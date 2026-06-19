@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.2 (PREDICTION PURGE & PERFORMANCE OVERHAUL)
+-- 👻 KILLER HUB | SHERIFF V4.3 (INSTANT SWAP & SMOOTH VERTICAL UPDATE)
 -- ============================================================================
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
@@ -16,7 +16,8 @@ local SheriffConfig = {
     
     PredictTracer = false,
     ShowLeadTracer = true,     
-    UseWeaponDetector = true,  
+    UseWeaponDetector = false,  -- Se desactiva por defecto para permitir el auto-equip
+    AutoUnequip = false,        -- NUEVA OPCIÓN
     ShowShootButton = false,
     ButtonSize = 95,
     ButtonOpacity = 0.95, 
@@ -39,6 +40,7 @@ local function saveConfig()
             PredictionMode = SheriffConfig.PredictionMode,
             LeadTimePred = SheriffConfig.LeadTimePred,
             UseWeaponDetector = SheriffConfig.UseWeaponDetector,
+            AutoUnequip = SheriffConfig.AutoUnequip,
             ShowLeadTracer = SheriffConfig.ShowLeadTracer
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
@@ -56,6 +58,7 @@ local function loadConfig()
             SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
+            if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
             if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
         end
     end
@@ -63,7 +66,7 @@ end
 loadConfig()
 
 -- ============================================================================
--- ⚙️ INTERFAZ GRÁFICA PURGADA
+-- ⚙️ INTERFAZ GRÁFICA ACTUALIZADA
 -- ============================================================================
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -75,7 +78,6 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check
     SheriffConfig.WallCheck = estado
 end)
 
--- MODOS INNECESARIOS ELIMINADOS DE LA LISTA
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo", "Lineal Estable"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
@@ -104,9 +106,14 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Ver anticipación (Mano)", 0, 100, fu
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Condiciones de Interfaz")
-SheriffTab:CreateToggle("WeaponDetectToggle", "Auto-Ocultar Interfaz si no tengo Arma", function(estado)
+SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
+SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
+    saveConfig()
+end)
+
+SheriffTab:CreateToggle("AutoUnequipToggle", "Auto-Desequipar Arma (Fast Unequip)", function(estado)
+    SheriffConfig.AutoUnequip = estado
     saveConfig()
 end)
 
@@ -140,7 +147,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.2 (ELITE PREDICTION ENGINE)
+-- 🧠 MOTOR CINEMÁTICO V4.3 (SMOOTH ACCELERATION & INTERPOLATION)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -159,9 +166,14 @@ wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 local floorCastParams = RaycastParams.new()
 floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function playerHasGun()
+local function getGunLocation()
     local char = LocalPlayer.Character
-    return char and (char:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Gun")) and true or false
+    if char and char:FindFirstChild("Gun") then
+        return char:FindFirstChild("Gun"), char
+    elseif LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun") then
+        return LocalPlayer.Backpack.Gun, LocalPlayer.Backpack
+    end
+    return nil, nil
 end
 
 local function getMurderer()
@@ -222,20 +234,24 @@ local function getPredictedPosition(targetChar)
     local vFactor = SheriffConfig.VerticalPred
     local finalPrediction = targetPosition
 
-    -- FILTRADO EXCLUSIVO: SOLO OPERAN LAS MEJORES PREDICCIONES LOGÍSTICAS
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local acceleration = (velocity - previousTargetVelocity)
+        local rawAcceleration = (velocity - previousTargetVelocity)
+        
+        -- AMORTIGUACIÓN CRÍTICA: Reducimos la brusquedad del eje Y multiplicándolo por 0.15
+        local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.15, rawAcceleration.Z)
+        
         local timeFrame = hFactor + ping
         
         if velocity.Y < -1 then
-            acceleration = acceleration + Vector3.new(0, -workspace.Gravity * 0.35, 0)
+            stableAcceleration = stableAcceleration + Vector3.new(0, -workspace.Gravity * 0.12, 0)
         end
         
-        local kinematicOffset = (velocity * timeFrame) + (0.5 * acceleration * (timeFrame ^ 2))
+        local kinematicOffset = (velocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
         finalPrediction = targetPosition + (kinematicOffset * distanceFactor)
         
+        -- Suavizado extra del multiplicador vertical final
         if math.abs(velocity.Y) > 1 then
-            finalPrediction = finalPrediction + Vector3.new(0, velocity.Y * vFactor * distanceFactor, 0)
+            finalPrediction = finalPrediction + Vector3.new(0, velocity.Y * (vFactor * 0.6) * distanceFactor, 0)
         end
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
@@ -248,17 +264,17 @@ local function getPredictedPosition(targetChar)
         end
 
         local dynamicV = vFactor
-        if velocity.Y < 0 then dynamicV = dynamicV * 0.4 end
+        if velocity.Y < 0 then dynamicV = dynamicV * 0.35 end
 
         local horizontalOffset = Vector3.new(velocity.X, 0, velocity.Z) * (dynamicH + ping) * distanceFactor
-        local verticalOffset = Vector3.new(0, velocity.Y * (dynamicV + (ping * 0.5)), 0) * distanceFactor
+        local verticalOffset = Vector3.new(0, velocity.Y * (dynamicV + (ping * 0.3)), 0) * distanceFactor
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        finalPrediction = targetPosition + (Vector3.new(velocity.X * hFactor, velocity.Y * vFactor, velocity.Z * hFactor) * distanceFactor)
+        finalPrediction = targetPosition + (Vector3.new(velocity.X * hFactor, velocity.Y * (vFactor * 0.7), velocity.Z * hFactor) * distanceFactor)
     end
 
-    -- CONTROL EXTREMO: Mecánica de Floor-Clamping Integrada
+    -- Mecánica de Floor-Clamping Estabilizada
     if velocity.Y < -0.5 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -281,7 +297,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================================
--- 🟥 & 🟩 VISUAL TRACERS ENGINE
+-- 🟥 & 🟩 VISUAL TRACERS ENGINE (SMOOTH RENDER)
 -- ============================================================================
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35)
@@ -289,12 +305,13 @@ PredictionLine.Thickness = 1.0
 PredictionLine.Visible = false
 
 local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(195, 255, 0) -- Neon Lime
+LeadLine.Color = Color3.fromRGB(149, 255, 0) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
 
 RunService.RenderStepped:Connect(function()
-    local hasGun = not SheriffConfig.UseWeaponDetector or playerHasGun()
+    local gun, _ = getGunLocation()
+    local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
     
     local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui")
@@ -326,9 +343,13 @@ RunService.RenderStepped:Connect(function()
             local distance = (targetHrp.Position - localHrp.Position).Magnitude
             local distFactor = math.clamp((distance - 4) / 16, 0, 1)
 
-            local leadPredictedPos = targetHrp.Position + (murderer.Character.HumanoidRootPart.AssemblyLinearVelocity * SheriffConfig.LeadTimePred * distFactor)
+            -- Suavizado en el cálculo del tracer visual verde para que concuerde perfectamente
+            local velY = murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.Y
+            local balancedVelocity = Vector3.new(murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.X, velY * 0.5, murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.Z)
             
-            if murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.Y < -0.5 then
+            local leadPredictedPos = targetHrp.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
+            
+            if velY < -0.5 then
                 local floorY = getFloorHeight(targetHrp, murderer.Character)
                 if floorY and leadPredictedPos.Y < (floorY + 1) then
                     leadPredictedPos = Vector3.new(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
@@ -351,23 +372,50 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ============================================================================
--- 🚀 DISPARO SÍNCRONO INTEGRADO
+-- 🚀 SISTEMA DE EJECUCIÓN ULTRA VELOZ (EQUIP -> DISPARO -> UNEQUIP)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     local char = LocalPlayer.Character
-    local gun = char and char:FindFirstChild("Gun")
+    if not char or not char:FindFirstChildOfClass("Humanoid") then return end
+    
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local gun, parent = getGunLocation()
     local murderer = getMurderer()
 
-    if gun and gun:FindFirstChild("Shoot") and murderer and murderer.Character then
+    if gun and murderer and murderer.Character then
         local hrp = murderer.Character:FindFirstChild("HumanoidRootPart")
         if hrp and isTargetVisible(hrp, murderer.Character) then 
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
-                local originCFrame = char.HumanoidRootPart.CFrame
-                if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
-                    originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame
-                end
-                gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
+                
+                -- Hilo aislado de ejecución instantánea
+                task.spawn(function()
+                    local startedInBackpack = (parent == LocalPlayer.Backpack)
+                    
+                    -- FASE 1: Equipamiento Forzado Inmediato si está guardada
+                    if startedInBackpack then
+                        humanoid:EquipTool(gun)
+                        -- Micro-espera exacta para que el motor físico procese el cambio de Parent
+                        RunService.Heartbeat:Wait() 
+                    end
+                    
+                    -- FASE 2: Disparo Síncronizado Directo al Objetivo Predicho
+                    if gun:FindFirstChild("Shoot") then
+                        local originCFrame = char.HumanoidRootPart.CFrame
+                        if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
+                            originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame
+                        end
+                        gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
+                    end
+                    
+                    -- FASE 3: Desequipamiento Táctico (Unequip Gun)
+                    if SheriffConfig.AutoUnequip then
+                        -- Pequeño respiro táctico para asegurar la llegada del paquete Shoot al servidor
+                        task.wait(0.02) 
+                        humanoid:UnequipTools()
+                    end
+                end)
+                
             end
         end
     end
@@ -397,7 +445,7 @@ Corner.Parent = ShootButton
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.41, 0, 0.41, 0) 
+DecalTexture.Size = UDim2.new(0.40, 0, 0.40, 0) 
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0) 
 DecalTexture.BackgroundTransparency = 1
@@ -460,7 +508,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ INTERCEPTACIÓN DE SERVICIOS MM2
+-- ⚡ INTERCEPTACIÓN REMOTA (SILENT AIM SEGURO)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -469,7 +517,8 @@ if ClientServices then
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
 
     local function checkAndPredict()
-        if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or playerHasGun()) then
+        local gun, _ = getGunLocation()
+        if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
             local murderer = getMurderer()
             if murderer and murderer.Character and murderer.Character:FindFirstChild("HumanoidRootPart") then
                 if isTargetVisible(murderer.Character.HumanoidRootPart, murderer.Character) then
