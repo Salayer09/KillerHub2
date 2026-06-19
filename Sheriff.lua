@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.4.6 (TELEMETRY TRACERS & PING-LAG VISUALIZER)
+-- 👻 KILLER HUB | SHERIFF V4.4.7 (CUSTOM TELEMETRY & HORIZONTAL GLASS UPDATE)
 -- ============================================================================
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
@@ -15,8 +15,8 @@ local SheriffConfig = {
     WallCheck = true,         
     
     PredictTracer = false,
-    ShowPingTracer = false,    -- NUEVO: Switch independiente para Tracer de Ping
-    ShowLagTracer = false,     -- NUEVO: Switch independiente para Tracer de Lag
+    ShowPingTracer = false,    
+    ShowLagTracer = false,     
     ShowLeadTracer = true,     
     UseWeaponDetector = false, 
     AutoUnequip = false,        
@@ -109,12 +109,12 @@ SheriffTab:CreateToggle("PingTracerToggle", "Mostrar Ping Prediction (Azul Fuert
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("LagTracerToggle", "Mostrar Lag Prediction (Morado Claro)", function(estado)
+SheriffTab:CreateToggle("LagTracerToggle", "Mostrar Lag Prediction (Morado Oscuro)", function(estado)
     SheriffConfig.ShowLagTracer = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("LeadTracerToggle", "Activar Lead Tracer (Mano Lima-Limón)", function(estado)
+SheriffTab:CreateToggle("LeadTracerToggle", "Activar Lead Tracer (Mano Verde Limón)", function(estado)
     SheriffConfig.ShowLeadTracer = estado
     saveConfig()
 end)
@@ -185,6 +185,16 @@ local smoothedVelocity = Vector3.new(0,0,0)
 local lastTargetPosition = Vector3.new(0,0,0)
 local lastTargetChar = nil
 local stuckCounter = 0
+
+-- MEJORA: Hilo pasivo de telemetría de red (Evita lookups intensivos en RenderStepped)
+local cachedPingValue = 0.06
+task.spawn(function()
+    while task.wait(0.5) do
+        if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
+            cachedPingValue = Stats.Network.ServerToClientPing:GetValue() / 1000
+        end
+    end
+end)
 
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -265,8 +275,8 @@ local function getPredictedPosition(targetChar)
     
     if currentSpeed < 12 then speedFactor = (currentSpeed / 16) ^ 2 end
 
-    local rawPing = (Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing")) and Stats.Network.ServerToClientPing:GetValue() / 1000 or 0.06
-    local ping = math.clamp(rawPing, 0.01, 0.4)
+    -- Uso de Ping Optimizado desde la caché pasiva
+    local ping = math.clamp(cachedPingValue, 0.01, 0.4)
 
     local distance = (targetPosition - localHrp.Position).Magnitude
     local distanceFactor = math.clamp((distance - 4) / 16, 0, 1) 
@@ -348,7 +358,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO
+-- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO (PREMIUM COLOR SYSTEM)
 -- ============================================================================
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35)
@@ -356,17 +366,19 @@ PredictionLine.Thickness = 1.0
 PredictionLine.Visible = false
 
 local PingLine = Drawing.new("Line")
-PingLine.Color = Color3.fromRGB(0, 85, 255) -- Azul Fuerte Premium
+PingLine.Color = Color3.fromRGB(0, 85, 255) 
 PingLine.Thickness = 1.0
 PingLine.Visible = false
 
+-- CAMBIO: Morado Oscuro Profundo Militar (Menos invasivo, súper pro)
 local LagLine = Drawing.new("Line")
-LagLine.Color = Color3.fromRGB(180, 130, 255) -- Morado Claro Estable
+LagLine.Color = Color3.fromRGB(45, 10, 80) 
 LagLine.Thickness = 1.0
 LagLine.Visible = false
 
+-- CAMBIO: Verde Neón Lima Premium Exacto
 local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(96, 255, 84) 
+LeadLine.Color = Color3.fromRGB(103, 255, 89) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
 
@@ -377,7 +389,6 @@ RunService.RenderStepped:Connect(function()
     local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui")
     if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
 
-    -- Limpieza total instantánea si las condiciones no se cumplen
     if not hasGun or not murderer or not murderer.Character then
         PredictionLine.Visible = false
         PingLine.Visible = false
@@ -394,8 +405,7 @@ RunService.RenderStepped:Connect(function()
         local distance = (targetHrp.Position - localHrp.Position).Magnitude
         local distFactor = math.clamp((distance - 4) / 16, 0, 1)
         
-        local rawPing = (Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing")) and Stats.Network.ServerToClientPing:GetValue() / 1000 or 0.06
-        local ping = math.clamp(rawPing, 0.01, 0.4)
+        local ping = math.clamp(cachedPingValue, 0.01, 0.4)
         
         local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16, 0, 1)
         local hFactor = SheriffConfig.HorizontalPred * speedFactor
@@ -423,7 +433,7 @@ RunService.RenderStepped:Connect(function()
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        -- 3. TRACER EXCLUSIVO DE ESTABILIZACIÓN DE LAG (MORADO CLARO)
+        -- 3. TRACER EXCLUSIVO DE ESTABILIZACIÓN DE LAG (MORADO OSCURO)
         if SheriffConfig.ShowLagTracer then
             local lagPos = targetHrp.Position + (Vector3.new(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
             local screenPos, onScreen = Camera:WorldToViewportPoint(lagPos)
@@ -434,7 +444,7 @@ RunService.RenderStepped:Connect(function()
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 4. TRACER DE LA MANO (VERDE LIMA)
+        -- 4. TRACER DE LA MANO (VERDE NEÓN SOLICITADO)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = Vector3.new(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
@@ -491,7 +501,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V2.9 (RANDOM ANGULAR GLASS REFLECTION SYSTEM)
+-- 🌌 INTERFAZ V3.0 (HORIZONTAL ANGLE GLASS REFLECTION SYSTEM)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -531,7 +541,7 @@ UiGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
     ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        
 })
-UiGradient.Rotation = 45 
+UiGradient.Rotation = 0 -- CAMBIO: Iniciación totalmente horizontal de fábrica
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
@@ -560,7 +570,8 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
-local PREMIUM_ANGLES = {45, 135, -45, -135, 60, 120}
+-- CAMBIO: Ángulos controlados estrictamente horizontales con desviaciones leves de 3 grados
+local PREMIUM_ANGLES = {0, 180, -3, 3, 177, 183}
 
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
