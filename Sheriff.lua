@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.4.2 (VOID GRADIENT GLOW UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.4.3 (DYNAMIC POSITION GLOW & JUMP STABILIZER)
 -- ============================================================================
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
@@ -128,9 +128,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
         btn.Size = UDim2.new(0, valor, 0, valor) 
         if btn:FindFirstChild("UICorner") then
             btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
-        end
-        if btn:FindFirstChild("GlowOverlay") and btn.GlowOverlay:FindFirstChild("UICorner") then
-            btn.GlowOverlay.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
         end
     end
 end)
@@ -263,6 +260,12 @@ local function getPredictedPosition(targetChar)
 
     local hFactor = SheriffConfig.HorizontalPred * speedFactor
     local vFactor = SheriffConfig.VerticalPred * speedFactor
+    
+    -- MEJORA ADICIONAL: Estabilizador Aéreo de Salto (Previene fallos si el Murderer salta como loco)
+    if humanoid.FloorMaterial == Enum.Material.Air and math.abs(smoothedVelocity.Y) > 0.5 then
+        vFactor = vFactor * 0.78 -- Amortigua variaciones bruscas de red en el aire
+    end
+
     local finalPrediction = targetPosition
 
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
@@ -456,7 +459,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2.6 (STATIC GLOW REFLECTION ENGINE)
+-- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2.7 (DYNAMIC TOUCH MAPPING ENGINE)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -471,35 +474,25 @@ ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26) -- Base ultra oscura vo
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true -- Corta el reflejo perfectamente dentro del botón sin salirse
+ShootButton.ClipsDescendants = true -- Mantiene el reflejo mapeado estrictamente dentro del botón
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24)) 
 Corner.Parent = ShootButton
 
--- Capa de Degradado Térmico (Simula el reflejo claro al centro y oscuro a los lados de 1000567085.jpg)
-local GlowOverlay = Instance.new("Frame")
-GlowOverlay.Name = "GlowOverlay"
-GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
-GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
-GlowOverlay.BackgroundTransparency = 1 -- Apagado por defecto
-GlowOverlay.ZIndex = ShootButton.ZIndex + 1 -- Renderiza justo encima del fondo base
-GlowOverlay.Parent = ShootButton
-
-local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = Corner.CornerRadius
-GlowCorner.Parent = GlowOverlay
-
--- Degradado estático premium: Bordes oscuros, centro morado luminoso void claro
-local UiGradient = Instance.new("UIGradient")
-UiGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 11, 56)),      -- Lateral izquierdo oscuro
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(114, 38, 201)),  -- CENTRO BRILLANTE MORADO VOID CLARO
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        -- Lateral derecho oscuro
-})
-UiGradient.Rotation = 45 -- Ángulo diagonal para imular reflejos de cristal idénticos a la foto
-UiGradient.Parent = GlowOverlay
+-- Capa de Reflejo Radial Premium Avanzada (Mapeada por coordenadas de entrada)
+local DynamicGlow = Instance.new("ImageLabel")
+DynamicGlow.Name = "DynamicGlow"
+-- El tamaño se establece grande para asegurar que el degradado se extienda de forma suave y natural
+DynamicGlow.Size = UDim2.new(1.65, 0, 1.65, 0)
+DynamicGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+DynamicGlow.BackgroundTransparency = 1
+DynamicGlow.Image = "rbxassetid://5012544693" -- Textura premium de degradado radial puro (Centro claro, esquinas oscuras)
+DynamicGlow.ImageColor3 = Color3.fromRGB(122, 42, 214) -- El morado void exacto de la captura
+DynamicGlow.ImageTransparency = 1 -- Oculto por defecto
+DynamicGlow.ZIndex = ShootButton.ZIndex + 1
+DynamicGlow.Parent = ShootButton
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
@@ -527,15 +520,24 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- CONTROL DE GLOW ESTÁTICO PREMIUM (SÍNCRONO)
-local function activateGlowReflection()
-    -- Enciende el degradado de forma instantánea al tacto
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+-- MOTOR DE CÁLCULO VECTORIAL PARA EL REFLEJO DE PRESIÓN
+local function processGlowAtCoordinates(inputPosition)
+    local buttonAbsolutePos = ShootButton.AbsolutePosition
+    
+    -- Calcula los píxeles de diferencia locales entre la esquina superior del botón y tu entrada
+    local localX = inputPosition.X - buttonAbsolutePos.X
+    local localY = inputPosition.Y - buttonAbsolutePos.Y
+    
+    -- Mueve el centro del degradado directamente a esa coordenada de impacto antes de encenderlo
+    DynamicGlow.Position = UDim2.new(0, localX, 0, localY)
+    
+    -- Enciende el reflejo morado claro con fundido veloz y estático
+    TweenService:Create(DynamicGlow, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 0.12}):Play()
 end
 
-local function deactivateGlowReflection()
-    -- Apaga el degradado suavemente al liberar el dedo/mouse
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+local function fadeGlowReflection()
+    -- Apagado progresivo del reflejo al levantar el dedo
+    TweenService:Create(DynamicGlow, TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {ImageTransparency = 1}):Play()
 end
 
 ShootButton.Activated:Connect(fireAtMurdererDirectly)
@@ -545,7 +547,7 @@ local DRAG_THRESHOLD = 8
 
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        activateGlowReflection() -- Prende el degradado de inmediato
+        processGlowAtCoordinates(input.Position) -- Ejecuta el escaneo de posición e ilumina
         
         if not SheriffConfig.ButtonLocked then
             dragStart = input.Position
@@ -568,7 +570,7 @@ end)
 
 ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        deactivateGlowReflection() -- Apaga el degradado
+        fadeGlowReflection() -- Desvanece el reflejo morado claro
     end
 end)
 
