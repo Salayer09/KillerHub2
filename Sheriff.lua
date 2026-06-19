@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.5.5 (STRICT HORIZONTAL BEAM & CLEAN UI UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.6.0 (INSTANT TRIGGER & SOLID BEAM UPDATE)
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -104,7 +104,6 @@ SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0,
     SheriffConfig.VerticalPred = valor / 1000
 end)
 
--- SECCIÓN DE TRACERS OPTIMIZADOS
 SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
 
 SheriffTab:CreateToggle("TracerPredToggle", "Mostrar Tracer de Impacto (Rojo)", function(estado)
@@ -175,7 +174,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.5.5 (DECOUPLED DELTA SMTH & TELEMETRY SUITE)
+-- 🧠 MOTOR CINEMÁTICO V4.6.0 (DECOUPLED DELTA SMTH & TELEMETRY SUITE)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -194,7 +193,6 @@ local lastTargetChar = nil
 local stuckCounter = 0
 local lastDeltaTime = 0.016
 
--- Hilo pasivo de telemetría de red
 local cachedPingValue = 0.06
 task.spawn(function()
     while task.wait(0.4) do
@@ -379,21 +377,18 @@ PingLine.Thickness = 1.0
 PingLine.Visible = false
 table.insert(_G.KillerHubLines, PingLine)
 
--- CAMBIO: Violeta 10% más oscuro, súper nítido sin encandilar (170, 95, 230)
 local LagLine = Drawing.new("Line")
 LagLine.Color = Color3.fromRGB(170, 95, 230) 
 LagLine.Thickness = 1.0
 LagLine.Visible = false
 table.insert(_G.KillerHubLines, LagLine)
 
--- Verde Neón Limón exacto guardado (103, 255, 89)
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = Color3.fromRGB(103, 255, 89) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
 
--- MEJORA RUTINARIA: Caché local estricta de llamadas de dibujo de alta frecuencia
 local vec2New, vec3New = Vector2.new, Vector3.new
 local worldToViewport = Camera.WorldToViewportPoint
 
@@ -422,8 +417,6 @@ RunService.RenderStepped:Connect(function()
         local hFactor = SheriffConfig.HorizontalPred * speedFactor
         local vFactor = SheriffConfig.VerticalPred * speedFactor
 
-        -- 1. TRACER ORIGINAL DE BALA (ROJO)
-        local predictedPos = getPredictedPosition(murderer.Character)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
@@ -433,7 +426,6 @@ RunService.RenderStepped:Connect(function()
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
-        -- 2. TRACER EXCLUSIVO DE PING (AZUL FUERTE)
         if SheriffConfig.ShowPingTracer then
             local pingPos = targetHrp.Position + (smoothedVelocity * ping * distFactor)
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
@@ -444,7 +436,6 @@ RunService.RenderStepped:Connect(function()
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        -- 3. TRACER EXCLUSIVO DE ESTABILIZACIÓN DE LAG (VIOLETA OSCURECIDO 10%)
         if SheriffConfig.ShowLagTracer then
             local lagPos = targetHrp.Position + (vec3New(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
@@ -455,7 +446,6 @@ RunService.RenderStepped:Connect(function()
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 4. TRACER DE LA MANO (VERDE NEÓN)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
@@ -494,25 +484,29 @@ local function fireAtMurdererDirectly()
         if hrp and isTargetVisible(hrp, murderer.Character) then 
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
-                task.spawn(function()
-                    local startedInBackpack = (parent == LocalPlayer.Backpack)
-                    if startedInBackpack then humanoid:EquipTool(gun) RunService.Heartbeat:Wait() end
-                    if gun:FindFirstChild("Shoot") then
-                        local originCFrame = char.HumanoidRootPart.CFrame
-                        if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
-                            originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame
-                        end
-                        gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
+                local startedInBackpack = (parent == LocalPlayer.Backpack)
+                if startedInBackpack then 
+                    humanoid:EquipTool(gun) 
+                    RunService.Heartbeat:Wait() 
+                end
+                if gun:FindFirstChild("Shoot") then
+                    local originCFrame = char.HumanoidRootPart.CFrame
+                    if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
+                        originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame
                     end
-                    if SheriffConfig.AutoUnequip then task.wait(0.02) humanoid:UnequipTools() end
-                end)
+                    gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
+                end
+                if SheriffConfig.AutoUnequip then 
+                    task.wait(0.02) 
+                    humanoid:UnequipTools() 
+                end
             end
         end
     end
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.2 (STRICT SIDE HORIZONTAL GLASS BEAM SYSTEM)
+-- 🌌 INTERFAZ V3.3 (INSTANT TRIGGER & 7% INCREASED GLOW FORCE SYSTEM)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -552,7 +546,7 @@ UiGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
     ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        
 })
-UiGradient.Rotation = 90 -- CAMBIO: Configuración a 90 grados para que la barra se acueste horizontalmente
+UiGradient.Rotation = 90 
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
@@ -581,7 +575,6 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- CAMBIO: Ángulo estricto para forzar que el rayo de luz apunte de izquierda a derecha (hacia los lados)
 local SIDE_ANGLES = {90, 270}
 
 local function processGlowAtCoordinates(inputPosition)
@@ -590,24 +583,27 @@ local function processGlowAtCoordinates(inputPosition)
     local localY = inputPosition.Y - buttonAbsolutePos.Y
     local relY = (localY / buttonSize.Y) - 0.5
     
-    -- CAMBIO: El offset ahora se calcula en Y para que si haces clic, la línea horizontal aparezca justo a la altura del dedo
     UiGradient.Offset = Vector2.new(0, relY * 1.5) 
     UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15}):Play()
+    -- OPTIMIZACIÓN VISUAL: Transparencia reducida a 0.08 para ganar un 7% más de solidez/fuerza
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play()
 end
 
 local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
-ShootButton.Activated:Connect(fireAtMurdererDirectly)
-
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
 local DRAG_THRESHOLD = 8 
 
+-- ROUTINE UPGRADE: Intercepción inmediata de clicks en InputBegan para remover los 0.2s de retraso nativos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
+        
+        -- DISPARO INSTANTÁNEO EN COLA PARALELA (No espera a que sueltes)
+        task.spawn(fireAtMurdererDirectly)
+        
         if not SheriffConfig.ButtonLocked then
             dragStart = input.Position
             startPos = ShootButton.Position
