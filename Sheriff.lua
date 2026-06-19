@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.4.1 (PREMIUM RIPPLE GLOW UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.4.2 (VOID GRADIENT GLOW UPDATE)
 -- ============================================================================
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
@@ -129,8 +129,8 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
         if btn:FindFirstChild("UICorner") then
             btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
         end
-        if btn:FindFirstChild("GlowEffect") and btn.GlowEffect:FindFirstChild("UICorner") then
-            btn.GlowEffect.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
+        if btn:FindFirstChild("GlowOverlay") and btn.GlowOverlay:FindFirstChild("UICorner") then
+            btn.GlowOverlay.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
         end
     end
 end)
@@ -456,7 +456,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2.5 (GLOW RIPPLE ENGINE)
+-- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2.6 (STATIC GLOW REFLECTION ENGINE)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -467,31 +467,39 @@ local ShootButton = Instance.new("ImageButton")
 ShootButton.Name = "ShootButton"
 ShootButton.Size = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
 ShootButton.Position = UDim2.new(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
-ShootButton.BackgroundColor3 = Color3.fromRGB(13, 5, 24) 
+ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26) -- Base ultra oscura void
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = false -- Requerido para permitir que la expansión de luz salga del borde
+ShootButton.ClipsDescendants = true -- Corta el reflejo perfectamente dentro del botón sin salirse
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24)) 
 Corner.Parent = ShootButton
 
--- COMPONENTE NEÓN: Efecto Shockwave / Glow Expansivo Escondido
-local GlowEffect = Instance.new("Frame")
-GlowEffect.Name = "GlowEffect"
-GlowEffect.Size = UDim2.new(1, 0, 1, 0)
-GlowEffect.Position = UDim2.new(0.5, 0, 0.5, 0)
-GlowEffect.AnchorPoint = Vector2.new(0.5, 0.5)
-GlowEffect.BackgroundColor3 = Color3.fromRGB(168, 50, 247) -- Púrpura de neón intenso vibrante
-GlowEffect.BackgroundTransparency = 1 -- Oculto por defecto
-GlowEffect.ZIndex = ShootButton.ZIndex - 1 -- Corre por detrás del fondo para emular un halo de luz exterior
-GlowEffect.Parent = ShootButton
+-- Capa de Degradado Térmico (Simula el reflejo claro al centro y oscuro a los lados de 1000567085.jpg)
+local GlowOverlay = Instance.new("Frame")
+GlowOverlay.Name = "GlowOverlay"
+GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
+GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
+GlowOverlay.BackgroundTransparency = 1 -- Apagado por defecto
+GlowOverlay.ZIndex = ShootButton.ZIndex + 1 -- Renderiza justo encima del fondo base
+GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
 GlowCorner.CornerRadius = Corner.CornerRadius
-GlowCorner.Parent = GlowEffect
+GlowCorner.Parent = GlowOverlay
+
+-- Degradado estático premium: Bordes oscuros, centro morado luminoso void claro
+local UiGradient = Instance.new("UIGradient")
+UiGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(31, 11, 56)),      -- Lateral izquierdo oscuro
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(114, 38, 201)),  -- CENTRO BRILLANTE MORADO VOID CLARO
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        -- Lateral derecho oscuro
+})
+UiGradient.Rotation = 45 -- Ángulo diagonal para imular reflejos de cristal idénticos a la foto
+UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
@@ -501,6 +509,7 @@ DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
 DecalTexture.Image = "rbxassetid://125754446555599" 
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
+DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
 TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
@@ -515,51 +524,51 @@ Label.TextColor3 = Color3.fromRGB(255, 255, 255)
 Label.TextSize = 15 
 Label.Font = Enum.Font.GothamBold
 Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
+Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- MOTOR DE ANIMACIÓN PREMIUM (DISPARO + EFECTO ONDA DE CHOQUE)
-local function playPremiumGlowAnimation()
-    -- 1. Efecto físico elástico (El botón se encoge y regresa rápido)
-    local originalSize = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
-    local compressedSize = UDim2.new(0, math.floor(SheriffConfig.ButtonSize * 0.91), 0, math.floor(SheriffConfig.ButtonSize * 0.91))
-    
-    ShootButton.Size = compressedSize
-    TweenService:Create(ShootButton, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = originalSize}):Play()
-
-    -- 2. Onda expansiva de luz perimetral (Se genera pequeña desde el centro y estalla hacia afuera)
-    GlowEffect.Size = UDim2.new(0.85, 0, 0.85, 0)
-    GlowEffect.BackgroundTransparency = 0.15 -- Brillo inicial muy intenso
-    
-    TweenService:Create(GlowEffect, TweenInfo.new(0.42, Enum.EasingStyle.OutExpo), {
-        Size = UDim2.new(1.48, 0, 1.48, 0), -- Se expande casi un 50% por fuera de los bordes del botón
-        BackgroundTransparency = 1 -- Se desvanece por completo de forma suave
-    }):Play()
+-- CONTROL DE GLOW ESTÁTICO PREMIUM (SÍNCRONO)
+local function activateGlowReflection()
+    -- Enciende el degradado de forma instantánea al tacto
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
 end
 
-ShootButton.Activated:Connect(function()
-    playPremiumGlowAnimation()
-    fireAtMurdererDirectly()
-end)
+local function deactivateGlowReflection()
+    -- Apaga el degradado suavemente al liberar el dedo/mouse
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+end
+
+ShootButton.Activated:Connect(fireAtMurdererDirectly)
 
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
 local DRAG_THRESHOLD = 8 
 
 ShootButton.InputBegan:Connect(function(input)
-    if not SheriffConfig.ButtonLocked and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-        dragStart = input.Position
-        startPos = ShootButton.Position
-        dragging = false 
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        activateGlowReflection() -- Prende el degradado de inmediato
         
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                if dragging then
-                    SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                    saveConfig() 
+        if not SheriffConfig.ButtonLocked then
+            dragStart = input.Position
+            startPos = ShootButton.Position
+            dragging = false 
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    if dragging then
+                        SheriffConfig.ButtonX = ShootButton.Position.X.Scale
+                        SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                        saveConfig() 
+                    end
+                    dragStart, dragging = nil, false
                 end
-                dragStart, dragging = nil, false
-            end
-        end)
+            end)
+        end
+    end
+end)
+
+ShootButton.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        deactivateGlowReflection() -- Apaga el degradado
     end
 end)
 
