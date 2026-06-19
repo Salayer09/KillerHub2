@@ -1,7 +1,6 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.5.0 (KINETIC VIOLET & HORIZONTAL GLASS UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.5.5 (STRICT HORIZONTAL BEAM & CLEAN UI UPDATE)
 -- ============================================================================
--- [OPTIMIZACIÓN BASE]: Limpieza automática de Tracers Fantasma en Memoria
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
         pcall(function() line:Remove() end)
@@ -117,7 +116,7 @@ SheriffTab:CreateToggle("PingTracerToggle", "Mostrar Ping Prediction (Azul Fuert
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("LagTracerToggle", "Mostrar Lag Prediction (Violeta Claro)", function(estado)
+SheriffTab:CreateToggle("LagTracerToggle", "Mostrar Lag Prediction (Violeta Elegante)", function(estado)
     SheriffConfig.ShowLagTracer = estado
     saveConfig()
 end)
@@ -176,7 +175,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.5 (DECOUPLED DELTA SMTH & TELEMETRY SUITE)
+-- 🧠 MOTOR CINEMÁTICO V4.5.5 (DECOUPLED DELTA SMTH & TELEMETRY SUITE)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -193,7 +192,7 @@ local smoothedVelocity = Vector3.new(0,0,0)
 local lastTargetPosition = Vector3.new(0,0,0)
 local lastTargetChar = nil
 local stuckCounter = 0
-local lastDeltaTime = 0.016 -- Guarda el tiempo real por fotograma
+local lastDeltaTime = 0.016
 
 -- Hilo pasivo de telemetría de red
 local cachedPingValue = 0.06
@@ -274,7 +273,6 @@ local function getPredictedPosition(targetChar)
     local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 38 then rawVelocity = rawVelocity.Unit * 16 end
 
-    -- MEJORA: Lerp desacoplado de framerate usando aproximación exponencial con DeltaTime
     local fpsWeight = math.clamp(1 - math.exp(-14 * lastDeltaTime), 0.05, 0.75)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
     
@@ -347,7 +345,7 @@ local function getPredictedPosition(targetChar)
 end
 
 RunService.Heartbeat:Connect(function(dt)
-    lastDeltaTime = dt -- Guardado dinámico de ciclo de reloj
+    lastDeltaTime = dt 
     local mud = getMurderer()
     if mud and mud.Character and mud.Character:FindFirstChild("HumanoidRootPart") then
         local hrp = mud.Character.HumanoidRootPart
@@ -381,19 +379,23 @@ PingLine.Thickness = 1.0
 PingLine.Visible = false
 table.insert(_G.KillerHubLines, PingLine)
 
--- CAMBIO: Violeta Claro Radiante Intuitivo (Súper estético y claro)
+-- CAMBIO: Violeta 10% más oscuro, súper nítido sin encandilar (170, 95, 230)
 local LagLine = Drawing.new("Line")
-LagLine.Color = Color3.fromRGB(190, 110, 255) 
+LagLine.Color = Color3.fromRGB(170, 95, 230) 
 LagLine.Thickness = 1.0
 LagLine.Visible = false
 table.insert(_G.KillerHubLines, LagLine)
 
--- CAMBIO: Código Verde Neón Limón exacto guardado (103, 255, 89)
+-- Verde Neón Limón exacto guardado (103, 255, 89)
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = Color3.fromRGB(103, 255, 89) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
+
+-- MEJORA RUTINARIA: Caché local estricta de llamadas de dibujo de alta frecuencia
+local vec2New, vec3New = Vector2.new, Vector3.new
+local worldToViewport = Camera.WorldToViewportPoint
 
 RunService.RenderStepped:Connect(function()
     local gun, _ = getGunLocation()
@@ -423,10 +425,10 @@ RunService.RenderStepped:Connect(function()
         -- 1. TRACER ORIGINAL DE BALA (ROJO)
         local predictedPos = getPredictedPosition(murderer.Character)
         if predictedPos and SheriffConfig.PredictTracer then
-            local screenPos, onScreen = Camera:WorldToViewportPoint(predictedPos)
+            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
-                PredictionLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                PredictionLine.To = Vector2.new(screenPos.X, screenPos.Y)
+                PredictionLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                PredictionLine.To = vec2New(screenPos.X, screenPos.Y)
                 PredictionLine.Visible = true
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
@@ -434,21 +436,21 @@ RunService.RenderStepped:Connect(function()
         -- 2. TRACER EXCLUSIVO DE PING (AZUL FUERTE)
         if SheriffConfig.ShowPingTracer then
             local pingPos = targetHrp.Position + (smoothedVelocity * ping * distFactor)
-            local screenPos, onScreen = Camera:WorldToViewportPoint(pingPos)
+            local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
-                PingLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                PingLine.To = Vector2.new(screenPos.X, screenPos.Y)
+                PingLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                PingLine.To = vec2New(screenPos.X, screenPos.Y)
                 PingLine.Visible = true
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        -- 3. TRACER EXCLUSIVO DE ESTABILIZACIÓN DE LAG (VIOLETA CLARO)
+        -- 3. TRACER EXCLUSIVO DE ESTABILIZACIÓN DE LAG (VIOLETA OSCURECIDO 10%)
         if SheriffConfig.ShowLagTracer then
-            local lagPos = targetHrp.Position + (Vector3.new(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
-            local screenPos, onScreen = Camera:WorldToViewportPoint(lagPos)
+            local lagPos = targetHrp.Position + (vec3New(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
+            local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
-                LagLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                LagLine.To = Vector2.new(screenPos.X, screenPos.Y)
+                LagLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                LagLine.To = vec2New(screenPos.X, screenPos.Y)
                 LagLine.Visible = true
             else LagLine.Visible = false end
         else LagLine.Visible = false end
@@ -456,22 +458,22 @@ RunService.RenderStepped:Connect(function()
         -- 4. TRACER DE LA MANO (VERDE NEÓN)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
-            local balancedVelocity = Vector3.new(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
+            local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
             local leadPredictedPos = targetHrp.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             
             if smoothedVelocity.Y < -0.5 then
                 local floorY = getFloorHeight(targetHrp, murderer.Character)
                 if floorY and leadPredictedPos.Y < (floorY + 1) then
-                    leadPredictedPos = Vector3.new(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
+                    leadPredictedPos = vec3New(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
                 end
             end
 
-            local handScreenPos, handOnScreen = Camera:WorldToViewportPoint(hand.Position)
-            local targetScreenPos, targetOnScreen = Camera:WorldToViewportPoint(leadPredictedPos)
+            local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
+            local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
 
             if handOnScreen and targetOnScreen then
-                LeadLine.From = Vector2.new(handScreenPos.X, handScreenPos.Y)
-                LeadLine.To = Vector2.new(targetScreenPos.X, targetScreenPos.Y)
+                LeadLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
+                LeadLine.To = vec2New(targetScreenPos.X, targetScreenPos.Y)
                 LeadLine.Visible = true
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
@@ -510,7 +512,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.1 (STRICT HORIZONTAL REFLECTION SYSTEM & HAPTIC ACTION)
+-- 🌌 INTERFAZ V3.2 (STRICT SIDE HORIZONTAL GLASS BEAM SYSTEM)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -550,12 +552,12 @@ UiGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
     ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        
 })
-UiGradient.Rotation = 0 
+UiGradient.Rotation = 90 -- CAMBIO: Configuración a 90 grados para que la barra se acueste horizontalmente
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.39, 0, 0.39, 0) 
+DecalTexture.Size = UDim2.new(0.41, 0, 0.41, 0) 
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0) 
 DecalTexture.BackgroundTransparency = 1
@@ -579,34 +581,23 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- MEJORA HÁPTICA: Reacción elástica de tamaño al pulsar
-local function playHapticImpact(compress)
-    local targetScale = compress and 0.92 or 1.0
-    local info = TweenInfo.new(compress and 0.04 or 0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    TweenService:Create(ShootButton, info, {
-        Size = UDim2.new(0, SheriffConfig.ButtonSize * targetScale, 0, SheriffConfig.ButtonSize * targetScale)
-    }):Play()
-end
-
--- CAMBIO: Rotaciones limitadas única y exclusivamente a alineaciones 100% horizontales (Reflejo plano)
-local HORIZONTAL_ANGLES = {0, 180}
+-- CAMBIO: Ángulo estricto para forzar que el rayo de luz apunte de izquierda a derecha (hacia los lados)
+local SIDE_ANGLES = {90, 270}
 
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
-    local localX = inputPosition.X - buttonAbsolutePos.X
-    local relX = (localX / buttonSize.X) - 0.5
+    local localY = inputPosition.Y - buttonAbsolutePos.Y
+    local relY = (localY / buttonSize.Y) - 0.5
     
-    -- Forzado estricto del eje X (Horizontal plano absoluto)
-    UiGradient.Offset = Vector2.new(relX * 1.5, 0) 
-    UiGradient.Rotation = HORIZONTAL_ANGLES[math.random(1, #HORIZONTAL_ANGLES)]
+    -- CAMBIO: El offset ahora se calcula en Y para que si haces clic, la línea horizontal aparezca justo a la altura del dedo
+    UiGradient.Offset = Vector2.new(0, relY * 1.5) 
+    UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
     TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15}):Play()
-    playHapticImpact(true)
 end
 
 local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
-    playHapticImpact(false)
 end
 
 ShootButton.Activated:Connect(fireAtMurdererDirectly)
