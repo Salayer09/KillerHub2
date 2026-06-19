@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.3 (INSTANT SWAP & SMOOTH VERTICAL UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.4.1 (PREMIUM RIPPLE GLOW UPDATE)
 -- ============================================================================
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
@@ -16,8 +16,8 @@ local SheriffConfig = {
     
     PredictTracer = false,
     ShowLeadTracer = true,     
-    UseWeaponDetector = false,  -- Se desactiva por defecto para permitir el auto-equip
-    AutoUnequip = false,        -- NUEVA OPCIÓN
+    UseWeaponDetector = false, 
+    AutoUnequip = false,        
     ShowShootButton = false,
     ButtonSize = 95,
     ButtonOpacity = 0.95, 
@@ -66,7 +66,7 @@ end
 loadConfig()
 
 -- ============================================================================
--- ⚙️ INTERFAZ GRÁFICA ACTUALIZADA
+-- ⚙️ INTERFAZ GRÁFICA CONTROLADA
 -- ============================================================================
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -129,6 +129,9 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
         if btn:FindFirstChild("UICorner") then
             btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
         end
+        if btn:FindFirstChild("GlowEffect") and btn.GlowEffect:FindFirstChild("UICorner") then
+            btn.GlowEffect.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
+        end
     end
 end)
 
@@ -147,7 +150,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.3 (SMOOTH ACCELERATION & INTERPOLATION)
+-- 🧠 MOTOR CINEMÁTICO V4.4 (ANTI-LAG & SMOOTH INERTIA ENGINE)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -160,6 +163,11 @@ local UserInputService = game:GetService("UserInputService")
 
 local lastVelocity = Vector3.new(0,0,0)
 local previousTargetVelocity = Vector3.new(0,0,0) 
+local smoothedVelocity = Vector3.new(0,0,0)
+local lastTargetPosition = Vector3.new(0,0,0)
+local lastTargetChar = nil
+local stuckCounter = 0
+
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -214,6 +222,11 @@ local function getPredictedPosition(targetChar)
     
     if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil end
 
+    if lastTargetChar ~= targetChar then
+        smoothedVelocity = hrp.AssemblyLinearVelocity
+        lastTargetChar = targetChar
+    end
+
     local targetPosition = hrp.Position
     local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
     
@@ -221,8 +234,26 @@ local function getPredictedPosition(targetChar)
         targetPosition = targetPosition - Vector3.new(0, (1 - heightScale) * 1.2, 0)
     end
 
-    local velocity = hrp.AssemblyLinearVelocity
-    if velocity.Magnitude < 0.1 then return targetPosition end
+    local rawVelocity = hrp.AssemblyLinearVelocity
+
+    if rawVelocity.Magnitude > 38 then
+        rawVelocity = rawVelocity.Unit * 16
+    end
+
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, 0.24)
+
+    if stuckCounter > 4 then
+        smoothedVelocity = Vector3.new(0, 0, 0)
+    end
+
+    if smoothedVelocity.Magnitude < 0.1 then return targetPosition end
+
+    local currentSpeed = smoothedVelocity.Magnitude
+    local speedFactor = math.clamp(currentSpeed / 16, 0, 1)
+    
+    if currentSpeed < 12 then
+        speedFactor = (currentSpeed / 16) ^ 2
+    end
 
     local rawPing = (Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing")) and Stats.Network.ServerToClientPing:GetValue() / 1000 or 0.06
     local ping = math.clamp(rawPing, 0.01, 0.4)
@@ -230,52 +261,48 @@ local function getPredictedPosition(targetChar)
     local distance = (targetPosition - localHrp.Position).Magnitude
     local distanceFactor = math.clamp((distance - 4) / 16, 0, 1) 
 
-    local hFactor = SheriffConfig.HorizontalPred
-    local vFactor = SheriffConfig.VerticalPred
+    local hFactor = SheriffConfig.HorizontalPred * speedFactor
+    local vFactor = SheriffConfig.VerticalPred * speedFactor
     local finalPrediction = targetPosition
 
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local rawAcceleration = (velocity - previousTargetVelocity)
-        
-        -- AMORTIGUACIÓN CRÍTICA: Reducimos la brusquedad del eje Y multiplicándolo por 0.15
+        local rawAcceleration = (smoothedVelocity - previousTargetVelocity)
         local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.15, rawAcceleration.Z)
         
         local timeFrame = hFactor + ping
         
-        if velocity.Y < -1 then
+        if smoothedVelocity.Y < -1 then
             stableAcceleration = stableAcceleration + Vector3.new(0, -workspace.Gravity * 0.12, 0)
         end
         
-        local kinematicOffset = (velocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
+        local kinematicOffset = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
         finalPrediction = targetPosition + (kinematicOffset * distanceFactor)
         
-        -- Suavizado extra del multiplicador vertical final
-        if math.abs(velocity.Y) > 1 then
-            finalPrediction = finalPrediction + Vector3.new(0, velocity.Y * (vFactor * 0.6) * distanceFactor, 0)
+        if math.abs(smoothedVelocity.Y) > 1 then
+            finalPrediction = finalPrediction + Vector3.new(0, smoothedVelocity.Y * (vFactor * 0.6) * distanceFactor, 0)
         end
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
         local dynamicH = hFactor
         if lastVelocity.Magnitude > 0.2 then
-            local dotProduct = velocity.Unit:Dot(lastVelocity.Unit)
+            local dotProduct = smoothedVelocity.Unit:Dot(lastVelocity.Unit)
             if dotProduct < 0.82 then
                 dynamicH = dynamicH * math.clamp(dotProduct, 0.15, 1.0)
             end
         end
 
         local dynamicV = vFactor
-        if velocity.Y < 0 then dynamicV = dynamicV * 0.35 end
+        if smoothedVelocity.Y < 0 then dynamicV = dynamicV * 0.35 end
 
-        local horizontalOffset = Vector3.new(velocity.X, 0, velocity.Z) * (dynamicH + ping) * distanceFactor
-        local verticalOffset = Vector3.new(0, velocity.Y * (dynamicV + (ping * 0.3)), 0) * distanceFactor
+        local horizontalOffset = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (dynamicH + ping) * distanceFactor
+        local verticalOffset = Vector3.new(0, smoothedVelocity.Y * (dynamicV + (ping * 0.3)), 0) * distanceFactor
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        finalPrediction = targetPosition + (Vector3.new(velocity.X * hFactor, velocity.Y * (vFactor * 0.7), velocity.Z * hFactor) * distanceFactor)
+        finalPrediction = targetPosition + (Vector3.new(smoothedVelocity.X * hFactor, smoothedVelocity.Y * (vFactor * 0.7), smoothedVelocity.Z * hFactor) * distanceFactor)
     end
 
-    -- Mecánica de Floor-Clamping Estabilizada
-    if velocity.Y < -0.5 then
+    if smoothedVelocity.Y < -0.5 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.3
@@ -291,13 +318,27 @@ end
 RunService.Heartbeat:Connect(function()
     local mud = getMurderer()
     if mud and mud.Character and mud.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = mud.Character.HumanoidRootPart
         previousTargetVelocity = lastVelocity
-        lastVelocity = mud.Character.HumanoidRootPart.AssemblyLinearVelocity
+        lastVelocity = hrp.AssemblyLinearVelocity
+        
+        if lastTargetPosition ~= Vector3.new(0, 0, 0) then
+            local actualDisplacement = (hrp.Position - lastTargetPosition).Magnitude
+            if hrp.AssemblyLinearVelocity.Magnitude > 1.5 and actualDisplacement < 0.01 then
+                stuckCounter = math.min(stuckCounter + 1, 20)
+            else
+                stuckCounter = math.max(stuckCounter - 1, 0)
+            end
+        end
+        lastTargetPosition = hrp.Position
+    else
+        stuckCounter = 0
+        lastTargetPosition = Vector3.new(0, 0, 0)
     end
 end)
 
 -- ============================================================================
--- 🟥 & 🟩 VISUAL TRACERS ENGINE (SMOOTH RENDER)
+-- 🟥 & 🟩 VISUAL TRACERS ENGINE (ANTI-LAG CONTROL)
 -- ============================================================================
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35)
@@ -305,7 +346,7 @@ PredictionLine.Thickness = 1.0
 PredictionLine.Visible = false
 
 local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(149, 255, 0) 
+LeadLine.Color = Color3.fromRGB(195, 255, 0) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
 
@@ -343,13 +384,12 @@ RunService.RenderStepped:Connect(function()
             local distance = (targetHrp.Position - localHrp.Position).Magnitude
             local distFactor = math.clamp((distance - 4) / 16, 0, 1)
 
-            -- Suavizado en el cálculo del tracer visual verde para que concuerde perfectamente
-            local velY = murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.Y
-            local balancedVelocity = Vector3.new(murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.X, velY * 0.5, murderer.Character.HumanoidRootPart.AssemblyLinearVelocity.Z)
+            local currentVel = smoothedVelocity
+            local balancedVelocity = Vector3.new(currentVel.X, currentVel.Y * 0.5, currentVel.Z)
             
             local leadPredictedPos = targetHrp.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             
-            if velY < -0.5 then
+            if currentVel.Y < -0.5 then
                 local floorY = getFloorHeight(targetHrp, murderer.Character)
                 if floorY and leadPredictedPos.Y < (floorY + 1) then
                     leadPredictedPos = Vector3.new(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
@@ -388,18 +428,14 @@ local function fireAtMurdererDirectly()
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
                 
-                -- Hilo aislado de ejecución instantánea
                 task.spawn(function()
                     local startedInBackpack = (parent == LocalPlayer.Backpack)
                     
-                    -- FASE 1: Equipamiento Forzado Inmediato si está guardada
                     if startedInBackpack then
                         humanoid:EquipTool(gun)
-                        -- Micro-espera exacta para que el motor físico procese el cambio de Parent
                         RunService.Heartbeat:Wait() 
                     end
                     
-                    -- FASE 2: Disparo Síncronizado Directo al Objetivo Predicho
                     if gun:FindFirstChild("Shoot") then
                         local originCFrame = char.HumanoidRootPart.CFrame
                         if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
@@ -408,9 +444,7 @@ local function fireAtMurdererDirectly()
                         gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                     end
                     
-                    -- FASE 3: Desequipamiento Táctico (Unequip Gun)
                     if SheriffConfig.AutoUnequip then
-                        -- Pequeño respiro táctico para asegurar la llegada del paquete Shoot al servidor
                         task.wait(0.02) 
                         humanoid:UnequipTools()
                     end
@@ -422,7 +456,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2
+-- 🌌 INTERFAZ ABYSSAL VOID PURPLE V2.5 (GLOW RIPPLE ENGINE)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -437,15 +471,31 @@ ShootButton.BackgroundColor3 = Color3.fromRGB(13, 5, 24)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
+ShootButton.ClipsDescendants = false -- Requerido para permitir que la expansión de luz salga del borde
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24)) 
 Corner.Parent = ShootButton
 
+-- COMPONENTE NEÓN: Efecto Shockwave / Glow Expansivo Escondido
+local GlowEffect = Instance.new("Frame")
+GlowEffect.Name = "GlowEffect"
+GlowEffect.Size = UDim2.new(1, 0, 1, 0)
+GlowEffect.Position = UDim2.new(0.5, 0, 0.5, 0)
+GlowEffect.AnchorPoint = Vector2.new(0.5, 0.5)
+GlowEffect.BackgroundColor3 = Color3.fromRGB(168, 50, 247) -- Púrpura de neón intenso vibrante
+GlowEffect.BackgroundTransparency = 1 -- Oculto por defecto
+GlowEffect.ZIndex = ShootButton.ZIndex - 1 -- Corre por detrás del fondo para emular un halo de luz exterior
+GlowEffect.Parent = ShootButton
+
+local GlowCorner = Instance.new("UICorner")
+GlowCorner.CornerRadius = Corner.CornerRadius
+GlowCorner.Parent = GlowEffect
+
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.40, 0, 0.40, 0) 
+DecalTexture.Size = UDim2.new(0.41, 0, 0.41, 0) 
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0) 
 DecalTexture.BackgroundTransparency = 1
@@ -467,7 +517,29 @@ Label.Font = Enum.Font.GothamBold
 Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.Parent = ShootButton
 
-ShootButton.Activated:Connect(fireAtMurdererDirectly)
+-- MOTOR DE ANIMACIÓN PREMIUM (DISPARO + EFECTO ONDA DE CHOQUE)
+local function playPremiumGlowAnimation()
+    -- 1. Efecto físico elástico (El botón se encoge y regresa rápido)
+    local originalSize = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
+    local compressedSize = UDim2.new(0, math.floor(SheriffConfig.ButtonSize * 0.91), 0, math.floor(SheriffConfig.ButtonSize * 0.91))
+    
+    ShootButton.Size = compressedSize
+    TweenService:Create(ShootButton, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = originalSize}):Play()
+
+    -- 2. Onda expansiva de luz perimetral (Se genera pequeña desde el centro y estalla hacia afuera)
+    GlowEffect.Size = UDim2.new(0.85, 0, 0.85, 0)
+    GlowEffect.BackgroundTransparency = 0.15 -- Brillo inicial muy intenso
+    
+    TweenService:Create(GlowEffect, TweenInfo.new(0.42, Enum.EasingStyle.OutExpo), {
+        Size = UDim2.new(1.48, 0, 1.48, 0), -- Se expande casi un 50% por fuera de los bordes del botón
+        BackgroundTransparency = 1 -- Se desvanece por completo de forma suave
+    }):Play()
+end
+
+ShootButton.Activated:Connect(function()
+    playPremiumGlowAnimation()
+    fireAtMurdererDirectly()
+end)
 
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
 local DRAG_THRESHOLD = 8 
