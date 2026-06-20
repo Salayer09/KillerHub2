@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.9.0 [CQC proximity & ADVANCED GLOW UPDATE]
+-- 👻 KILLER HUB | SHERIFF V4.9.1 [CLEAN UI & ROBUST AIM FIX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -264,7 +264,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.9.0 (CON ADAPTACIÓN DE PROXIMIDAD EXTREMA - CQC)
+-- 🧠 MOTOR CINEMÁTICO V4.9.1 (CON ADAPTACIÓN DE PROXIMIDAD INTELIGENTE - CQC)
 -- ============================================================================
 local function getPredictedPosition(targetChar)
     if not targetChar then return nil end
@@ -287,7 +287,6 @@ local function getPredictedPosition(targetChar)
     end
 
     local rawVelocity = hrp.AssemblyLinearVelocity
-    -- OPTIMIZACIÓN ANTI-LAGSPIKES: Ningún jugador en MM2 pasa de 23 studs/s de forma legítima
     if rawVelocity.Magnitude > 23 then rawVelocity = rawVelocity.Unit * 16 end
 
     local clampedDT = math.min(lastDeltaTime, 0.05) 
@@ -298,11 +297,10 @@ local function getPredictedPosition(targetChar)
 
     local ping = math.clamp(cachedPingValue, 0.005, 0.25)
     
-    -- SISTEMA DE PROXIMIDAD: Reduce la predicción de forma dinámica si está muy cerca de ti
+    -- SISTEMA DE PROXIMIDAD: Reduce la predicción gradualmente si el Murderer se acerca a menos de 14 studs
     local currentDistance = (hrp.Position - localHrp.Position).Magnitude
     local proximityScale = math.clamp(currentDistance / 14, 0.12, 1.0)
 
-    -- Aplicación del modificador de proximidad inteligente
     local timeFrame = ping * (SheriffConfig.HorizontalPred * 10) * proximityScale
     local verticalTimeFrame = ping * (SheriffConfig.VerticalPred * 10) * proximityScale
 
@@ -347,7 +345,7 @@ local function getPredictedPosition(targetChar)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
     end
 
-    -- CAP DE SEGURIDAD ABSOLUTO (Máximo adelantamiento permitido dinámico)
+    -- CAP DE SEGURIDAD ABSOLUTO ADAPTATIVO
     local maxAllowedLead = 2.2 * proximityScale
     local horizontalDist = (Vector3.new(finalPrediction.X, 0, finalPrediction.Z) - Vector3.new(targetPosition.X, 0, targetPosition.Z)).Magnitude
     if horizontalDist > maxAllowedLead then
@@ -530,7 +528,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.5 (BOTÓN CON DESTELLO DE EXPANSIÓN MEJORADO)
+-- 🌌 INTERFAZ V3.6 (BOTÓN CON TRASLACIÓN DE REFLEJO INTERNO CORREGIDO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -545,7 +543,7 @@ ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = false -- Desactivado para permitir que la expansión del destello sobresalga limpiamente
+ShootButton.ClipsDescendants = true -- ACTIVADO: El destello se mantendrá limpio dentro del contenedor clásico
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
@@ -557,7 +555,7 @@ GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
 GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1 
-GlowOverlay.ZIndex = ShootButton.ZIndex - 1 -- Colocado detrás para crear un aura/destello exterior expansivo
+GlowOverlay.ZIndex = ShootButton.ZIndex + 1 -- Colocado al frente para la máscara táctil original
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
@@ -610,19 +608,15 @@ local function processGlowAtCoordinates(inputPosition)
     UiGradient.Offset = Vector2.new(0, relY * 1.5) 
     UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
     
-    -- AUMENTO DE DESTELLO POR EXPANSIÓN ÓPTICA (Sin alterar claridad ni el color base)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(1.32, 0, 1.32, 0),
-        Position = UDim2.new(-0.16, 0, -0.16, 0),
-        BackgroundTransparency = 0.25
+    -- RESTAURADO: Animación clásica limpia de transparencia interna, sin alterar tamaños
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.06
     }):Play()
 end
 
 local function fadeGlowReflection()
-    -- Regresa al tamaño original ocultando el destello suavemente
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
+    -- RESTAURADO: Desvanecimiento suave clásico
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
         BackgroundTransparency = 1
     }):Play()
 end
