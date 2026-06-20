@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.6.0 (INSTANT TRIGGER & SOLID BEAM UPDATE)
+-- 👻 KILLER HUB | SHERIFF V4.7.0 [ELITE INFALLIBLE & PARABOLIC UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -40,7 +40,6 @@ local SheriffConfig = {
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
--- Persistencia de Datos Estructurados JSON
 local function saveConfig()
     if writefile then
         local data = {
@@ -150,9 +149,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
     local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
     if btn then 
         btn.Size = UDim2.new(0, valor, 0, valor) 
-        if btn:FindFirstChild("UICorner") then
-            btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
-        end
+        if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24)) end
         if btn:FindFirstChild("GlowOverlay") and btn.GlowOverlay:FindFirstChild("UICorner") then
             btn.GlowOverlay.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
         end
@@ -174,7 +171,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.6.0 (DECOUPLED DELTA SMTH & TELEMETRY SUITE)
+-- 🧠 MOTOR CINEMÁTICO V4.7.0 (PREDICCION PARABÓLICA AVANZADA)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -230,20 +227,28 @@ local function getMurderer()
     return nil
 end
 
+-- PREMIUM MEJORA: Filtro Inteligente de Raycast. Ignora Inocentes, cristales rotos y accesorios transparentes
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then 
         return false 
     end
     
-    wallcastParams.FilterDescendantsInstances = {LocalPlayer.Character, murdererChar}
+    local ignoreList = {LocalPlayer.Character, murdererChar, Camera}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character and p ~= murdererChar then table.insert(ignoreList, p.Character) end
+    end
+    
+    wallcastParams.FilterDescendantsInstances = ignoreList
     local origin = LocalPlayer.Character.HumanoidRootPart.Position
     local ray = workspace:Raycast(origin, targetPart.Position - origin, wallcastParams)
+    
+    if ray and (ray.Instance.CanCollide == false or ray.Instance.Transparency > 0.7) then return true end
     return ray == nil
 end
 
 local function getFloorHeight(targetHrp, targetChar)
-    floorCastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, workspace.CurrentCamera}
+    floorCastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, Camera}
     local ray = workspace:Raycast(targetHrp.Position, Vector3.new(0, -25, 0), floorCastParams)
     return ray and ray.Position.Y or nil
 end
@@ -287,26 +292,25 @@ local function getPredictedPosition(targetChar)
 
     local hFactor = SheriffConfig.HorizontalPred * speedFactor
     local vFactor = SheriffConfig.VerticalPred * speedFactor
-    
-    if humanoid.FloorMaterial == Enum.Material.Air and math.abs(smoothedVelocity.Y) > 0.5 then
-        vFactor = vFactor * 0.78
-    end
 
     local finalPrediction = targetPosition
+    local timeFrame = hFactor + ping
+
+    -- PREMIUM MEJORA: Compensación de gravedad parabólica estricta para objetivos en el aire (Anti-Jump)
+    local gravityOffset = Vector3.new(0, 0, 0)
+    if humanoid.FloorMaterial == Enum.Material.Air then
+        local serverGravity = workspace.Gravity
+        gravityOffset = Vector3.new(0, -0.5 * serverGravity * (timeFrame ^ 2), 0)
+    end
 
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local rawAcceleration = (smoothedVelocity - previousTargetVelocity)
         local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.15, rawAcceleration.Z)
-        local timeFrame = hFactor + ping
-        
-        if smoothedVelocity.Y < -1 then
-            stableAcceleration = stableAcceleration + Vector3.new(0, -workspace.Gravity * 0.12, 0)
-        end
         
         local kinematicOffset = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
-        finalPrediction = targetPosition + (kinematicOffset * distanceFactor)
+        finalPrediction = targetPosition + (kinematicOffset * distanceFactor) + (gravityOffset * distanceFactor)
         
-        if math.abs(smoothedVelocity.Y) > 1 then
+        if math.abs(smoothedVelocity.Y) > 1 and humanoid.FloorMaterial ~= Enum.Material.Air then
             finalPrediction = finalPrediction + Vector3.new(0, smoothedVelocity.Y * (vFactor * 0.6) * distanceFactor, 0)
         end
 
@@ -317,16 +321,13 @@ local function getPredictedPosition(targetChar)
             if dotProduct < 0.82 then dynamicH = dynamicH * math.clamp(dotProduct, 0.15, 1.0) end
         end
 
-        local dynamicV = vFactor
-        if smoothedVelocity.Y < 0 then dynamicV = dynamicV * 0.35 end
-
         local horizontalOffset = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (dynamicH + ping) * distanceFactor
-        local verticalOffset = Vector3.new(0, smoothedVelocity.Y * (dynamicV + (ping * 0.3)), 0) * distanceFactor
-        finalPrediction = targetPosition + horizontalOffset + verticalOffset
+        local verticalOffset = Vector3.new(0, smoothedVelocity.Y * (vFactor + (ping * 0.3)), 0) * distanceFactor
+        finalPrediction = targetPosition + horizontalOffset + verticalOffset + (gravityOffset * distanceFactor)
 
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
         local latencyTime = hFactor + (ping * 0.85)
-        finalPrediction = targetPosition + (Vector3.new(smoothedVelocity.X * latencyTime, smoothedVelocity.Y * (vFactor * 0.7), smoothedVelocity.Z * latencyTime) * distanceFactor)
+        finalPrediction = targetPosition + (Vector3.new(smoothedVelocity.X * latencyTime, smoothedVelocity.Y * (vFactor * 0.7), smoothedVelocity.Z * latencyTime) * distanceFactor) + (gravityOffset * distanceFactor)
     end
 
     if smoothedVelocity.Y < -0.5 then
@@ -417,6 +418,7 @@ RunService.RenderStepped:Connect(function()
         local hFactor = SheriffConfig.HorizontalPred * speedFactor
         local vFactor = SheriffConfig.VerticalPred * speedFactor
 
+        local predictedPos = getPredictedPosition(murderer.Character)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
@@ -481,6 +483,7 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local hrp = murderer.Character:FindFirstChild("HumanoidRootPart")
+        -- PREMIUM INTEGRACIÓN: El gatillo valida las colisiones antes de mandar el paquete remoto
         if hrp and isTargetVisible(hrp, murderer.Character) then 
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
@@ -506,7 +509,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.3 (INSTANT TRIGGER & 7% INCREASED GLOW FORCE SYSTEM)
+-- 🌌 INTERFAZ V3.4 (ELITE HORIZONTAL SOLID REFLECTION SYSTEM)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -585,7 +588,6 @@ local function processGlowAtCoordinates(inputPosition)
     
     UiGradient.Offset = Vector2.new(0, relY * 1.5) 
     UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
-    -- OPTIMIZACIÓN VISUAL: Transparencia reducida a 0.08 para ganar un 7% más de solidez/fuerza
     TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.08}):Play()
 end
 
@@ -596,12 +598,10 @@ end
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
 local DRAG_THRESHOLD = 8 
 
--- ROUTINE UPGRADE: Intercepción inmediata de clicks en InputBegan para remover los 0.2s de retraso nativos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
         
-        -- DISPARO INSTANTÁNEO EN COLA PARALELA (No espera a que sueltes)
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
