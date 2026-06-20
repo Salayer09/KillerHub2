@@ -518,8 +518,8 @@ local function fireAtMurdererDirectly()
     end
 end
 
--- ============================================================================
--- 🌌 INTERFAZ V3.4 (ELITE HORIZONTAL SOLID REFLECTION SYSTEM)
+-- -- ============================================================================
+-- 🌌 INTERFAZ V3.4 (ELITE HORIZONTAL SOLID REFLECTION SYSTEM - FIXED DIAGONAL)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -538,14 +538,14 @@ ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24)) 
+Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
 GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
 GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
-GlowOverlay.BackgroundTransparency = 1 
+GlowOverlay.BackgroundTransparency = 1
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
@@ -557,18 +557,18 @@ local UiGradient = Instance.new("UIGradient")
 UiGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 8, 43)),       
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))        
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))
 })
-UiGradient.Rotation = 90 
+UiGradient.Rotation = 45 -- FIJO: Inclinación diagonal perfecta (Arriba-Izquierda a Abajo-Derecha)
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.39, 0, 0.39, 0) 
+DecalTexture.Size = UDim2.new(0.39, 0, 0.39, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0) 
+DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
-DecalTexture.Image = "rbxassetid://125754446555599" 
+DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
@@ -578,27 +578,26 @@ TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enu
 local Label = Instance.new("TextLabel")
 Label.Name = "Label"
 Label.Size = UDim2.new(1, 0, 0.2, 0)
-Label.Position = UDim2.new(0, 0, 0.75, 0) 
+Label.Position = UDim2.new(0, 0, 0.75, 0)
 Label.BackgroundTransparency = 1
 Label.Text = "SHOOT"
-Label.TextColor3 = Color3.fromRGB(255, 255, 255) 
-Label.TextSize = 15 
+Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+Label.TextSize = 15
 Label.Font = Enum.Font.GothamBold
 Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
-local SIDE_ANGLES = {90, 270}
-
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
-    local localY = inputPosition.Y - buttonAbsolutePos.Y
-    local relY = (localY / buttonSize.Y) - 0.5
     
-    UiGradient.Offset = Vector2.new(0, relY * 1.5) 
-    UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06}):Play()
+    local localX = inputPosition.X - buttonAbsolutePos.X
+    local relX = (localX / buttonSize.X) - 0.5
+    
+    -- Mantiene el barrido lateral de la luz respetando de forma estática la diagonal de 45°
+    UiGradient.Offset = Vector2.new(relX * 1.5, 0)
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play()
 end
 
 local function fadeGlowReflection()
@@ -606,7 +605,7 @@ local function fadeGlowReflection()
 end
 
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
-local DRAG_THRESHOLD = 8 
+local DRAG_THRESHOLD = 8
 
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -617,13 +616,13 @@ ShootButton.InputBegan:Connect(function(input)
         if not SheriffConfig.ButtonLocked then
             dragStart = input.Position
             startPos = ShootButton.Position
-            dragging = false 
+            dragging = false
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     if dragging then
                         SheriffConfig.ButtonX = ShootButton.Position.X.Scale
                         SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                        saveConfig() 
+                        saveConfig()
                     end
                     dragStart, dragging = nil, false
                 end
