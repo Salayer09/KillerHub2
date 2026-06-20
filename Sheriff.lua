@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V5.0.0 [ULTRA INFALLIBLE & TINY AVATAR ANTI-EVASION]
+-- 👻 KILLER HUB | SHERIFF V4.7.0 [ELITE INFALLIBLE & PARABOLIC UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -171,7 +171,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V5.0.0 (PREDICCIÓN ESTABLE CON COMPENSACIÓN DE AVATARES DIMINUTOS)
+-- 🧠 MOTOR CINEMÁTICO V4.7.0 (PREDICCION PARABÓLICA AVANZADA)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -227,6 +227,7 @@ local function getMurderer()
     return nil
 end
 
+-- PREMIUM MEJORA: Filtro Inteligente de Raycast. Ignora Inocentes, cristales rotos y accesorios transparentes
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then 
@@ -265,99 +266,74 @@ local function getPredictedPosition(targetChar)
         lastTargetChar = targetChar
     end
 
-    -- 1. DETECCIÓN Y AJUSTE DE AVATARES DIMINUTOS (Normalización de hitbox volumétrica)
     local targetPosition = hrp.Position
-    local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.05, 2.0) or 1
-    local widthScale = humanoid:FindFirstChild("BodyWidthScale") and math.clamp(humanoid.BodyWidthScale.Value, 0.05, 2.0) or 1
-
-    -- Si el avatar es extremadamente bajo o deformado, corregimos el centro visual exacto
-    if heightScale < 0.65 then
-        local boundingBoxSize = targetChar:GetExtentsSize()
-        -- Reajustamos el tiro ligeramente hacia arriba de su HRP para evitar dar al piso en rigs customizados
-        targetPosition = targetPosition + Vector3.new(0, (boundingBoxSize.Y * 0.15), 0)
+    local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
+    
+    if heightScale < 0.85 then
+        targetPosition = targetPosition - Vector3.new(0, (1 - heightScale) * 1.2, 0)
     end
 
-    -- 2. FILTRADO ANTIFLING Y ESTABILIZACIÓN DE VELOCIDAD SUAVE
     local rawVelocity = hrp.AssemblyLinearVelocity
-    if rawVelocity.Magnitude > 45 then 
-        rawVelocity = rawVelocity.Unit * 16 -- Capa máxima para evitar desvíos por tirones de físicas o scripts externos
-    end
+    if rawVelocity.Magnitude > 38 then rawVelocity = rawVelocity.Unit * 16 end
 
-    local fpsWeight = math.clamp(1 - math.exp(-15 * lastDeltaTime), 0.05, 0.8)
+    local fpsWeight = math.clamp(1 - math.exp(-14 * lastDeltaTime), 0.05, 0.75)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
     
     if stuckCounter > 4 then smoothedVelocity = Vector3.new(0, 0, 0) end
-    if smoothedVelocity.Magnitude < 0.15 then return targetPosition end
+    if smoothedVelocity.Magnitude < 0.1 then return targetPosition end
 
-    -- 3. CÁLCULO DE DIRECCIÓN ESTABLE (Filtro Anti-ZigZag / Anti-Círculos por Dot Product)
-    local stabilityFactor = 1.0
-    if smoothedVelocity.Magnitude > 1.5 and previousTargetVelocity.Magnitude > 1.5 then
-        local dot = smoothedVelocity.Unit:Dot(previousTargetVelocity.Unit)
-        if dot < 0.96 then
-            -- El asesino está girando bruscamente. Reducimos la predicción para evitar que la mira se anticipe en el vacío.
-            stabilityFactor = math.clamp(dot, 0.08, 1.0)
-        end
-    end
+    local currentSpeed = smoothedVelocity.Magnitude
+    local speedFactor = math.clamp(currentSpeed / 16, 0, 1)
+    if currentSpeed < 12 then speedFactor = (currentSpeed / 16) ^ 2 end
 
-    local ping = math.clamp(cachedPingValue, 0.01, 0.35)
+    local ping = math.clamp(cachedPingValue, 0.01, 0.4)
     local distance = (targetPosition - localHrp.Position).Magnitude
-    local distanceFactor = math.clamp((distance - 3) / 16, 0, 1) 
+    local distanceFactor = math.clamp((distance - 4) / 16, 0, 1) 
 
-    local hFactor = SheriffConfig.HorizontalPred * (smoothedVelocity.Magnitude / 16) * stabilityFactor
-    local vFactor = SheriffConfig.VerticalPred * (smoothedVelocity.Magnitude / 16)
+    local hFactor = SheriffConfig.HorizontalPred * speedFactor
+    local vFactor = SheriffConfig.VerticalPred * speedFactor
 
     local finalPrediction = targetPosition
     local timeFrame = hFactor + ping
 
-    -- 4. ECUACIÓN PARABÓLICA ESTRICTA DE SEGUNDO GRADO PARA CAÍDAS Y SALTOS
+    -- PREMIUM MEJORA: Compensación de gravedad parabólica estricta para objetivos en el aire (Anti-Jump)
     local gravityOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
         local serverGravity = workspace.Gravity
-        -- Movimiento Uniformemente Acelerado exacto para interceptar trayectorias aéreas
-        gravityOffset = Vector3.new(0, (smoothedVelocity.Y * timeFrame) - (0.5 * serverGravity * (timeFrame ^ 2)), 0)
+        gravityOffset = Vector3.new(0, -0.5 * serverGravity * (timeFrame ^ 2), 0)
     end
 
-    -- 5. ASIGNACIÓN ASÍNCRONA DE MODOS MEJORADOS
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local rawAcceleration = (smoothedVelocity - previousTargetVelocity)
-        local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.1, rawAcceleration.Z)
+        local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.15, rawAcceleration.Z)
         
         local kinematicOffset = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
+        finalPrediction = targetPosition + (kinematicOffset * distanceFactor) + (gravityOffset * distanceFactor)
         
-        if humanoid.FloorMaterial == Enum.Material.Air then
-            finalPrediction = targetPosition + (Vector3.new(kinematicOffset.X, 0, kinematicOffset.Z) * distanceFactor) + (gravityOffset * distanceFactor)
-        else
-            finalPrediction = targetPosition + (kinematicOffset * distanceFactor)
-            if math.abs(smoothedVelocity.Y) > 0.8 then
-                finalPrediction = finalPrediction + Vector3.new(0, smoothedVelocity.Y * vFactor * distanceFactor, 0)
-            end
+        if math.abs(smoothedVelocity.Y) > 1 and humanoid.FloorMaterial ~= Enum.Material.Air then
+            finalPrediction = finalPrediction + Vector3.new(0, smoothedVelocity.Y * (vFactor * 0.6) * distanceFactor, 0)
         end
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local horizontalOffset = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (hFactor + ping) * distanceFactor
-        if humanoid.FloorMaterial == Enum.Material.Air then
-            finalPrediction = targetPosition + horizontalOffset + (gravityOffset * distanceFactor)
-        else
-            local verticalOffset = Vector3.new(0, smoothedVelocity.Y * (vFactor + (ping * 0.25)), 0) * distanceFactor
-            finalPrediction = targetPosition + horizontalOffset + verticalOffset
+        local dynamicH = hFactor
+        if lastVelocity.Magnitude > 0.2 then
+            local dotProduct = smoothedVelocity.Unit:Dot(lastVelocity.Unit)
+            if dotProduct < 0.82 then dynamicH = dynamicH * math.clamp(dotProduct, 0.15, 1.0) end
         end
+
+        local horizontalOffset = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (dynamicH + ping) * distanceFactor
+        local verticalOffset = Vector3.new(0, smoothedVelocity.Y * (vFactor + (ping * 0.3)), 0) * distanceFactor
+        finalPrediction = targetPosition + horizontalOffset + verticalOffset + (gravityOffset * distanceFactor)
 
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        local latencyTime = (SheriffConfig.HorizontalPred * stabilityFactor) + (ping * 0.85)
-        local baseOffset = Vector3.new(smoothedVelocity.X * latencyTime, smoothedVelocity.Y * (vFactor * 0.6), smoothedVelocity.Z * latencyTime) * distanceFactor
-        
-        if humanoid.FloorMaterial == Enum.Material.Air then
-            finalPrediction = targetPosition + Vector3.new(baseOffset.X, 0, baseOffset.Z) + (gravityOffset * distanceFactor)
-        else
-            finalPrediction = targetPosition + baseOffset
-        end
+        local latencyTime = hFactor + (ping * 0.85)
+        finalPrediction = targetPosition + (Vector3.new(smoothedVelocity.X * latencyTime, smoothedVelocity.Y * (vFactor * 0.7), smoothedVelocity.Z * latencyTime) * distanceFactor) + (gravityOffset * distanceFactor)
     end
 
-    -- 6. CONTROL ANTIPISO PARA CHARRITOS/AVATARES CHICOS EN CAÍDAS RAPIDAS
     if smoothedVelocity.Y < -0.5 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
-            local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
+            local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.3
             if finalPrediction.Y < minAllowedY then
                 finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z)
             end
@@ -376,7 +352,7 @@ RunService.Heartbeat:Connect(function(dt)
         lastVelocity = hrp.AssemblyLinearVelocity
         if lastTargetPosition ~= Vector3.new(0, 0, 0) then
             local actualDisplacement = (hrp.Position - lastTargetPosition).Magnitude
-            if hrp.AssemblyLinearVelocity.Magnitude > 1.2 and actualDisplacement < 0.01 then
+            if hrp.AssemblyLinearVelocity.Magnitude > 1.5 and actualDisplacement < 0.01 then
                 stuckCounter = math.min(stuckCounter + 1, 20)
             else stuckCounter = math.max(stuckCounter - 1, 0) end
         end
@@ -507,6 +483,7 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local hrp = murderer.Character:FindFirstChild("HumanoidRootPart")
+        -- PREMIUM INTEGRACIÓN: El gatillo valida las colisiones antes de mandar el paquete remoto
         if hrp and isTargetVisible(hrp, murderer.Character) then 
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
