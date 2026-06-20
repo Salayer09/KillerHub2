@@ -304,10 +304,16 @@ local function getPredictedPosition(targetChar)
         checkedVerticalVelocity = 0 -- Filtrar velocidades negativas por bajar escaleras/correr
     end
 
-    local verticalOffset = Vector3.new(0, 0, 0)
+        local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
+        -- 🛰️ AMORTIGUACIÓN DE GRAVEDAD PARA EVITAR QUE EL TRACER SE CLAJE EN EL SUELO
         local airTime = timeFrame * distanceFactor
-        verticalOffset = Vector3.new(0, (checkedVerticalVelocity * airTime) - (0.5 * workspace.Gravity * (airTime ^ 2)), 0)
+        local gravityAmortiguacion = 0.65 -- Suaviza el impacto visual de la gravedad en el aire
+        
+        local predictedYVelocity = checkedVerticalVelocity * airTime
+        local predictedGravityDrop = 0.5 * workspace.Gravity * (airTime ^ 2) * gravityAmortiguacion
+        
+        verticalOffset = Vector3.new(0, predictedYVelocity - predictedGravityDrop, 0)
     else
         verticalOffset = Vector3.new(0, checkedVerticalVelocity * timeFrame * vFactor, 0)
     end
@@ -579,7 +585,7 @@ local function processGlowAtCoordinates(inputPosition)
     local localX = inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / buttonSize.X) - 0.5
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.18}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.22}):Play()
 end
 
 local function fadeGlowReflection()
