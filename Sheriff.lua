@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.7.5 [ANTI-DIPPING & STRICT WALLCHECK UPDATE]
+-- 👻 KILLER HUB | SHERIFF V4.9.0 [CQC proximity & ADVANCED GLOW UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -95,11 +95,11 @@ SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Predictivo Adapt
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("HorizontalPredSlider", "Pred. Horizontal (130 = 0.130)", 0, 300, function(valor)
+SheriffTab:CreateSlider("HorizontalPredSlider", "Pred. Horizontal (130 = 1.3x de tu Ping)", 0, 300, function(valor)
     SheriffConfig.HorizontalPred = valor / 1000 
 end)
 
-SheriffTab:CreateSlider("VerticalPredSlider", "Pred. Vertical (35 = 0.035)", 0, 120, function(valor)
+SheriffTab:CreateSlider("VerticalPredSlider", "Pred. Vertical (35 = Multiplicador Vertical)", 0, 120, function(valor)
     SheriffConfig.VerticalPred = valor / 1000
 end)
 
@@ -240,7 +240,6 @@ local function isTargetVisible(murdererChar)
     
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    -- 1. Comprobar Torso (HRP)
     local rayHrp = workspace:Raycast(origin, hrp.Position - origin, wallcastParams)
     local hrpVisible = true
     if rayHrp and rayHrp.Instance.Transparency <= 0.7 then
@@ -248,7 +247,6 @@ local function isTargetVisible(murdererChar)
     end
     if hrpVisible then return true end
     
-    -- 2. Comprobar Cabeza (Si el torso está tapado por una caja/cobertura baja)
     if head then
         local rayHead = workspace:Raycast(origin, head.Position - origin, wallcastParams)
         if not rayHead or rayHead.Instance.Transparency > 0.7 then
@@ -266,7 +264,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO ULTRA-PERFECTO (SISTEMA ANTI-ENTERRADO CONSTANTE)
+-- 🧠 MOTOR CINEMÁTICO V4.9.0 (CON ADAPTACIÓN DE PROXIMIDAD EXTREMA - CQC)
 -- ============================================================================
 local function getPredictedPosition(targetChar)
     if not targetChar then return nil end
@@ -289,58 +287,55 @@ local function getPredictedPosition(targetChar)
     end
 
     local rawVelocity = hrp.AssemblyLinearVelocity
-    if rawVelocity.Magnitude > 50 then rawVelocity = rawVelocity.Unit * 16 end
+    -- OPTIMIZACIÓN ANTI-LAGSPIKES: Ningún jugador en MM2 pasa de 23 studs/s de forma legítima
+    if rawVelocity.Magnitude > 23 then rawVelocity = rawVelocity.Unit * 16 end
 
     local clampedDT = math.min(lastDeltaTime, 0.05) 
-    local isLowFPS = lastDeltaTime > 0.033 
-
-    local fpsWeight = isLowFPS and 0.4 or math.clamp(1 - math.exp(-18 * clampedDT), 0.02, 0.8)
-    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, 0.3)
     
     if stuckCounter > 4 then smoothedVelocity = Vector3.new(0, 0, 0) end
     if smoothedVelocity.Magnitude < 0.05 then return targetPosition end
 
-    local currentSpeed = smoothedVelocity.Magnitude
-    local speedFactor = math.clamp(currentSpeed / 16, 0, 1.2)
-
-    local fpsBuffer = isLowFPS and 0.045 or 0.033
-    local ping = math.clamp(cachedPingValue, 0.01, 0.4) + fpsBuffer
+    local ping = math.clamp(cachedPingValue, 0.005, 0.25)
     
-    local hFactor = SheriffConfig.HorizontalPred * speedFactor
-    local vFactor = SheriffConfig.VerticalPred * speedFactor
-    local timeFrame = hFactor + ping
+    -- SISTEMA DE PROXIMIDAD: Reduce la predicción de forma dinámica si está muy cerca de ti
+    local currentDistance = (hrp.Position - localHrp.Position).Magnitude
+    local proximityScale = math.clamp(currentDistance / 14, 0.12, 1.0)
+
+    -- Aplicación del modificador de proximidad inteligente
+    local timeFrame = ping * (SheriffConfig.HorizontalPred * 10) * proximityScale
+    local verticalTimeFrame = ping * (SheriffConfig.VerticalPred * 10) * proximityScale
 
     local finalPrediction = targetPosition
     local serverGravity = workspace.Gravity
 
-    -- CONTROL VERTICAL ABSOLUTO ANTI-ENTERRADO
+    -- CONTROL VERTICAL DINÁMICO
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
-        -- Solo predice caídas o saltos reales si no toca el suelo
-        verticalOffset = Vector3.new(0, (smoothedVelocity.Y * timeFrame) - (0.5 * serverGravity * (timeFrame ^ 2)), 0)
+        verticalOffset = Vector3.new(0, (smoothedVelocity.Y * verticalTimeFrame) - (0.5 * serverGravity * (verticalTimeFrame ^ 2)), 0)
     else
-        -- Si está en el suelo, la velocidad Y vertical se congela para evitar hundimientos
-        verticalOffset = Vector3.new(0, 0, 0)
+        if math.abs(smoothedVelocity.Y) > 0.5 then
+            verticalOffset = Vector3.new(0, smoothedVelocity.Y * verticalTimeFrame * 0.3, 0)
+        else
+            verticalOffset = Vector3.new(0, 0, 0)
+        end
     end
 
-    -- MODOS DE PREDICCIÓN SIN FACTORES DE DISTANCIA DEGRADANTES
+    -- MODOS DE PREDICCIÓN CORREGIDOS
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-        if rawAcceleration.Magnitude > 120 then rawAcceleration = rawAcceleration.Unit * 12 end
-        
-        local accAmortiguacion = isLowFPS and 0.03 or 0.1
-        local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
+        if rawAcceleration.Magnitude > 100 then rawAcceleration = rawAcceleration.Unit * 10 end
+        local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.05, rawAcceleration.Z)
         
         local horizontalPrediction = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
         finalPrediction = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z) + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
         local dynamicH = timeFrame
-        if lastVelocity.Magnitude > 0.5 and smoothedVelocity.Magnitude > 0.5 then
+        if lastVelocity.Magnitude > 1 and smoothedVelocity.Magnitude > 1 then
             local dotProduct = smoothedVelocity.Unit:Dot(lastVelocity.Unit)
-            local limit = isLowFPS and 0.85 or 0.90
-            if dotProduct < limit then 
-                dynamicH = dynamicH * math.clamp(dotProduct, 0.25, 1.0) 
+            if dotProduct < 0.30 then 
+                dynamicH = dynamicH * math.clamp(dotProduct, 0.50, 1.0) 
             end
         end
 
@@ -348,12 +343,19 @@ local function getPredictedPosition(targetChar)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        local stableTime = timeFrame * (isLowFPS and 0.90 or 0.95)
-        local horizontalOffset = Vector3.new(smoothedVelocity.X * stableTime, 0, smoothedVelocity.Z * stableTime)
+        local horizontalOffset = Vector3.new(smoothedVelocity.X * timeFrame, 0, smoothedVelocity.Z * timeFrame)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
     end
 
-    -- SAFEGUARD FINAL PARA EL PISO
+    -- CAP DE SEGURIDAD ABSOLUTO (Máximo adelantamiento permitido dinámico)
+    local maxAllowedLead = 2.2 * proximityScale
+    local horizontalDist = (Vector3.new(finalPrediction.X, 0, finalPrediction.Z) - Vector3.new(targetPosition.X, 0, targetPosition.Z)).Magnitude
+    if horizontalDist > maxAllowedLead then
+        local direction = (finalPrediction - targetPosition).Unit
+        finalPrediction = targetPosition + (direction * maxAllowedLead)
+    end
+
+    -- COMPROBACIÓN FINAL ANTI-ENTERRADO
     if smoothedVelocity.Y < -0.1 or humanoid.FloorMaterial ~= Enum.Material.Air then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -528,7 +530,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN INTEGRADO)
+-- 🌌 INTERFAZ V3.5 (BOTÓN CON DESTELLO DE EXPANSIÓN MEJORADO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -543,7 +545,7 @@ ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true 
+ShootButton.ClipsDescendants = false -- Desactivado para permitir que la expansión del destello sobresalga limpiamente
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
@@ -555,7 +557,7 @@ GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
 GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1 
-GlowOverlay.ZIndex = ShootButton.ZIndex + 1
+GlowOverlay.ZIndex = ShootButton.ZIndex - 1 -- Colocado detrás para crear un aura/destello exterior expansivo
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
@@ -607,11 +609,22 @@ local function processGlowAtCoordinates(inputPosition)
     
     UiGradient.Offset = Vector2.new(0, relY * 1.5) 
     UiGradient.Rotation = SIDE_ANGLES[math.random(1, #SIDE_ANGLES)]
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.06}):Play()
+    
+    -- AUMENTO DE DESTELLO POR EXPANSIÓN ÓPTICA (Sin alterar claridad ni el color base)
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(1.32, 0, 1.32, 0),
+        Position = UDim2.new(-0.16, 0, -0.16, 0),
+        BackgroundTransparency = 0.25
+    }):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    -- Regresa al tamaño original ocultando el destello suavemente
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundTransparency = 1
+    }):Play()
 end
 
 local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
