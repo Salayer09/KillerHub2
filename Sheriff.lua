@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V4.8.5 [PREMIUM HYBRID ACCELERATION UPDATE]
+-- 👻 KILLER HUB | SHERIFF V5.0.0 [GOD-MODE ANTI-EVASION UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -13,10 +13,10 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 -- 1. PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
--- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA
+-- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA (ACTUALIZADA A HEURÍSTICA 3.0)
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "Predictiva 2.0 (Aceleración)",
+    PredictionMode = "Predictiva Heurística 3.0", -- NUEVO MODO POR DEFECTO
     HorizontalPred = 0.135, 
     VerticalPred = 0.045,    
     WallCheck = true,         
@@ -90,7 +90,8 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check
     SheriffConfig.WallCheck = estado
 end)
 
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo", "Lineal Estable"}, function(seleccionado)
+-- ACTUALIZADO: Inclusión de la opción Heurística en el menú desplegable
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Predictiva Heurística 3.0", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo", "Lineal Estable"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
@@ -171,7 +172,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.8.0 (PREDICCION PARABÓLICA AVANZADA)
+-- 🧠 MOTOR CINEMÁTICO V5.0.0 (SISTEMA DE PREDICTOR ANTI-EVASIÓN AVANZADO)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -189,6 +190,12 @@ local lastTargetPosition = Vector3.new(0,0,0)
 local lastTargetChar = nil
 local stuckCounter = 0
 local lastDeltaTime = 0.016
+
+-- NUEVAS VARIABLES: Búferes e Historiales para análisis de patrones erráticos
+local positionHistory = {} 
+local directionHistory = {} 
+local zigZagIntensity = 0 
+local lastDirectionChangeTime = 0
 
 local cachedPingValue = 0.06
 task.spawn(function()
@@ -227,7 +234,6 @@ local function getMurderer()
     return nil
 end
 
--- 🚀 MEJORA CRÍTICA: Fusión del Wall Check Avanzado Anti-Bugs (Inmune a Esquinas)
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -236,7 +242,6 @@ local function isTargetVisible(targetPart, murdererChar)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    -- Determina dinámicamente el origen desde el accesorio de la pistola o la cámara
     local originCFrame = hrp:FindFirstChild("GunRaycastAttachment") and hrp.GunRaycastAttachment.WorldCFrame or hrp.CFrame
     local originPos = originCFrame.Position
     local targetPos = targetPart.Position
@@ -247,15 +252,12 @@ local function isTargetVisible(targetPart, murdererChar)
     end
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    -- 1. clipCheck: Detecta si tu propia arma o cuerpo están incrustados en una pared
     local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
     if clipCheck then return false end
     
-    -- 2. pathCheck: Evalúa el vector directo de la trayectoria de la bala
     local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
     if not pathCheck then return true end
     
-    -- Filtrado para vidrios, vitrinas transparentes u objetos sin colisión física
     if pathCheck.Instance.CanCollide == false or pathCheck.Instance.Transparency > 0.5 then 
         return true 
     end
@@ -270,7 +272,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V4.8.0 (PREDICCIÓN ULTRA-INFALIBLE ACTUALIZADA)
+-- 🧠 MOTOR CINEMÁTICO V5.0.0 (CÁLCULOS AVANZADOS DE BALÍSTICA E INVERSIÓN)
 -- ============================================================================
 local function getPredictedPosition(targetChar)
     if not targetChar then return nil end
@@ -280,9 +282,18 @@ local function getPredictedPosition(targetChar)
     
     if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil end
 
+    local now = os.clock()
+    local clampedDT = math.min(lastDeltaTime, 0.05) 
+    local isLowFPS = lastDeltaTime > 0.033 
+
+    -- Inicializar o limpiar registros si cambia de objetivo
     if lastTargetChar ~= targetChar then
         smoothedVelocity = hrp.AssemblyLinearVelocity
         lastTargetChar = targetChar
+        positionHistory = {}
+        directionHistory = {}
+        zigZagIntensity = 0
+        lastDirectionChangeTime = now
     end
 
     local targetPosition = hrp.Position
@@ -295,8 +306,26 @@ local function getPredictedPosition(targetChar)
     local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 50 then rawVelocity = rawVelocity.Unit * 16 end
 
-    local clampedDT = math.min(lastDeltaTime, 0.05) 
-    local isLowFPS = lastDeltaTime > 0.033 
+    -- Guardar historial de posiciones (Búfer de 10 posiciones para Heurística)
+    table.insert(positionHistory, 1, targetPosition)
+    if #positionHistory > 10 then table.remove(positionHistory) end
+
+    -- DETECTOR ANTI ZIG-ZAG: Analiza cambios abruptos de dirección en el eje X/Z
+    if lastVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
+        local currentDir = Vector3.new(rawVelocity.X, 0, rawVelocity.Z).Unit
+        local prevDir = Vector3.new(lastVelocity.X, 0, lastVelocity.Z).Unit
+        local dotProduct = currentDir:Dot(prevDir)
+        
+        if dotProduct < 0.25 then -- Giro brusco o amago detectado
+            zigZagIntensity = math.min(zigZagIntensity + 1.2, 5)
+            lastDirectionChangeTime = now
+        end
+    end
+    
+    -- Degradación suave de la intensidad del zig-zag si se estabiliza
+    if now - lastDirectionChangeTime > 0.5 then
+        zigZagIntensity = math.max(zigZagIntensity - (clampedDT * 2.5), 0)
+    end
 
     local fpsWeight = isLowFPS and 0.4 or math.clamp(1 - math.exp(-18 * clampedDT), 0.02, 0.8)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
@@ -313,24 +342,45 @@ local function getPredictedPosition(targetChar)
     local distance = (targetPosition - localHrp.Position).Magnitude
     local distanceFactor = math.clamp(distance / 20, 0.1, 1) 
 
-    local hFactor = SheriffConfig.HorizontalPred * speedFactor
+    -- Amortiguador de predicción dinámica: si hace zig-zag, reduce el multiplicador horizontal para evitar sobretiro
+    local zigZagDampening = math.clamp(1 - (zigZagIntensity / 6), 0.35, 1.0)
+    local hFactor = SheriffConfig.HorizontalPred * speedFactor * zigZagDampening
     local vFactor = SheriffConfig.VerticalPred * speedFactor
     local timeFrame = hFactor + ping
 
     local finalPrediction = targetPosition
     local serverGravity = workspace.Gravity
 
+    -- MEJORA DE SALTO: Aplicación de ecuaciones parabólicas físicas reales en el aire
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
         local airTime = timeFrame * distanceFactor
+        -- s = ut - 0.5gt^2 (Fórmula cinemática real de proyectiles)
         verticalOffset = Vector3.new(0, (smoothedVelocity.Y * airTime) - (0.5 * serverGravity * (airTime ^ 2)), 0)
     else
         verticalOffset = Vector3.new(0, smoothedVelocity.Y * timeFrame * vFactor, 0)
     end
 
-    if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
+    -- PROCESAMIENTO DE MODOS SELECCIONADOS
+    if SheriffConfig.PredictionMode == "Predictiva Heurística 3.0" then
+        -- Calcula el centro de masa de la actividad reciente del objetivo
+        local centroid = Vector3.new(0, 0, 0)
+        if #positionHistory > 0 then
+            for _, pos in ipairs(positionHistory) do centroid = centroid + pos end
+            centroid = centroid / #positionHistory
+        else
+            centroid = targetPosition
+        end
+        
+        -- Si el jugador se mueve de forma caótica, mezcla dinámicamente el vector cinemático hacia el centro de masa
+        local blendWeight = math.clamp(zigZagIntensity / 4, 0.1, 0.8)
+        local basePrediction = targetPosition + (Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * timeFrame * distanceFactor) + verticalOffset
+        finalPrediction = basePrediction:Lerp(centroid + verticalOffset, blendWeight)
+
+    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-        if rawAcceleration.Magnitude > 120 then rawAcceleration = rawAcceleration.Unit * 12 end
+        -- CLAMP DE SEGURIDAD: Evita saltos infinitos al vacío causados por picos de aceleración artificiales
+        if rawAcceleration.Magnitude > 45 then rawAcceleration = rawAcceleration.Unit * 45 end
         
         local accAmortiguacion = isLowFPS and 0.03 or 0.1
         local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
@@ -357,6 +407,7 @@ local function getPredictedPosition(targetChar)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
     end
 
+    -- Control de colisión con el suelo en caídas
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -367,11 +418,13 @@ local function getPredictedPosition(targetChar)
         end
     end
 
+    previousTargetVelocity = smoothedVelocity
+    lastVelocity = rawVelocity
     return finalPrediction
 end
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO (CAPAS ACTUALIZADAS)
+-- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
@@ -404,7 +457,8 @@ table.insert(_G.KillerHubLines, PredictionLine)
 local vec2New, vec3New = Vector2.new, Vector3.new
 local worldToViewport = Camera.WorldToViewportPoint
 
-RunService.RenderStepped:Connect(function()
+RunService.RenderStepped:Connect(function(dt)
+    lastDeltaTime = dt
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
@@ -518,8 +572,8 @@ local function fireAtMurdererDirectly()
     end
 end
 
--- -- ============================================================================
--- 🌌 INTERFAZ V3.4 (ELITE HORIZONTAL SOLID REFLECTION SYSTEM - FIXED DIAGONAL)
+-- ============================================================================
+-- 🌌 INTERFAZ V3.4 (BOTÓN DIAGONAL FIJO - ARRIBA/IZQUIERDA -> ABAJO/DERECHA)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -559,7 +613,7 @@ UiGradient.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
     ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))
 })
-UiGradient.Rotation = 45 -- FIJO: Inclinación diagonal perfecta (Arriba-Izquierda a Abajo-Derecha)
+UiGradient.Rotation = 45 
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
@@ -595,7 +649,6 @@ local function processGlowAtCoordinates(inputPosition)
     local localX = inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / buttonSize.X) - 0.5
     
-    -- Mantiene el barrido lateral de la luz respetando de forma estática la diagonal de 45°
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
     TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play()
 end
