@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.5 [INSTANT HITSCAN & FIXED TRACERS UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.9.0 [WALLCHECK FIX & SMOOTH JUMP UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -16,9 +16,9 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 -- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "HYPER-CORE V6.8.5", 
+    PredictionMode = "HYPER-CORE V6.9.0", 
     HorizontalPred = 0.135,
-    VerticalPred = 0.045,   
+    VerticalPred = 0.032,   -- Ajustado de fábrica para máxima suavidad
     WallCheck = true,      
     
     PredictTracer = false,
@@ -65,7 +65,7 @@ local function loadConfig()
         if success and type(data) == "table" then
             SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
-            SheriffConfig.PredictionMode = "HYPER-CORE V6.8.5"
+            SheriffConfig.PredictionMode = "HYPER-CORE V6.9.0"
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
@@ -168,7 +168,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V6.8.5 HYPER-CORE HITSCAN (DYNAMICS ENGINE)
+-- 🧠 MOTOR CINEMÁTICO V6.9.0 HYPER-CORE HITSCAN (OPTIMIZADO)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -199,8 +199,10 @@ task.spawn(function()
     end
 end)
 
+-- PARÁMETROS DEL WALLCAST CORREGIDOS DE FORMA COMPLETA
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
+wallcastParams.IgnoreWater = true
 
 local floorCastParams = RaycastParams.new()
 floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -235,28 +237,32 @@ local function isPartVisible(targetPart, murdererChar)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    local originCFrame = hrp:FindFirstChild("GunRaycastAttachment") and hrp.GunRaycastAttachment.WorldCFrame or hrp.CFrame
-    local originPos = originCFrame.Position
+    local originPos = hrp.Position
     local targetPos = targetPart.Position
+    local direction = targetPos - originPos
     
-    local ignoreList = {char, murdererChar, Camera}
+    -- Excluimos TODOS los avatares para evitar que otros jugadores rompan la detección física de las paredes
+    local excludeList = {char, murdererChar, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and p ~= murdererChar then table.insert(ignoreList, p.Character) end
+        if p.Character then table.insert(excludeList, p.Character) end
     end
-    wallcastParams.FilterDescendantsInstances = ignoreList
+    wallcastParams.FilterDescendantsInstances = excludeList
     
-    local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
-    if clipCheck then return false end
+    local pathCheck = workspace:Raycast(originPos, direction, wallcastParams)
     
-    local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
-    if pathCheck then return false end
-    return true
+    -- Si no choca con nada del mapa, la parte es completamente visible
+    if not pathCheck then
+        return true
+    end
+    
+    return false
 end
 
 local function getBestVisibleTarget(murdererChar)
     if not murdererChar then return nil, nil end
     
-    local priorityParts = {"HumanoidRootPart", "Head", "UpperTorso", "Torso", "LowerTorso"}
+    -- Orden de escaneo prioritario para garantizar impactos limpios
+    local priorityParts = {"HumanoidRootPart", "UpperTorso", "Torso", "Head", "LowerTorso"}
     for _, partName in ipairs(priorityParts) do
         local part = murdererChar:FindFirstChild(partName)
         if part and isPartVisible(part, murdererChar) then
@@ -264,13 +270,13 @@ local function getBestVisibleTarget(murdererChar)
         end
     end
     
-    local defaultPart = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Head")
-    return defaultPart, defaultPart and defaultPart.Position
+    -- Si todo está cubierto, devolvemos nil para evitar gastar la bala inútilmente en una pared
+    return nil, nil
 end
 
 local function getAnyTargetFallback(murdererChar)
     if not murdererChar then return nil, nil end
-    local part = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Head") or murdererChar:FindFirstChild("Torso")
+    local part = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("UpperTorso") or murdererChar:FindFirstChild("Head")
     return part, part and part.Position
 end
 
@@ -351,18 +357,12 @@ local function getPredictedPosition(targetChar, forceAbsoluteVisibility)
     
     local distance = (targetPosition - localHrp.Position).Magnitude
     
-    -- 🌟 AJUSTE QUIRÚRGICO DE DISTANCIA (Optimizada para balas instantáneas Hitscan)
     local distanceFactor = 1.0
-    
     if distance <= 12 then
-        -- CORTA DISTANCIA: Amortiguación baja para clavar el tiro en giros cerrados
         distanceFactor = math.clamp(distance / 25, 0.15, 0.6)
     elseif distance > 12 and distance <= 40 then
-        -- MEDIA DISTANCIA: Escala ideal estable 1:1
         distanceFactor = 1.0
     else
-        -- LARGA DISTANCIA: Balas instantáneas. Evitamos Overprediction por completo. 
-        -- Solo se aplica un microajuste fijo para balancear la actualización de red de Roblox.
         distanceFactor = 1.03
     end
 
@@ -379,15 +379,23 @@ local function getPredictedPosition(targetChar, forceAbsoluteVisibility)
     local serverGravity = workspace.Gravity
     local verticalOffset = Vector3.new(0, 0, 0)
     
+    -- 🌟 NUEVO ALGORITMO INTEGRADO DE SALTO (MÁXIMA SUAVIDAD Y PRECISIÓN EN EL AIRE)
     if humanoid.FloorMaterial == Enum.Material.Air then
         local airTime = timeFrame * (distance <= 12 and 0.2 or distanceFactor)
-        local gravityInertia = 0.5 * serverGravity * (airTime ^ 2)
         
-        if activeVerticalVelocity > 0 then
-            gravityInertia = gravityInertia * 0.12
+        -- Si está en la cima del salto (velocidad vertical cercana a 0), congelamos la predicción vertical
+        if math.abs(activeVerticalVelocity) < 3 then
+            verticalOffset = Vector3.new(0, activeVerticalVelocity * airTime * 0.1, 0)
+        else
+            -- Curva de amortiguación gravitacional suave para evitar tirones bruscos
+            local gravityInertia = 0.5 * serverGravity * (airTime ^ 2)
+            if activeVerticalVelocity > 0 then
+                gravityInertia = gravityInertia * 0.15
+            end
+            verticalOffset = Vector3.new(0, (activeVerticalVelocity * airTime) - gravityInertia, 0)
         end
-        verticalOffset = Vector3.new(0, (activeVerticalVelocity * airTime) - gravityInertia, 0)
     else
+        -- Predicción vertical en suelo totalmente optimizada y amortiguada
         verticalOffset = Vector3.new(0, activeVerticalVelocity * timeFrame * SheriffConfig.VerticalPred * speedFactor, 0)
     end
 
@@ -472,7 +480,6 @@ RunService.RenderStepped:Connect(function(dt)
         return
     end
 
-    -- 🌟 VISIBILIDAD INFINITA: Fallback directo que salta el filtro de obstrucción de paredes
     local bestPart, _ = getAnyTargetFallback(murderer.Character)
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
@@ -550,6 +557,7 @@ local function fireAtMurdererDirectly()
     local murderer = getMurderer()
 
     if gun and murderer and murderer.Character then
+        -- Lógica de disparo vinculada al filtro estricto de visibilidad real
         local bestPart, _ = getBestVisibleTarget(murderer.Character)
         if bestPart then 
             local predictedPos = getPredictedPosition(murderer.Character, false)
@@ -653,7 +661,7 @@ local function processGlowAtCoordinates(inputPosition)
     local relX = (localX / buttonSize.X) - 0.5
     
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.40}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25}):Play()
 end
 
 local function fadeGlowReflection()
