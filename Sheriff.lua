@@ -52,8 +52,8 @@ local function saveConfig()
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
             ShowLagTracer = SheriffConfig.ShowLagTracer,
-            HorizontalPred = SheriffConfig.HorizontalPred, -- [CORRECCIÓN]: Ahora guarda tu personalización horizontal
-            VerticalPred = SheriffConfig.VerticalPred      -- [CORRECCIÓN]: Ahora guarda tu personalización vertical
+            HorizontalPred = SheriffConfig.HorizontalPred,
+            VerticalPred = SheriffConfig.VerticalPred
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -96,7 +96,6 @@ end)
 
 SheriffTab:CreateSection("Motor Activo: OMNI-ENGINE V6.8 (Física Cinematográfica)")
 
--- [MEJORA]: Convertidos a sliders de porcentaje adaptativo (100% = Punto ideal por defecto)
 SheriffTab:CreateSlider("HorizontalPredSlider", "Ajuste Fino Horizontal (%)", 50, 150, function(valor)
     SheriffConfig.HorizontalPred = valor / 100 
     saveConfig()
@@ -234,7 +233,6 @@ local function getMurderer()
     return nil
 end
 
--- VERIFICACIÓN EXCLUSIVA PARA EL DISPARO FIJO (WALL CHECK)
 local function isPartVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -264,7 +262,6 @@ local function isPartVisible(targetPart, murdererChar)
     return true
 end
 
--- [MEJORA]: Selección dinámica e inteligente de Hitbox según visibilidad en tiempo real
 local function getAbsoluteTargetPart(murdererChar)
     if not murdererChar then return nil end
     
@@ -272,7 +269,7 @@ local function getAbsoluteTargetPart(murdererChar)
     for _, name in ipairs(priorityParts) do
         local part = murdererChar:FindFirstChild(name)
         if part and isPartVisible(part, murdererChar) then
-            return part -- Devuelve instantáneamente la primera parte que no esté tapada por una pared
+            return part
         end
     end
     
@@ -285,7 +282,6 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- [NÚCLEO OPTIMIZADO]: Motor Cinematográfico y Balístico Predictivo V6.8
 local function getPredictedPosition(targetChar)
     if not targetChar then return nil end
     
@@ -313,10 +309,9 @@ local function getPredictedPosition(targetChar)
     -- ============================================================================
     -- 🎯 MOTOR BALÍSTICO AUTOMÁTICO (EL PUNTO IDEAL)
     -- ============================================================================
-    local BULLET_SPEED = 275 -- Velocidad física estándar de la bala en MM2
+    local BULLET_SPEED = 275 
     local estimatedTimeToTarget = (distance / BULLET_SPEED) + smoothedPing
 
-    -- Curva dinámica de estabilización por rangos de distancia
     local distanceMultiplier = 1.0
     if distance < 15 then
         distanceMultiplier = 0.88
@@ -324,18 +319,15 @@ local function getPredictedPosition(targetChar)
         distanceMultiplier = 1.12
     end
 
-    -- Integración de Sliders de Ajuste Fino como Multiplicadores de Porcentaje
     local totalHorizontalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.HorizontalPred
     local totalVerticalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.VerticalPred
 
-    -- Filtro e interpolación de velocidad para pings inestables
     local rawVelocity = mainPart.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 55 then rawVelocity = rawVelocity.Unit * 16 end
     
     local fpsWeight = math.clamp(1 - math.exp(-25 * clampedDT), 0.02, 0.85)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
 
-    -- Filtrado de Zig-Zag (Strafe Stabilization)
     table.insert(positionHistory, 1, targetPosition)
     if #positionHistory > 10 then table.remove(positionHistory) end
     if lastVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
@@ -351,13 +343,12 @@ local function getPredictedPosition(targetChar)
     end
     local zigZagDampening = math.clamp(1 - (zigZagIntensity / 7.5), 0.15, 1.0)
 
-    -- Ecuación Cinemática de Posición Horizontal
     local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * zigZagDampening
     local horizontalPrediction = horizontalVelocity * totalHorizontalTime
     local basePrediction = targetPosition + horizontalPrediction
 
     -- ============================================================================
-    -- 🦘 PREDICCIÓN VERTICAL CORREGIDA (SOLUCIÓN AL TRACER BAJO)
+    -- 🦘 PREDICCIÓN VERTICAL
     -- ============================================================================
     local verticalOffset = Vector3.new(0, 0, 0)
     local serverGravity = workspace.Gravity
@@ -365,13 +356,11 @@ local function getPredictedPosition(targetChar)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(rawVelocity.Y) > 0.8 then
         local verticalVelocity = rawVelocity.Y
         
-        -- Si el enemigo salta/sube, empujamos el cálculo para romper el lag de replicación de Roblox
         if verticalVelocity > 0.5 then
             local jumpNetworkCompensation = 1.35 
             verticalVelocity = verticalVelocity * jumpNetworkCompensation
         end
 
-        -- Ecuación física de caída libre real: (V * t) - (0.5 * g * t^2)
         local predictedYDisplacement = (verticalVelocity * totalVerticalTime) - (0.5 * serverGravity * (totalVerticalTime ^ 2))
         verticalOffset = Vector3.new(0, predictedYDisplacement, 0)
     else
@@ -380,7 +369,6 @@ local function getPredictedPosition(targetChar)
 
     local finalPrediction = basePrediction + verticalOffset
 
-    -- Prevención de colisión subterránea (Anti-Underground Floor Snap)
     if rawVelocity.Y < -0.1 then
         local floorY = getFloorHeight(mainPart, targetChar)
         if floorY then
@@ -392,7 +380,6 @@ local function getPredictedPosition(targetChar)
         end
     end
 
-    -- Confinamiento físico reactivo contra muros sólidos
     wallcastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, Camera}
     local wallSnapCheck = workspace:Raycast(targetPosition, finalPrediction - targetPosition, wallcastParams)
     if wallSnapCheck and wallSnapCheck.Instance.CanCollide then
@@ -405,7 +392,7 @@ local function getPredictedPosition(targetChar)
 end
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO (SIEMPRE VISIBLES POR PARED)
+-- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS OPTIMIZADO (SIN BUGS VISUALES)
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
@@ -457,14 +444,18 @@ RunService.RenderStepped:Connect(function(dt)
 
     if mainPart and localHrp then
         local distance = (mainPart.Position - localHrp.Position).Magnitude
-        local distFactor = math.clamp((distance - 4) / 16, 0, 1)
         local ping = math.clamp(smoothedPing, 0.01, 0.4)
         
-        local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16, 0, 1)
-        local hFactor = SheriffConfig.HorizontalPred * speedFactor
-        local vFactor = SheriffConfig.VerticalPred * speedFactor
+        -- Sincronización matemática exacta para el dibujo de líneas decorativas
+        local BULLET_SPEED = 275
+        local estimatedTimeToTarget = (distance / BULLET_SPEED) + ping
+        local distanceMultiplier = 1.0
+        if distance < 15 then distanceMultiplier = 0.88 elseif distance > 45 then distanceMultiplier = 1.12 end
+        
+        local totalHorizontalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.HorizontalPred
+        local totalVerticalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.VerticalPred
 
-        -- DIBUJO CONTINUO DE TRAZADORES SIN RESTRICCIÓN DE MUROS
+        -- 1. TRACER ROJO (Destino exacto de la bala)
         local predictedPos = getPredictedPosition(murderer.Character)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
@@ -475,8 +466,9 @@ RunService.RenderStepped:Connect(function(dt)
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
+        -- 2. TRACER AZUL (Predicción de Red pura)
         if SheriffConfig.ShowPingTracer then
-            local pingPos = mainPart.Position + (smoothedVelocity * ping * distFactor)
+            local pingPos = mainPart.Position + (smoothedVelocity * ping)
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
                 PingLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
@@ -485,8 +477,10 @@ RunService.RenderStepped:Connect(function(dt)
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
+        -- 3. TRACER MORADO (Predicción Cinemática Estabilizada)
+        -- [SOLUCIONADO]: Ahora lee los nuevos multiplicadores de tiempo balístico correctamente
         if SheriffConfig.ShowLagTracer then
-            local lagPos = mainPart.Position + (vec3New(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
+            local lagPos = mainPart.Position + vec3New(smoothedVelocity.X * totalHorizontalTime, smoothedVelocity.Y * totalVerticalTime * 0.5, smoothedVelocity.Z * totalHorizontalTime)
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
                 LagLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
@@ -495,8 +489,10 @@ RunService.RenderStepped:Connect(function(dt)
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
+        -- 4. TRACER VERDE (Mano del jugador)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
+            local distFactor = math.clamp((distance - 4) / 16, 0, 1)
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
             local leadPredictedPos = mainPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             
