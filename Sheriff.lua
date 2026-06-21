@@ -16,9 +16,9 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 -- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "OMNI-ENGINE V6.5", 
-    HorizontalPred = 0.135, 
-    VerticalPred = 0.045,    
+    PredictionMode = "OMNI-ENGINE V6.8", 
+    HorizontalPred = 1.0, -- 1.0 representa el 100% (Punto ideal balístico automático)
+    VerticalPred = 1.0,   -- 1.0 representa el 100% (Física vertical perfecta)
     WallCheck = true,         
     
     PredictTracer = false,
@@ -51,7 +51,9 @@ local function saveConfig()
             AutoUnequip = SheriffConfig.AutoUnequip,
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
-            ShowLagTracer = SheriffConfig.ShowLagTracer
+            ShowLagTracer = SheriffConfig.ShowLagTracer,
+            HorizontalPred = SheriffConfig.HorizontalPred, -- [CORRECCIÓN]: Ahora guarda tu personalización horizontal
+            VerticalPred = SheriffConfig.VerticalPred      -- [CORRECCIÓN]: Ahora guarda tu personalización vertical
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -65,13 +67,15 @@ local function loadConfig()
         if success and type(data) == "table" then
             SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
-            SheriffConfig.PredictionMode = "OMNI-ENGINE V6.5"
+            SheriffConfig.PredictionMode = "OMNI-ENGINE V6.8"
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
             if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
             if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
             if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
+            if data.HorizontalPred ~= nil then SheriffConfig.HorizontalPred = data.HorizontalPred end
+            if data.VerticalPred ~= nil then SheriffConfig.VerticalPred = data.VerticalPred end
         end
     end
 end
@@ -92,12 +96,15 @@ end)
 
 SheriffTab:CreateSection("Motor Activo: OMNI-ENGINE V6.8 (Física Cinematográfica)")
 
-SheriffTab:CreateSlider("HorizontalPredSlider", "Predicción Horizontal", 0, 300, function(valor)
-    SheriffConfig.HorizontalPred = valor / 1000 
+-- [MEJORA]: Convertidos a sliders de porcentaje adaptativo (100% = Punto ideal por defecto)
+SheriffTab:CreateSlider("HorizontalPredSlider", "Ajuste Fino Horizontal (%)", 50, 150, function(valor)
+    SheriffConfig.HorizontalPred = valor / 100 
+    saveConfig()
 end)
 
-SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0, 120, function(valor)
-    SheriffConfig.VerticalPred = valor / 1000
+SheriffTab:CreateSlider("VerticalPredSlider", "Ajuste Fino Vertical (%)", 50, 150, function(valor)
+    SheriffConfig.VerticalPred = valor / 100
+    saveConfig()
 end)
 
 SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
@@ -194,7 +201,7 @@ task.spawn(function()
     while task.wait(0.3) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
             local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
-            smoothedPing = smoothedPing + (rawPing - smoothedPing) * 0.35 -- Filtrado de picos de ping acelerado
+            smoothedPing = smoothedPing + (rawPing - smoothedPing) * 0.35
         end
     end
 end)
@@ -257,8 +264,18 @@ local function isPartVisible(targetPart, murdererChar)
     return true
 end
 
+-- [MEJORA]: Selección dinámica e inteligente de Hitbox según visibilidad en tiempo real
 local function getAbsoluteTargetPart(murdererChar)
     if not murdererChar then return nil end
+    
+    local priorityParts = {"HumanoidRootPart", "Head", "UpperTorso"}
+    for _, name in ipairs(priorityParts) do
+        local part = murdererChar:FindFirstChild(name)
+        if part and isPartVisible(part, murdererChar) then
+            return part -- Devuelve instantáneamente la primera parte que no esté tapada por una pared
+        end
+    end
+    
     return murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Head") or murdererChar:FindFirstChild("UpperTorso")
 end
 
@@ -268,6 +285,7 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- [NÚCLEO OPTIMIZADO]: Motor Cinematográfico y Balístico Predictivo V6.8
 local function getPredictedPosition(targetChar)
     if not targetChar then return nil end
     
@@ -280,7 +298,6 @@ local function getPredictedPosition(targetChar)
 
     local now = os.clock()
     local clampedDT = math.min(lastDeltaTime, 0.05) 
-    local isLowFPS = lastDeltaTime > 0.033 
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = mainPart.AssemblyLinearVelocity
@@ -294,46 +311,37 @@ local function getPredictedPosition(targetChar)
     local distance = (targetPosition - localHrp.Position).Magnitude
     
     -- ============================================================================
-    -- 📊 CURVA DINÁMICA DE DISTANCIA (AJUSTE HORIZONTAL DE PRECISIÓN)
+    -- 🎯 MOTOR BALÍSTICO AUTOMÁTICO (EL PUNTO IDEAL)
     -- ============================================================================
-    local distanceScale = 1.0
-    local closeRangeDampening = 1.0
+    local BULLET_SPEED = 275 -- Velocidad física estándar de la bala en MM2
+    local estimatedTimeToTarget = (distance / BULLET_SPEED) + smoothedPing
 
-    if distance < 14 then
-        -- Ultra-corta distancia: Amortiguación agresiva para evitar sobre-predicción por giros de cámara
-        closeRangeDampening = math.clamp((distance - 2) / 12, 0.05, 1.0)
-        distanceScale = distance / 20
-    elseif distance >= 14 and distance <= 42 then
-        -- Rango Cercano/Medio (Zona Crítica): Pequeña amplificación para compensar lag físico de réplica
-        distanceScale = 1.06 + ((distance - 14) / 28) * 0.06 -- Escala fluida entre 1.06 y 1.12
-    else
-        -- Larga distancia: Factor estabilizado de arrastre
-        distanceScale = 1.15
+    -- Curva dinámica de estabilización por rangos de distancia
+    local distanceMultiplier = 1.0
+    if distance < 15 then
+        distanceMultiplier = 0.88
+    elseif distance > 45 then
+        distanceMultiplier = 1.12
     end
 
-    local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
+    -- Integración de Sliders de Ajuste Fino como Multiplicadores de Porcentaje
+    local totalHorizontalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.HorizontalPred
+    local totalVerticalTime = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.VerticalPred
+
+    -- Filtro e interpolación de velocidad para pings inestables
     local rawVelocity = mainPart.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 55 then rawVelocity = rawVelocity.Unit * 16 end
-
-    -- Suavizado de velocidad dependiente de FPS para evitar tirones en el cálculo de Lag/Ping
-    local fpsWeight = isLowFPS and 0.35 or math.clamp(1 - math.exp(-22 * clampedDT), 0.02, 0.85)
-    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
     
-    local activeVerticalVelocity = smoothedVelocity.Y
-    if humanoid.FloorMaterial == Enum.Material.Air then
-        activeVerticalVelocity = rawVelocity.Y
-    end
+    local fpsWeight = math.clamp(1 - math.exp(-25 * clampedDT), 0.02, 0.85)
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
 
+    -- Filtrado de Zig-Zag (Strafe Stabilization)
     table.insert(positionHistory, 1, targetPosition)
     if #positionHistory > 10 then table.remove(positionHistory) end
-
-    -- FILTRADO DE ZIG-ZAG PERFECCIONADO
     if lastVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
         local currentDir = Vector3.new(rawVelocity.X, 0, rawVelocity.Z).Unit
         local prevDir = Vector3.new(lastVelocity.X, 0, lastVelocity.Z).Unit
-        local dotProduct = currentDir:Dot(prevDir)
-        
-        if dotProduct < 0.30 then 
+        if currentDir:Dot(prevDir) < 0.30 then 
             zigZagIntensity = math.min(zigZagIntensity + 2.0, 7.0)
             lastDirectionChangeTime = now
         end
@@ -341,72 +349,42 @@ local function getPredictedPosition(targetChar)
     if now - lastDirectionChangeTime > 0.30 then
         zigZagIntensity = math.max(zigZagIntensity - (clampedDT * 4.0), 0)
     end
-
-    local currentSpeed = smoothedVelocity.Magnitude
-    local speedFactor = math.clamp(currentSpeed / 16, 0, 1.25)
-
-    -- ============================================================================
-    -- 📡 MOTOR DE COMPENSACIÓN ULTRA PING & LAG ENGINE
-    -- ============================================================================
-    local networkBuffer = isLowFPS and 0.040 or 0.022
-    local pingCorrection = (math.clamp(smoothedPing, 0.005, 0.38) * 1.12) + networkBuffer
-    
-    local zigZagDampening = math.clamp(1 - (zigZagIntensity / 7.5), 0.12, 1.0)
-    -- El tiempo de fotograma integra de manera exacta la predicción horizontal, latencia y amortiguación de rango
-    local totalTimeFrame = ((SheriffConfig.HorizontalPred * speedFactor * zigZagDampening) + pingCorrection) * closeRangeDampening
-
-    -- Vector de Aceleración Estable (Lag Prediction Avanzado)
-    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-    if rawAcceleration.Magnitude > 50 then rawAcceleration = rawAcceleration.Unit * 50 end
-    local stableAcceleration = Vector3.new(rawAcceleration.X, 0, rawAcceleration.Z)
+    local zigZagDampening = math.clamp(1 - (zigZagIntensity / 7.5), 0.15, 1.0)
 
     -- Ecuación Cinemática de Posición Horizontal
-    local horizontalPrediction = (Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalTimeFrame) + (0.5 * stableAcceleration * (totalTimeFrame ^ 2))
-    local basePrediction = targetPosition + (horizontalPrediction * distanceScale)
+    local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * zigZagDampening
+    local horizontalPrediction = horizontalVelocity * totalHorizontalTime
+    local basePrediction = targetPosition + horizontalPrediction
 
     -- ============================================================================
-    -- 🦘 PARÁBOLA VERTICAL ASISTIDA (ANTI-DESFASE EN CAÍDA Y SALTOS)
+    -- 🦘 PREDICCIÓN VERTICAL CORREGIDA (SOLUCIÓN AL TRACER BAJO)
     -- ============================================================================
-    local serverGravity = workspace.Gravity
     local verticalOffset = Vector3.new(0, 0, 0)
+    local serverGravity = workspace.Gravity
     
-    if humanoid.FloorMaterial == Enum.Material.Air or math.abs(rawVelocity.Y) > 0.5 then
-        local t = totalTimeFrame * distanceScale
-        local verticalTrajectoryY = activeVerticalVelocity * t
+    if humanoid.FloorMaterial == Enum.Material.Air or math.abs(rawVelocity.Y) > 0.8 then
+        local verticalVelocity = rawVelocity.Y
         
-        if activeVerticalVelocity < -0.2 then
-            -- 📉 FASE DE CAÍDA: El jugador va hacia abajo. Incrementamos la atracción gravitatoria simulada
-            -- para que el tracer y el tiro no se queden flotando arriba por retraso de réplica.
-            local gravityCompensator = 1.18 
-            verticalTrajectoryY = verticalTrajectoryY - (0.5 * serverGravity * (t ^ 2) * gravityCompensator)
-        else
-            -- 📈 FASE DE ASCENSO: El jugador va subiendo. Suavizamos la inercia cerca del ápice
-            -- para que los proyectiles no salgan volando por encima de la cabeza en espacios reducidos.
-            local apexReduction = math.clamp(activeVerticalVelocity / 28, 0, 1)
-            verticalTrajectoryY = verticalTrajectoryY - (0.5 * serverGravity * (t ^ 2) * (1 - apexReduction * 0.45))
+        -- Si el enemigo salta/sube, empujamos el cálculo para romper el lag de replicación de Roblox
+        if verticalVelocity > 0.5 then
+            local jumpNetworkCompensation = 1.35 
+            verticalVelocity = verticalVelocity * jumpNetworkCompensation
         end
-        verticalOffset = Vector3.new(0, verticalTrajectoryY, 0)
+
+        -- Ecuación física de caída libre real: (V * t) - (0.5 * g * t^2)
+        local predictedYDisplacement = (verticalVelocity * totalVerticalTime) - (0.5 * serverGravity * (totalVerticalTime ^ 2))
+        verticalOffset = Vector3.new(0, predictedYDisplacement, 0)
     else
-        -- Movimiento sobre superficies planas, rampas o escaleras estrechas
-        verticalOffset = Vector3.new(0, activeVerticalVelocity * totalTimeFrame * SheriffConfig.VerticalPred * speedFactor * 0.45 * closeRangeDampening, 0)
+        verticalOffset = Vector3.new(0, rawVelocity.Y * totalVerticalTime * 0.5, 0)
     end
 
     local finalPrediction = basePrediction + verticalOffset
 
-    -- Ajuste centro de masa (Mitigación final de spam de saltos y strafe)
-    if #positionHistory > 0 and zigZagIntensity > 0.5 then
-        local centroid = Vector3.new(0, 0, 0)
-        for _, pos in ipairs(positionHistory) do centroid = centroid + pos end
-        centroid = centroid / #positionHistory
-        
-        local blendWeight = math.clamp(zigZagIntensity / 4.5, 0.05, 0.75)
-        finalPrediction = finalPrediction:Lerp(centroid + verticalOffset, blendWeight)
-    end
-
-    -- Fijación de seguridad contra penetración del suelo (Anti-Underground)
-    if activeVerticalVelocity < -0.1 then
+    -- Prevención de colisión subterránea (Anti-Underground Floor Snap)
+    if rawVelocity.Y < -0.1 then
         local floorY = getFloorHeight(mainPart, targetChar)
         if floorY then
+            local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
             local minAllowedY = floorY + ((mainPart.Size.Y / 2) * heightScale) + 0.15
             if finalPrediction.Y < minAllowedY then
                 finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z)
@@ -552,7 +530,6 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local mainPart = getAbsoluteTargetPart(murderer.Character)
-        -- LA VALIDACIÓN VISUAL DE MUROS SE QUEDA ESTRICTAMENTE AQUÍ PARA IMPEDIR TIROS NULOS
         if mainPart and isPartVisible(mainPart, murderer.Character) then 
             local predictedPos = getPredictedPosition(murderer.Character)
             if predictedPos then
