@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.0.0 [ULTRA-NETCODE & JITTER COMPENSATOR UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.1.0 [ULTRA MAP-SHIELD & ANTI-LAG UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -187,7 +187,6 @@ local lastTargetChar = nil
 local stuckCounter = 0
 local lastDeltaTime = 0.016
 
--- MEJORA: Buffer de Historial de Red (Anti Jitter / Lag Spike)
 local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
@@ -202,7 +201,6 @@ local function getSmoothedPing(rawPing)
         sum = sum + p
         if p > maxRecentPing then maxRecentPing = p end
     end
-    -- Balance dinámico: Filtra picos falsos pero añade un colchón si la conexión es inestable
     local averagePing = sum / #pingHistory
     return (averagePing * 0.65) + (maxRecentPing * 0.35)
 end
@@ -244,6 +242,9 @@ local function getMurderer()
     return nil
 end
 
+-- ============================================================================
+-- 🛡️ REVISION DEL WALL CHECK ULTRA-ESTRICTA (PROTECCIÓN DE MAPAS DE MM2)
+-- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -252,8 +253,9 @@ local function isTargetVisible(targetPart, murdererChar)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    local originCFrame = hrp:FindFirstChild("GunRaycastAttachment") and hrp.GunRaycastAttachment.WorldCFrame or hrp.CFrame
-    local originPos = originCFrame.Position
+    -- Tratar de buscar el cañón del arma para el cálculo de origen exacto, si no, usar la HRP
+    local gun = char:FindFirstChild("Gun")
+    local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     local targetPos = targetPart.Position
     
     local ignoreList = {char, murdererChar, Camera}
@@ -262,15 +264,33 @@ local function isTargetVisible(targetPart, murdererChar)
     end
     wallcastParams.FilterDescendantsInstances = ignoreList
     
+    -- 1. Control de Clip Inmediato (Anti-Incrustamiento en objetos)
     local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
     if clipCheck then return false end
     
+    -- 2. Análisis de Trayectoria Principal
     local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
-    if not pathCheck then return true end
+    if not pathCheck then return true end -- Camino 100% limpio
     
     local instance = pathCheck.Instance
-    if instance.CanCollide == false or instance.Transparency > 0.5 then 
-        return true 
+    
+    -- 3. FILTRO DEL MAPA AVANZADO: Comprobamos si el objeto colisionado es decorativo/falso del mapa
+    if instance:IsA("BasePart") then
+        -- Si tiene colisión activada, es una pared sólida indiscutible del mapa
+        if instance.CanCollide == true then
+            return false
+        end
+        
+        -- Si la transparencia es baja, es un muro sólido visualmente (muebles fijados, decoraciones sin colisión física pero que bloquean balas en el server)
+        if instance.Transparency < 0.75 then
+            return false
+        end
+        
+        -- Lista de materiales estructurales que SIEMPRE bloquean balas en MM2 aunque estén mal configurados en el mapa
+        local mat = instance.Material
+        if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
+            return false
+        end
     end
     
     return false
@@ -319,7 +339,6 @@ local function getPredictedPosition(targetChar, targetPart)
     local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 50 then rawVelocity = rawVelocity.Unit * 16 end
 
-    -- DETECCIÓN DE ZIG-ZAG, FRENOS Y FILTRADO DE CONEXIÓN INESTABLE
     local dotProduct = 1
     if previousTargetVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
         dotProduct = rawVelocity.Unit:Dot(previousTargetVelocity.Unit)
@@ -335,7 +354,6 @@ local function getPredictedPosition(targetChar, targetPart)
     local clampedDT = math.min(lastDeltaTime, 0.05) 
     local isLowFPS = lastDeltaTime > 0.033 
 
-    -- Ajuste adaptativo del Lerp para absorber pérdidas de paquetes de red
     local adaptiveWeight = isLowFPS and 0.4 or math.clamp(1 - math.exp(-18 * clampedDT), 0.02, 0.8)
     if dotProduct < 0.5 then
         adaptiveWeight = adaptiveWeight * 1.6 
@@ -351,19 +369,16 @@ local function getPredictedPosition(targetChar, targetPart)
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16, 0, 1.2)
 
-    -- FILTRO PARA MOVIMIENTOS MUY LENTOS (SNEAK / SHIFT-LOCK)
     if currentSpeed < 7 then
         speedFactor = speedFactor * (currentSpeed / 7) ^ 2
     end
 
-    -- Integración del Ping Suavizado contra picos de Lag
     local fpsBuffer = isLowFPS and 0.045 or 0.033
     local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer
     
     local distance = (targetPosition - localHrp.Position).Magnitude
     local distanceFactor = math.clamp(distance / 20, 0.05, 1) 
 
-    -- MITIGACIÓN A QUEMA ROPA
     if distance < 7 then
         distanceFactor = distanceFactor * (distance / 7)
     end
@@ -391,7 +406,6 @@ local function getPredictedPosition(targetChar, targetPart)
         
         local horizontalPrediction = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
         
-        -- MEJORA DE ACUMULACIÓN: Limitamos el desplazamiento máximo si el ping es críticamente inestable (Caja de Seguridad)
         if ping > 0.22 then
             horizontalPrediction = horizontalPrediction * 0.85
         end
@@ -410,7 +424,7 @@ local function getPredictedPosition(targetChar, targetPart)
     elseif SheriffConfig.PredictionMode == "Lineal Estable" then
         local stableTime = timeFrame * (isLowFPS and 0.90 or 0.95) * distanceFactor
         if dotProduct < 0.7 then stableTime = stableTime * math.clamp(dotProduct, 0.3, 1) end
-        local horizontalOffset = Vector3.new(smoothedVelocity.X * stableTime, 0, smoothedVelocity.Z * stableTime)
+        local horizontalOffset = Vector3.new(smoothedVelocity.X * stableTime, 0, stableTime * smoothedVelocity.Z)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
     end
 
@@ -431,7 +445,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO (DIBUJADO DE RED)
+-- 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
@@ -660,7 +674,7 @@ local function processGlowAtCoordinates(inputPosition)
     local relX = (localX / buttonSize.X) - 0.5
     
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.29}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.27}):Play()
 end
 
 local function fadeGlowReflection()
