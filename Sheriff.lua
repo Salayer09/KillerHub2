@@ -272,8 +272,10 @@ local function getPredictedPosition(targetChar)
     
     if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil end
 
+    -- CORRECCIÓN: Inicializar la velocidad anterior si cambia de objetivo
     if lastTargetChar ~= targetChar then
         smoothedVelocity = hrp.AssemblyLinearVelocity
+        previousTargetVelocity = smoothedVelocity
         lastTargetChar = targetChar
     end
 
@@ -294,7 +296,10 @@ local function getPredictedPosition(targetChar)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, fpsWeight)
     
     if stuckCounter > 4 then smoothedVelocity = Vector3.new(0, 0, 0) end
-    if smoothedVelocity.Magnitude < 0.05 then return targetPosition end
+    if smoothedVelocity.Magnitude < 0.05 then 
+        previousTargetVelocity = smoothedVelocity
+        return targetPosition 
+    end
 
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16, 0, 1.2)
@@ -309,18 +314,21 @@ local function getPredictedPosition(targetChar)
     local vFactor = SheriffConfig.VerticalPred * speedFactor
     local timeFrame = hFactor + ping
 
-    local finalPrediction = targetPosition
-    local serverGravity = workspace.Gravity
-
+    -- CORRECCIÓN: Simplificación del cálculo vertical (Adiós al bug del hundimiento)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
-        local airTime = timeFrame * distanceFactor
-        verticalOffset = Vector3.new(0, (smoothedVelocity.Y * airTime) - (0.5 * serverGravity * (airTime ^ 2)), 0)
+        -- En el aire usamos una predicción lineal directa multiplicada por el tiempo de reacción.
+        -- Ya no restamos la gravedad del servidor de forma parabólica.
+        verticalOffset = Vector3.new(0, smoothedVelocity.Y * timeFrame * 1.05, 0)
     else
+        -- En escaleras o superficies amortiguamos el eje Y para evitar saltos bruscos del tracer
         verticalOffset = Vector3.new(0, smoothedVelocity.Y * timeFrame * vFactor, 0)
     end
 
+    local finalPrediction = targetPosition
+
     if SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
+        -- CORRECCIÓN: Ahora que previousTargetVelocity se actualiza, este bloque funcionará perfectamente
         local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
         if rawAcceleration.Magnitude > 120 then rawAcceleration = rawAcceleration.Unit * 12 end
         
@@ -358,6 +366,10 @@ local function getPredictedPosition(targetChar)
             end
         end
     end
+
+    -- CORRECCIÓN CRUCIAL: Actualizar las variables de estado para el próximo frame
+    previousTargetVelocity = smoothedVelocity
+    lastVelocity = smoothedVelocity
 
     return finalPrediction
 end
