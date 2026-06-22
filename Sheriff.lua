@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V8.5.1 [FIXED UI SYNTAX]
+-- 👻 KILLER HUB | SHERIFF V8.5.2 [CORRECTED SOURCE URL]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -8,7 +8,8 @@ if _G.KillerHubLines then
 end
 _G.KillerHubLines = {}
 
-local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/InterfazBase.lua"))()
+-- URL corregida al archivo correcto de la interfaz
+local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 -- 1. PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
@@ -28,7 +29,7 @@ local SheriffConfig = {
     ShowTargetTracer = false, -- Rojo (Capa Suprema)
     ShowPingTracer = false,   -- Azul Fuerte
     ShowLagTracer = false,    -- Morado
-    ShowLeadTracer = false,    -- Mano Verde Neón
+    ShowLeadTracer = false,   -- Mano Verde Neón
     LeadTimePred = 0.05,      
     
     -- Interfaz Base
@@ -474,7 +475,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ DE USUARIO INTERACTIVA (FIXED PARENTHESIS)
+-- 🌌 INTERFAZ DE USUARIO INTERACTIVA
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -497,7 +498,7 @@ Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
-GlowOverlay.Name = "GlowOverlay" -- Corregido aquí
+GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
 GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
@@ -531,7 +532,7 @@ DecalTexture.Parent = ShootButton
 TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
 
 local Label = Instance.new("TextLabel")
-Label.Name = "Label" -- Corregido aquí
+Label.Name = "Label"
 Label.Size = UDim2.new(1, 0, 0.2, 0)
 Label.Position = UDim2.new(0, 0, 0.75, 0)
 Label.BackgroundTransparency = 1
