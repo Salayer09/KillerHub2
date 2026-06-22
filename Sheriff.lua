@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V7.6.2 [ADAPTIVE CLOSE-QUARTERS & TRACER SYNC]
+-- 👻 KILLER HUB | SHERIFF V8.2.0 [ULTRA-SMOOTH VISUAL TRACER SYNC]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -13,18 +13,23 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 -- 1. PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
--- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA
+-- 2. CONFIGURACIÓN COMPLETA REINCORPORADA
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "REALTIME-ENGINE V7.6 (ADAPTIVE)",
-    HorizontalPred = 1.0,
-    VerticalPred = 1.0,
     WallCheck = true,
     
-    PredictTracer = false,
-    ShowPingTracer = false,
-    ShowLagTracer = false,
-    ShowLeadTracer = true,
+    -- Ajustes Predictivos Estables
+    PredictMode = "Adaptativo Automático",
+    SmoothIntensity = 0.22,
+    
+    -- Todos tus Tracers Clásicos Estabilizados
+    ShowTargetTracer = false, -- Rojo (Predicción Normal)
+    ShowPingTracer = false,   -- Azul Fuerte
+    ShowLagTracer = false,    -- Morado
+    ShowLeadTracer = false,   -- Mano Verde Neón
+    LeadTimePred = 0.05,      -- Anticipación de la mano
+    
+    -- Configuración de Interfaz Base
     UseWeaponDetector = false,
     AutoUnequip = false,
     ShowShootButton = false,
@@ -32,28 +37,26 @@ local SheriffConfig = {
     ButtonOpacity = 0.95,
     ButtonLocked = false,
     ButtonX = 0.7,
-    ButtonY = 0.6,
-    
-    LeadTimePred = 0.05
+    ButtonY = 0.6
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_V8_2.txt"
 
 local function saveConfig()
     if writefile then
         local data = {
             ButtonX = SheriffConfig.ButtonX,
             ButtonY = SheriffConfig.ButtonY,
-            PredictionMode = SheriffConfig.PredictionMode,
-            LeadTimePred = SheriffConfig.LeadTimePred,
+            PredictMode = SheriffConfig.PredictMode,
+            SmoothIntensity = SheriffConfig.SmoothIntensity,
             UseWeaponDetector = SheriffConfig.UseWeaponDetector,
             AutoUnequip = SheriffConfig.AutoUnequip,
-            ShowLeadTracer = SheriffConfig.ShowLeadTracer,
+            ShowTargetTracer = SheriffConfig.ShowTargetTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
             ShowLagTracer = SheriffConfig.ShowLagTracer,
-            HorizontalPred = SheriffConfig.HorizontalPred,
-            VerticalPred = SheriffConfig.VerticalPred
+            ShowLeadTracer = SheriffConfig.ShowLeadTracer,
+            LeadTimePred = SheriffConfig.LeadTimePred
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -67,15 +70,15 @@ local function loadConfig()
         if success and type(data) == "table" then
             SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
-            SheriffConfig.PredictionMode = "REALTIME-ENGINE V7.6 (ADAPTIVE)"
+            SheriffConfig.PredictMode = data.PredictMode or SheriffConfig.PredictMode
+            SheriffConfig.SmoothIntensity = data.SmoothIntensity or SheriffConfig.SmoothIntensity
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
-            if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
+            if data.ShowTargetTracer ~= nil then SheriffConfig.ShowTargetTracer = data.ShowTargetTracer end
             if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
             if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
-            if data.HorizontalPred ~= nil then SheriffConfig.HorizontalPred = data.HorizontalPred end
-            if data.VerticalPred ~= nil then SheriffConfig.VerticalPred = data.VerticalPred end
+            if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
         end
     end
 end
@@ -94,22 +97,23 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes Físicas (E
     SheriffConfig.WallCheck = estado
 end)
 
-SheriffTab:CreateSection("Motor Activo: ADAPTIVE V7.6 (Anti-Overpredict)")
+SheriffTab:CreateSection("Motor Antitemblores (Anti-Jitter)")
 
-SheriffTab:CreateSlider("HorizontalPredSlider", "Ajuste Fino Horizontal (%)", 50, 150, function(valor)
-    SheriffConfig.HorizontalPred = valor / 100
+SheriffTab:CreateDropdown("PredictModeDropdown", "Filtro de Escenario Target:", {"Adaptativo Automático", "Anti-ZigZag", "Agresivo"}, function(seleccionado)
+    SheriffConfig.PredictMode = seleccionado
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("VerticalPredSlider", "Ajuste Fino Vertical (%)", 50, 150, function(valor)
-    SheriffConfig.VerticalPred = valor / 100
+SheriffTab:CreateSlider("SmoothIntensitySlider", "Suavizado de Trayectoria (%)", 5, 50, function(valor)
+    SheriffConfig.SmoothIntensity = valor / 100
     saveConfig()
 end)
 
 SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
 
-SheriffTab:CreateToggle("TracerPredToggle", "Mostrar Tracer de Impacto (Rojo)", function(estado)
-    SheriffConfig.PredictTracer = estado
+SheriffTab:CreateToggle("TargetTracerToggle", "Mostrar Tracer de Impacto (Rojo)", function(estado)
+    SheriffConfig.ShowTargetTracer = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateToggle("PingTracerToggle", "Mostrar Ping Prediction (Azul Fuerte)", function(estado)
@@ -133,7 +137,7 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Ver anticipación (Mano)", 0, 100, fu
 end)
 
 SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
-SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
+SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
 end)
@@ -174,39 +178,33 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO ADAPTATIVO MODIFICADO (CERCANÍA Y GRAVEDAD CORREGIDAS)
+-- 🧠 MOTOR CINEMÁTICO FILTRADO (ESTABILIDAD TOTAL DE VECTORES)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService") 
-local Stats = game:GetService("Stats") 
 local Camera = workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Stats = game:GetService("Stats")
 
-local lastTargetChar = nil
-local lastVelocity = Vector3.new(0,0,0)
-local smoothedVelocity = Vector3.new(0,0,0)
-local smoothedAcceleration = Vector3.new(0,0,0)
-local lastDeltaTime = 0.016
+local smoothVelocity = Vector3.new()
+local lastRawVelocity = Vector3.new()
+local smoothedPing = 0.03
 
-local smoothedPing = 0.06
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.5) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
             local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
-            smoothedPing = smoothedPing + (rawPing - smoothedPing) * 0.35
+            smoothedPing = smoothedPing + (rawPing - smoothedPing) * 0.3
         end
     end
 end)
 
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
-local floorCastParams = RaycastParams.new()
-floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local ignoreInstances = table.create(120)
+local ignoreInstances = {}
 
 local function getGunLocation()
     local char = LocalPlayer.Character
@@ -225,61 +223,21 @@ local function getMurderer()
     return nil
 end
 
-local function updateWallCheckIgnoreList(myChar, murdererChar)
-    table.clear(ignoreInstances)
-    table.insert(ignoreInstances, myChar)
-    table.insert(ignoreInstances, murdererChar)
-    table.insert(ignoreInstances, Camera)
-    
-    local playersList = Players:GetPlayers()
-    for i = 1, #playersList do
-        local p = playersList[i]
-        local c = p.Character
-        if c and c ~= murdererChar and c ~= myChar then
-            table.insert(ignoreInstances, c)
-        end
-    end
-    wallcastParams.FilterDescendantsInstances = ignoreInstances
-end
-
 local function isPartVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
     
-    local char = LocalPlayer.Character
-    local hrp = char:FindFirstChild("HumanoidRootPart")
+    table.clear(ignoreInstances)
+    table.insert(ignoreInstances, LocalPlayer.Character)
+    table.insert(ignoreInstances, murdererChar)
+    table.insert(ignoreInstances, Camera)
+    wallcastParams.FilterDescendantsInstances = ignoreInstances
+    
+    local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    local originCFrame = hrp:FindFirstChild("GunRaycastAttachment") and hrp.GunRaycastAttachment.WorldCFrame or hrp.CFrame
-    local originPos = originCFrame.Position
-    local targetPos = targetPart.Position
-    
-    updateWallCheckIgnoreList(char, murdererChar)
-    
-    local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
-    if clipCheck then return false end
-    
-    local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
-    if not pathCheck then 
-        return true 
-    end
-    
-    local partSize = targetPart.Size
-    local offsets = {
-        Vector3.new(partSize.X * 0.45, 0, 0),
-        Vector3.new(-partSize.X * 0.45, 0, 0),
-        Vector3.new(0, partSize.Y * 0.45, 0)
-    }
-    
-    for i = 1, #offsets do
-        local alternateTarget = targetPart.CFrame:PointToWorldSpace(offsets[i])
-        local altCheck = workspace:Raycast(originPos, alternateTarget - originPos, wallcastParams)
-        if not altCheck then
-            return true
-        end
-    end
-    
-    return false
+    local pathCheck = workspace:Raycast(hrp.Position, targetPart.Position - hrp.Position, wallcastParams)
+    return not pathCheck
 end
 
 local function getAbsoluteTargetPart(murdererChar)
@@ -289,143 +247,100 @@ local function getAbsoluteTargetPart(murdererChar)
         local part = murdererChar:FindFirstChild(name)
         if part and isPartVisible(part, murdererChar) then return part end
     end
-    return murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Head") or murdererChar:FindFirstChild("UpperTorso")
+    return murdererChar:FindFirstChild("HumanoidRootPart")
 end
 
-local function getFloorHeight(targetHrp, targetChar)
-    floorCastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, Camera}
-    local ray = workspace:Raycast(targetHrp.Position, Vector3.new(0, -25, 0), floorCastParams)
-    return ray and ray.Position.Y or nil
-end
-
-local function getPredictedPosition(targetChar)
+-- Generador de predicción base libre de saltos de fotogramas
+local function calculateStablePrediction(targetChar)
     if not targetChar then return nil end
     local mainPart = getAbsoluteTargetPart(targetChar)
-    if not mainPart then return nil end
-    
-    local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoid or humanoid.Health <= 0 or not localHrp then return nil end
-
-    local dt = math.clamp(lastDeltaTime, 0.008, 0.05)
-
-    local targetPosition = mainPart.Position
-    local currentVelocity = mainPart.AssemblyLinearVelocity
+    local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     
-    if currentVelocity.Magnitude > 60 then currentVelocity = currentVelocity.Unit * 16 end
+    if not mainPart or not localHrp or not humanoid or humanoid.Health <= 0 then return nil end
     
-    local currentAcceleration = Vector3.new()
-    if lastTargetChar == targetChar then
-        currentAcceleration = (currentVelocity - lastVelocity) / dt
-        if currentAcceleration.Magnitude > 175 then 
-            currentAcceleration = currentAcceleration.Unit * 175 
-        end
+    local targetPos = mainPart.Position
+    local rawVelocity = mainPart.AssemblyLinearVelocity
+    
+    if rawVelocity.Magnitude > 80 then 
+        rawVelocity = rawVelocity.Unit * 16 
+    end
+    
+    -- Filtro de suavizado pasivo aplicado a la velocidad global
+    local smoothWeight = SheriffConfig.SmoothIntensity
+    smoothVelocity = smoothVelocity:Lerp(rawVelocity, smoothWeight)
+    
+    local distance = (targetPos - localHrp.Position).Magnitude
+    local bulletTravelTime = distance / 275
+    local timeToTarget = bulletTravelTime + smoothedPing
+    
+    -- Lógica Adaptativa de Escenarios
+    local dotDirection = smoothVelocity.Unit:Dot(lastRawVelocity.Unit)
+    if SheriffConfig.PredictMode == "Anti-ZigZag" or (dotDirection < 0.4 and smoothVelocity.Magnitude > 5) then
+        timeToTarget = timeToTarget * 0.65
+    end
+    
+    -- Calibración por distancias (Campos abiertos y cerrados)
+    if distance < 10 then
+        timeToTarget = timeToTarget * 0.08
+    elseif distance < 30 then
+        timeToTarget = timeToTarget * 0.9
     else
-        smoothedVelocity = currentVelocity
-        smoothedAcceleration = Vector3.new()
-        lastTargetChar = targetChar
+        timeToTarget = timeToTarget * 1.15
     end
-
-    local fpsWeight = math.clamp(1 - math.exp(-32 * dt), 0.10, 1.0)
-    smoothedVelocity = smoothedVelocity:Lerp(currentVelocity, fpsWeight)
-    smoothedAcceleration = smoothedAcceleration:Lerp(currentAcceleration, fpsWeight)
-
-    if smoothedVelocity.Magnitude < 0.15 then smoothedVelocity = Vector3.new(0, 0, 0) end
-    if smoothedAcceleration.Magnitude < 0.15 then smoothedAcceleration = Vector3.new(0, 0, 0) end
-
-    local distance = (targetPosition - localHrp.Position).Magnitude
-    local BULLET_SPEED = 275
-    local estimatedTimeToTarget = (distance / BULLET_SPEED) + smoothedPing
-
-    -- 🔥 SOLUCIÓN EXCLUSIVA CERCANÍA: Atenuación lineal inteligente para evitar overprediction a quemarropa
-    local distanceMultiplier = 1.0
-    if distance < 5 then
-        distanceMultiplier = 0.12  -- Casi 0 predicción si está pegado a ti
-    elseif distance < 15 then
-        distanceMultiplier = 0.12 + ((distance - 5) / 10) * 0.88 -- Escala suave de 5 a 15 studs
-    elseif distance > 45 then
-        distanceMultiplier = 1.14
-    end
-
-    local tH = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.HorizontalPred
-    local tV = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.VerticalPred
-
-    local predX = targetPosition.X + (smoothedVelocity.X * tH) + (0.5 * smoothedAcceleration.X * (tH ^ 2))
-    local predZ = targetPosition.Z + (smoothedVelocity.Z * tH) + (0.5 * smoothedAcceleration.Z * (tH ^ 2))
-
-    local predY = targetPosition.Y
-    local serverGravity = workspace.Gravity
     
-    if humanoid.FloorMaterial == Enum.Material.Air or math.abs(currentVelocity.Y) > 0.6 then
-        local verticalVelocity = currentVelocity.Y
-        if verticalVelocity > 0.3 then 
-            verticalVelocity = verticalVelocity * 1.32 
-        end
-        predY = targetPosition.Y + (verticalVelocity * tV) + (0.5 * (smoothedAcceleration.Y - serverGravity) * (tV ^ 2))
+    if SheriffConfig.PredictMode == "Agresivo" then
+        timeToTarget = timeToTarget * 1.3
+    end
+    
+    local predictedX = targetPos.X + (smoothVelocity.X * timeToTarget)
+    local predictedZ = targetPos.Z + (smoothVelocity.Z * timeToTarget)
+    local predictedY = targetPos.Y
+    
+    -- Compensación de Saltos y Caídas
+    if humanoid.FloorMaterial == Enum.Material.Air or math.abs(rawVelocity.Y) > 0.5 then
+        predictedY = targetPos.Y + (smoothVelocity.Y * timeToTarget) - (0.5 * workspace.Gravity * (timeToTarget ^ 2))
+        if predictedY < (targetPos.Y - 4) then predictedY = targetPos.Y - 4 end
     else
-        predY = targetPosition.Y + (smoothedVelocity.Y * tV) + (0.5 * smoothedAcceleration.Y * (tV ^ 2))
+        predictedY = targetPos.Y + (smoothVelocity.Y * timeToTarget * 0.5)
     end
-
-    local finalPrediction = Vector3.new(predX, predY, predZ)
-
-    if currentVelocity.Y < -0.1 then
-        local floorY = getFloorHeight(mainPart, targetChar)
-        if floorY then
-            local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
-            local minAllowedY = floorY + ((mainPart.Size.Y / 2) * heightScale) + 0.15
-            if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-        end
-    end
-
-    wallcastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, Camera}
-    local wallSnapCheck = workspace:Raycast(targetPosition, finalPrediction - targetPosition, wallcastParams)
-    if wallSnapCheck and wallSnapCheck.Instance.CanCollide then
-        finalPrediction = wallSnapCheck.Position - (finalPrediction - targetPosition).Unit * 0.32
-    end
-
-    lastVelocity = currentVelocity
-    return finalPrediction
+    
+    lastRawVelocity = rawVelocity
+    return Vector3.new(predictedX, predictedY, predictedZ), timeToTarget
 end
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 DRAWING MOTOR CON CORRECCIÓN FÍSICA DE SUELO
+-- 🟦 🟣 🟥 🟩 MOTOR DE DIBUJO FLUIDO (TODOS TUS TRACERS ORIGINALES)
 -- ============================================================================
+local PredictionLine = Drawing.new("Line")
+PredictionLine.Color = Color3.fromRGB(255, 35, 35) -- Rojo
+PredictionLine.Thickness = 1.3
+PredictionLine.Visible = false
+table.insert(_G.KillerHubLines, PredictionLine)
+
 local PingLine = Drawing.new("Line")
-PingLine.Color = Color3.fromRGB(0, 85, 255) 
+PingLine.Color = Color3.fromRGB(0, 85, 255) -- Azul Fuerte
 PingLine.Thickness = 1.0
 PingLine.Visible = false
-PingLine.ZIndex = 1
 table.insert(_G.KillerHubLines, PingLine)
 
 local LagLine = Drawing.new("Line")
-LagLine.Color = Color3.fromRGB(160, 32, 240) 
+LagLine.Color = Color3.fromRGB(160, 32, 240) -- Morado
 LagLine.Thickness = 1.0
 LagLine.Visible = false
-LagLine.ZIndex = 2
 table.insert(_G.KillerHubLines, LagLine)
 
 local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(103, 255, 89) 
+LeadLine.Color = Color3.fromRGB(103, 255, 89) -- Mano Verde Neón
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
-LeadLine.ZIndex = 3
 table.insert(_G.KillerHubLines, LeadLine)
 
-local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = Color3.fromRGB(255, 35, 35)
-PredictionLine.Thickness = 1.2 
-PredictionLine.Visible = false
-PredictionLine.ZIndex = 4
-table.insert(_G.KillerHubLines, PredictionLine)
-
-local vec2New, vec3New = Vector2.new, Vector3.new
-local worldToViewport = Camera.WorldToViewportPoint
-
-RunService.RenderStepped:Connect(function(dt)
-    lastDeltaTime = dt
+RunService.RenderStepped:Connect(function()
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
+    
     local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui")
     if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
 
@@ -436,84 +351,56 @@ RunService.RenderStepped:Connect(function(dt)
 
     local mainPart = getAbsoluteTargetPart(murderer.Character)
     local localChar = LocalPlayer.Character
-    local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    local enemyHumanoid = murderer.Character:FindFirstChildOfClass("Humanoid")
-
-    if mainPart and localHrp and enemyHumanoid then
-        local distance = (mainPart.Position - localHrp.Position).Magnitude
-        local viewportCenter = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+    
+    if mainPart and localChar then
+        local viewportCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+        local predictedLocation, calculatedTime = calculateStablePrediction(murderer.Character)
+        local distance = (mainPart.Position - (localChar:FindFirstChild("HumanoidRootPart") and localChar.HumanoidRootPart.Position or Vector3.new())).Magnitude
         
-        local BULLET_SPEED = 275
-        local estimatedTimeToTarget = (distance / BULLET_SPEED) + smoothedPing
-        
-        local distanceMultiplier = 1.0
-        if distance < 5 then distanceMultiplier = 0.12
-        elseif distance < 15 then distanceMultiplier = 0.12 + ((distance - 5) / 10) * 0.88
-        elseif distance > 45 then distanceMultiplier = 1.14 end
-        
-        local tH = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.HorizontalPred
-        local tV = estimatedTimeToTarget * distanceMultiplier * SheriffConfig.VerticalPred
-
-        local predictedPos = getPredictedPosition(murderer.Character)
-        if predictedPos and SheriffConfig.PredictTracer then
-            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
+        -- 🟥 Tracer 1: Predicción de Impacto Estabilizada
+        if predictedLocation and SheriffConfig.ShowTargetTracer then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(predictedLocation)
             if onScreen then
                 PredictionLine.From = viewportCenter
-                PredictionLine.To = vec2New(screenPos.X, screenPos.Y)
+                PredictionLine.To = Vector2.new(screenPos.X, screenPos.Y)
                 PredictionLine.Visible = true
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
+        -- 🟦 Tracer 2: Predicción de Ping (Compensación de Red)
         if SheriffConfig.ShowPingTracer then
-            local pingPos = mainPart.Position + (smoothedVelocity * smoothedPing) + (0.5 * smoothedAcceleration * (smoothedPing^2))
-            local screenPos, onScreen = worldToViewport(Camera, pingPos)
+            local pingPos = mainPart.Position + (smoothVelocity * smoothedPing)
+            local screenPos, onScreen = Camera:WorldToViewportPoint(pingPos)
             if onScreen then
                 PingLine.From = viewportCenter
-                PingLine.To = vec2New(screenPos.X, screenPos.Y)
+                PingLine.To = Vector2.new(screenPos.X, screenPos.Y)
                 PingLine.Visible = true
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        if SheriffConfig.ShowLagTracer then
-            local lagX = mainPart.Position.X + (smoothedVelocity.X * tH) + (0.5 * smoothedAcceleration.X * (tH^2))
-            local lagZ = mainPart.Position.Z + (smoothedVelocity.Z * tH) + (0.5 * smoothedAcceleration.Z * (tH^2))
-            
-            -- 🔥 SOLUCIÓN AL TRACER APUNTANDO ABAJO: Sincronización con el estado real del suelo
-            local lagY = mainPart.Position.Y
-            if enemyHumanoid.FloorMaterial == Enum.Material.Air or math.abs(mainPart.AssemblyLinearVelocity.Y) > 0.6 then
-                lagY = mainPart.Position.Y + (mainPart.AssemblyLinearVelocity.Y * tV) + (0.5 * (smoothedAcceleration.Y - workspace.Gravity) * (tV^2))
-            else
-                lagY = mainPart.Position.Y + (smoothedVelocity.Y * tV) + (0.5 * smoothedAcceleration.Y * (tV^2))
-            end
-            
-            local lagPos = Vector3.new(lagX, lagY, lagZ)
-            local screenPos, onScreen = worldToViewport(Camera, lagPos)
+        -- 🟣 Tracer 3: Lag Realtime (Basado en el tiempo de vuelo de la bala adaptativo)
+        if predictedLocation and SheriffConfig.ShowLagTracer then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(predictedLocation)
             if onScreen then
                 LagLine.From = viewportCenter
-                LagLine.To = vec2New(screenPos.X, screenPos.Y)
+                LagLine.To = Vector2.new(screenPos.X, screenPos.Y)
                 LagLine.Visible = true
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
+        -- 🟩 Tracer 4: Lead Tracer (Desde tu mano física hacia el vector anticipado)
+        local hand = localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm")
         if SheriffConfig.ShowLeadTracer and hand then
             local distFactor = math.clamp((distance - 4) / 16, 0, 1)
-            local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
+            local balancedVelocity = Vector3.new(smoothVelocity.X, smoothVelocity.Y * 0.5, smoothVelocity.Z)
             local leadPredictedPos = mainPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             
-            if smoothedVelocity.Y < -0.5 then
-                local floorY = getFloorHeight(mainPart, murderer.Character)
-                if floorY and leadPredictedPos.Y < (floorY + 1) then
-                    leadPredictedPos = vec3New(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
-                end
-            end
-
-            local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
-            local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
+            local handScreenPos, handOnScreen = Camera:WorldToViewportPoint(hand.Position)
+            local targetScreenPos, targetOnScreen = Camera:WorldToViewportPoint(leadPredictedPos)
 
             if handOnScreen and targetOnScreen then
-                LeadLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
-                LeadLine.To = vec2New(targetScreenPos.X, targetScreenPos.Y)
+                LeadLine.From = Vector2.new(handScreenPos.X, handScreenPos.Y)
+                LeadLine.To = Vector2.new(targetScreenPos.X, targetScreenPos.Y)
                 LeadLine.Visible = true
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
@@ -531,13 +418,13 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local mainPart = getAbsoluteTargetPart(murderer.Character)
-        if mainPart and isPartVisible(mainPart, murderer.Character) then 
-            local predictedPos = getPredictedPosition(murderer.Character)
+        if mainPart and isPartVisible(mainPart, murderer.Character) then
+            local predictedPos, _ = calculateStablePrediction(murderer.Character)
             if predictedPos then
-                if parent == LocalPlayer.Backpack then 
-                    humanoid:EquipTool(gun) 
-                    RunService.Heartbeat:Wait() 
-                end 
+                if parent == LocalPlayer.Backpack then
+                    humanoid:EquipTool(gun)
+                    RunService.Heartbeat:Wait()
+                end
                 if gun:FindFirstChild("Shoot") then
                     local originCFrame = char.HumanoidRootPart.CFrame
                     if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
@@ -545,9 +432,9 @@ local function fireAtMurdererDirectly()
                     end
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end
-                if SheriffConfig.AutoUnequip then 
-                    task.wait(0.02) 
-                    humanoid:UnequipTools() 
+                if SheriffConfig.AutoUnequip then
+                    task.wait(0.01)
+                    humanoid:UnequipTools()
                 end
             end
         end
@@ -555,7 +442,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ DE USUARIO INTERACTIVA V3.4 (ESTABLE ORIGINAL)
+-- 🌌 INTERFAZ DE USUARIO INTERACTIVA
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -568,9 +455,9 @@ ShootButton.Size = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.Butto
 ShootButton.Position = UDim2.new(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
 ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
-ShootButton.BorderSizePixel = 0 
-ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true 
+ShootButton.BorderSizePixel = 0
+ShootButton.AutoButtonColor = false
+ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
@@ -591,11 +478,11 @@ GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
 UiGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 8, 43)), 
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)), 
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 8, 43)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))
 })
-UiGradient.Rotation = 45 
+UiGradient.Rotation = 45
 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
@@ -627,7 +514,6 @@ Label.Parent = ShootButton
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
-    
     local localX = inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / buttonSize.X) - 0.5
     
@@ -645,7 +531,6 @@ local DRAG_THRESHOLD = 8
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
@@ -689,7 +574,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ INTERCEPTACIÓN REMOTA (SILENT AIM SEGURO)
+-- ⚡ INTERCEPTACIÓN REMOTA (SILENT AIM ADAPTATIVO INTEGRADO)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -704,7 +589,7 @@ if ClientServices then
             if murderer and murderer.Character then
                 local mainPart = getAbsoluteTargetPart(murderer.Character)
                 if mainPart and isPartVisible(mainPart, murderer.Character) then
-                    local predictedPos = getPredictedPosition(murderer.Character)
+                    local predictedPos, _ = calculateStablePrediction(murderer.Character)
                     if predictedPos then return CFrame.new(predictedPos) end
                 end
             end
