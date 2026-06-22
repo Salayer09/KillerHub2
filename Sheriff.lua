@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V8.5.0 [ULTIMATE HYBRID ENGINE & PERFORMANCE PUSH]
+-- 👻 KILLER HUB | SHERIFF V8.5.1 [FIXED UI SYNTAX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -13,13 +13,13 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 -- 1. PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
--- 2. CONFIGURACIÓN COMPLETA ACTUALIZADA
+-- 2. CONFIGURACIÓN COMPLETA
 local SheriffConfig = {
     SilentAim = false,
     WallCheck = true,
     
     -- Ajustes Predictivos Avanzados
-    PredictMode = "Híbrido Definitivo", -- Modificado por defecto al nuevo super-modo
+    PredictMode = "Híbrido Definitivo", 
     SmoothIntensity = 0.22,
     HorizontalPred = 1.0, 
     VerticalPred = 1.0,   
@@ -28,7 +28,7 @@ local SheriffConfig = {
     ShowTargetTracer = false, -- Rojo (Capa Suprema)
     ShowPingTracer = false,   -- Azul Fuerte
     ShowLagTracer = false,    -- Morado
-    ShowLeadTracer = false,   -- Mano Verde Neón
+    ShowLeadTracer = false,    -- Mano Verde Neón
     LeadTimePred = 0.05,      
     
     -- Interfaz Base
@@ -105,7 +105,6 @@ end)
 
 SheriffTab:CreateSection("Motor de Predicción")
 
--- Agregado el nuevo modo a la lista de opciones de la UI
 SheriffTab:CreateDropdown("PredictModeDropdown", "Filtro de Escenario Target:", {"Híbrido Definitivo", "Adaptativo Automático", "Anti-ZigZag", "Agresivo"}, function(seleccionado)
     SheriffConfig.PredictMode = seleccionado
     saveConfig()
@@ -195,7 +194,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO (NUEVA LÓGICA HÍBRIDA)
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO (LÓGICA HÍBRIDA)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -291,9 +290,8 @@ local function calculateStablePrediction(targetChar)
     
     local dotDirection = smoothVelocity.Unit:Dot(lastRawVelocity.Unit)
     
-    -- 🔥 EJECUCIÓN DEL NUEVO MODO: HÍBRIDO DEFINITIVO
+    -- 🔥 EJECUCIÓN DEL MODO: HÍBRIDO DEFINITIVO
     if SheriffConfig.PredictMode == "Híbrido Definitivo" then
-        -- 1. Control adaptativo de distancia incorporado
         if distance < 10 then
             timeToTarget = timeToTarget * 0.08
         elseif distance < 30 then
@@ -302,15 +300,12 @@ local function calculateStablePrediction(targetChar)
             timeToTarget = timeToTarget * 1.15
         end
         
-        -- 2. Detección instantánea de evasión (Anti-ZigZag integrado)
         if dotDirection < 0.4 and smoothVelocity.Magnitude > 5 then
             timeToTarget = timeToTarget * 0.65
-        -- 3. Inyección de potencia lineal si corre recto (Agresivo integrado)
         elseif dotDirection > 0.95 and smoothVelocity.Magnitude > 11 then
             timeToTarget = timeToTarget * 1.25
         end
     else
-        -- Modos clásicos (Legado)
         if SheriffConfig.PredictMode == "Anti-ZigZag" or (dotDirection < 0.4 and smoothVelocity.Magnitude > 5) then
             timeToTarget = timeToTarget * 0.65
         end
@@ -328,7 +323,6 @@ local function calculateStablePrediction(targetChar)
         end
     end
     
-    -- Multiplicadores manuales desde los sliders
     local tH = timeToTarget * SheriffConfig.HorizontalPred
     local tV = timeToTarget * SheriffConfig.VerticalPred
     
@@ -348,7 +342,7 @@ local function calculateStablePrediction(targetChar)
 end
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 SISTEMA DE TRACERS OPTIMIZADO (Z-INDEX ESTRICTO)
+-- 🟦 🟣 🟥 🟩 SISTEMA DE TRACERS OPTIMIZADO
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 85, 255)
@@ -375,7 +369,7 @@ local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35)
 PredictionLine.Thickness = 1.6 
 PredictionLine.Visible = false
-PredictionLine.ZIndex = 4 -- 🔥 CAPA SUPREMA: Siempre visible arriba del morado/azul
+PredictionLine.ZIndex = 4 
 table.insert(_G.KillerHubLines, PredictionLine)
 
 RunService.RenderStepped:Connect(function()
@@ -399,7 +393,6 @@ RunService.RenderStepped:Connect(function()
         local predictedLocation = calculateStablePrediction(murderer.Character)
         local distance = (mainPart.Position - (localChar:FindFirstChild("HumanoidRootPart") and localChar.HumanoidRootPart.Position or Vector3.new())).Magnitude
         
-        -- 🟥 Tracer Rojo (Encima de todo por ZIndex)
         if predictedLocation and SheriffConfig.ShowTargetTracer then
             local screenPos, onScreen = Camera:WorldToViewportPoint(predictedLocation)
             if onScreen then
@@ -409,7 +402,6 @@ RunService.RenderStepped:Connect(function()
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
-        -- 🟦 Tracer Azul (Ping)
         if SheriffConfig.ShowPingTracer then
             local pingPos = mainPart.Position + (smoothVelocity * smoothedPing)
             local screenPos, onScreen = Camera:WorldToViewportPoint(pingPos)
@@ -420,7 +412,6 @@ RunService.RenderStepped:Connect(function()
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        -- 🟣 Tracer Morado (Lag)
         if predictedLocation and SheriffConfig.ShowLagTracer then
             local screenPos, onScreen = Camera:WorldToViewportPoint(predictedLocation)
             if onScreen then
@@ -430,7 +421,6 @@ RunService.RenderStepped:Connect(function()
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 🟩 Tracer Verde Neón (Mano)
         local hand = localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm")
         if SheriffConfig.ShowLeadTracer and hand then
             local distFactor = math.clamp((distance - 4) / 16, 0, 1)
@@ -484,7 +474,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ DE USUARIO INTERACTIVA
+-- 🌌 INTERFAZ DE USUARIO INTERACTIVA (FIXED PARENTHESIS)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -507,7 +497,7 @@ Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
-GlowOverlay.Name = "GlowOverlay")
+GlowOverlay.Name = "GlowOverlay" -- Corregido aquí
 GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
 GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
@@ -541,7 +531,7 @@ DecalTexture.Parent = ShootButton
 TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
 
 local Label = Instance.new("TextLabel")
-Label.Name = "Label")
+Label.Name = "Label" -- Corregido aquí
 Label.Size = UDim2.new(1, 0, 0.2, 0)
 Label.Position = UDim2.new(0, 0, 0.75, 0)
 Label.BackgroundTransparency = 1
@@ -616,7 +606,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ INTERCEPTACIÓN REMOTA (SILENT AIM ADAPTATIVO INTEGRADO)
+-- ⚡ INTERCEPTACIÓN REMOTA
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
