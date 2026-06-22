@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V5.5.0 [ELITE ULTRA-PREDICTION & ANTI-WASTE UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.0.0 [ULTRA-NETCODE & JITTER COMPENSATOR UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -169,7 +169,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO V5.5.0 (PREDICCIÓN AVANZADA, MULTI-HUESO Y DETECTOR ANTI-DESPERDICIO)
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO CON ESTABILIZACIÓN DE RED AVANZADA
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -187,11 +187,31 @@ local lastTargetChar = nil
 local stuckCounter = 0
 local lastDeltaTime = 0.016
 
+-- MEJORA: Buffer de Historial de Red (Anti Jitter / Lag Spike)
+local pingHistory = {}
+local maxPingHistorySize = 12
 local cachedPingValue = 0.06
+
+local function getSmoothedPing(rawPing)
+    table.insert(pingHistory, rawPing)
+    if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
+    
+    local sum = 0
+    local maxRecentPing = 0
+    for _, p in ipairs(pingHistory) do
+        sum = sum + p
+        if p > maxRecentPing then maxRecentPing = p end
+    end
+    -- Balance dinámico: Filtra picos falsos pero añade un colchón si la conexión es inestable
+    local averagePing = sum / #pingHistory
+    return (averagePing * 0.65) + (maxRecentPing * 0.35)
+end
+
 task.spawn(function()
-    while task.wait(0.4) do
+    while task.wait(0.3) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
-            cachedPingValue = Stats.Network.ServerToClientPing:GetValue() / 1000
+            local currentRaw = Stats.Network.ServerToClientPing:GetValue() / 1000
+            cachedPingValue = getSmoothedPing(currentRaw)
         end
     end
 end)
@@ -224,7 +244,6 @@ local function getMurderer()
     return nil
 end
 
--- WALL CHECK MODIFICADO: Estricto 100% para MM2 (Evita disparar si algo bloquea el trayecto o el origen)
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -243,11 +262,9 @@ local function isTargetVisible(targetPart, murdererChar)
     end
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    -- Anti-Desperdicio: Si nuestro cuerpo/arma está incrustado o bloqueado inmediatamente por un mueble o pared cercana
     local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
     if clipCheck then return false end
     
-    -- Comprobación de trayectoria hacia el objetivo
     local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
     if not pathCheck then return true end
     
@@ -256,11 +273,9 @@ local function isTargetVisible(targetPart, murdererChar)
         return true 
     end
     
-    -- Ajuste estricto: Si hay colisión con cualquier grosor o estructura, está tapado y devuelve falso
     return false
 end
 
--- ESCANEO DINÁMICO DE HUESOS (Torso con fallback a Cabeza si el Torso se tapa)
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
     local hrp = murdererChar:FindFirstChild("HumanoidRootPart")
@@ -271,7 +286,7 @@ local function getBestTargetPart(murdererChar)
     elseif head and isTargetVisible(head, murdererChar) then
         return head
     end
-    return nil -- Si nada es visible, retorna nil (Previene gasto de bala)
+    return nil 
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -304,17 +319,15 @@ local function getPredictedPosition(targetChar, targetPart)
     local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 50 then rawVelocity = rawVelocity.Unit * 16 end
 
-    -- --- MEJORA: DETECCIÓN DE GIROS BRUSCOS (ZIG-ZAG), FRENOS Y FALSOS ENGAÑOS ---
+    -- DETECCIÓN DE ZIG-ZAG, FRENOS Y FILTRADO DE CONEXIÓN INESTABLE
     local dotProduct = 1
     if previousTargetVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
         dotProduct = rawVelocity.Unit:Dot(previousTargetVelocity.Unit)
     end
 
-    -- Amortiguador dinámico de amagos / Zig-Zag de red
     if dotProduct < 0.3 then
         rawVelocity = rawVelocity * math.clamp(dotProduct, 0.1, 0.5)
     end
-    -- Reducción drástica en frenos secos instantáneos
     if rawVelocity.Magnitude < previousTargetVelocity.Magnitude * 0.4 then
         rawVelocity = rawVelocity * 0.15
     end
@@ -322,9 +335,10 @@ local function getPredictedPosition(targetChar, targetPart)
     local clampedDT = math.min(lastDeltaTime, 0.05) 
     local isLowFPS = lastDeltaTime > 0.033 
 
+    -- Ajuste adaptativo del Lerp para absorber pérdidas de paquetes de red
     local adaptiveWeight = isLowFPS and 0.4 or math.clamp(1 - math.exp(-18 * clampedDT), 0.02, 0.8)
     if dotProduct < 0.5 then
-        adaptiveWeight = adaptiveWeight * 1.6 -- Corrección de refresco acelerada en curvas
+        adaptiveWeight = adaptiveWeight * 1.6 
     end
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, math.clamp(adaptiveWeight, 0.02, 0.95))
     
@@ -337,30 +351,29 @@ local function getPredictedPosition(targetChar, targetPart)
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16, 0, 1.2)
 
-    -- --- MEJORA: FILTRO INTELIGENTE PARA MOVIMIENTO MUY LENTO (SNEAK / SHIFT-LOCK) ---
+    -- FILTRO PARA MOVIMIENTOS MUY LENTOS (SNEAK / SHIFT-LOCK)
     if currentSpeed < 7 then
         speedFactor = speedFactor * (currentSpeed / 7) ^ 2
     end
 
+    -- Integración del Ping Suavizado contra picos de Lag
     local fpsBuffer = isLowFPS and 0.045 or 0.033
-    local ping = math.clamp(cachedPingValue, 0.01, 0.4) + fpsBuffer
+    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer
     
     local distance = (targetPosition - localHrp.Position).Magnitude
     local distanceFactor = math.clamp(distance / 20, 0.05, 1) 
 
-    -- --- MEJORA: MITIGACIÓN DE CERCANÍA EXTREMA (EVITA LATIGAZOS A QUEMA ROPA) ---
+    -- MITIGACIÓN A QUEMA ROPA
     if distance < 7 then
         distanceFactor = distanceFactor * (distance / 7)
     end
 
-    -- Ejes y factores de escala completamente independientes
     local hFactor = SheriffConfig.HorizontalPred * speedFactor
     local timeFrame = hFactor + ping
     local actualVerticalTime = ping * SheriffConfig.VerticalPred
 
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air then
-        -- Cálculo lineal puro acoplado estrictamente a tu slider vertical
         verticalOffset = Vector3.new(0, smoothedVelocity.Y * actualVerticalTime, 0)
     else
         verticalOffset = Vector3.new(0, smoothedVelocity.Y * actualVerticalTime * 0.35, 0)
@@ -377,6 +390,12 @@ local function getPredictedPosition(targetChar, targetPart)
         local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
         
         local horizontalPrediction = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
+        
+        -- MEJORA DE ACUMULACIÓN: Limitamos el desplazamiento máximo si el ping es críticamente inestable (Caja de Seguridad)
+        if ping > 0.22 then
+            horizontalPrediction = horizontalPrediction * 0.85
+        end
+        
         finalPrediction = targetPosition + (Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z) * distanceFactor) + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
@@ -412,7 +431,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟦 🟣 🟥 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO (CAPAS ACTUALIZADAS)
+-- 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO (DIBUJADO DE RED)
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
@@ -446,7 +465,7 @@ local vec2New, vec3New = Vector2.new, Vector3.new
 local worldToViewport = Camera.WorldToViewportPoint
 
 RunService.RenderStepped:Connect(function(dt)
-    lastDeltaTime = dt -- Sincronización continua de tasa de fotogramas
+    lastDeltaTime = dt 
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
@@ -459,7 +478,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar) or targetChar:FindFirstChild("HumanoidRootPart") -- Adaptación visual multi-hueso
+    local bestPart = getBestTargetPart(targetChar) or targetChar:FindFirstChild("HumanoidRootPart") 
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
@@ -537,9 +556,8 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getBestTargetPart(targetChar) -- Validación multi-hueso estricta antes de abrir fuego
+        local bestPart = getBestTargetPart(targetChar) 
         
-        -- Si el objetivo está completamente tapado por paredes o estructuras macizas, NO dispara
         if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
@@ -565,7 +583,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (ELITE HORIZONTAL SOLID REFLECTION SYSTEM - FIXED DIAGONAL)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT FLUIDO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -610,7 +628,7 @@ UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
+DecalTexture.Size = UDim2.new(0.37, 0, 0.37, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
@@ -642,7 +660,7 @@ local function processGlowAtCoordinates(inputPosition)
     local relX = (localX / buttonSize.X) - 0.5
     
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.28}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.29}):Play()
 end
 
 local function fadeGlowReflection()
@@ -655,7 +673,6 @@ local DRAG_THRESHOLD = 8
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
@@ -699,7 +716,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ INTERCEPTACIÓN REMOTA CON RESTRICCIÓN DE COBERTURA (SILENT AIM SEGURO)
+-- ⚡ REMOTOS MODIFICADOS (SILENT AIM ADAPTATIVO DE RED)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -713,9 +730,8 @@ if ClientServices then
             local murderer = getMurderer()
             if murderer and murderer.Character then
                 local targetChar = murderer.Character
-                local bestPart = getBestTargetPart(targetChar) -- Validación estricta multi-hueso
+                local bestPart = getBestTargetPart(targetChar) 
                 
-                -- Si el asesino está completamente a cubierto, devolvemos nil para no gatillar disparos fallidos
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart)
                     if predictedPos then return CFrame.new(predictedPos) end
