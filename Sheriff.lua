@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.2.5 [TRACER SMOOTHNESS UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.2.6 [ANTI-JITTER FAST STABILIZATION]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -24,7 +24,7 @@ local SheriffConfig = {
     ShowPingTracer = false,    
     ShowLagTracer = false,     
     ShowLeadTracer = true,     
-    TracerSmoothness = 0.25, -- VALOR POR DEFECTO (0.25 = Equilibrado, 1 = Instantáneo)
+    TracerSmoothness = 0.60, -- Por defecto ahora es más reactivo y firme
     UseWeaponDetector = false, 
     AutoUnequip = false,        
     ShowShootButton = false,
@@ -104,7 +104,7 @@ SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0,
     SheriffConfig.VerticalPred = valor / 1000
 end)
 
--- SECCIÓN DE TRACERS OPTIMIZADA
+-- SECCIÓN DE TRACERS OPTIMIZADA (ANTI-TEMBLOR)
 SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
 
 SheriffTab:CreateToggle("TracerPredToggle", "Mostrar Tracer de Impacto (Rojo)", function(estado)
@@ -126,13 +126,13 @@ SheriffTab:CreateToggle("LeadTracerToggle", "Activar Lead Tracer (Mano Verde Ne�
     saveConfig()
 end)
 
--- NUEVO SLIDER SOLICITADO
-SheriffTab:CreateSlider("TracerSmoothSlider", "Suavizado de Tracers (1 = Instantáneo)", 1, 100, function(valor)
-    -- Si es 1, se vuelve 100% instantáneo (sin Lerp). Valores más altos suavizan más.
+-- SLIDER REDISEÑADO: ESTABILIZADOR EN LUGAR DE SUAVIZADO LENTO
+SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, function(valor)
     if valor == 1 then
-        SheriffConfig.TracerSmoothness = 1
+        SheriffConfig.TracerSmoothness = 1 -- Instantáneo puro (puede verse tembloroso si hay lag)
     else
-        SheriffConfig.TracerSmoothness = math.clamp(1 / valor, 0.01, 0.99)
+        -- Nueva matemática: Escala de forma fluida entre 0.95 (casi instantáneo) y 0.15 (máxima estabilidad sin perder velocidad)
+        SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
     saveConfig()
 end)
@@ -142,7 +142,7 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Ver anticipación (Mano)", 0, 100, fu
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Conditions de Interfaz / Tácticas")
+SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
@@ -419,7 +419,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 MOTOR DE TRACERS INTERPOLADO POR SLIDER
+-- 🟩 MOTOR DE TRACERS INTERPOLADO EFICIENTE
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
@@ -445,7 +445,6 @@ PredictionLine.Thickness = 1.2
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
 
--- Variables de persistencia para el suavizado de pantalla (2D Vectors)
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
 local currentScreenLag = Vector2.new(0,0)
@@ -483,7 +482,6 @@ RunService.RenderStepped:Connect(function(dt)
         local hFactor = SheriffConfig.HorizontalPred * speedFactor
         local vFactor = SheriffConfig.VerticalPred * speedFactor
         
-        -- Obtener el factor de suavizado configurado en el slider
         local tSmooth = SheriffConfig.TracerSmoothness
 
         -- 1. TRACER DE IMPACTO (ROJO)
@@ -528,7 +526,7 @@ RunService.RenderStepped:Connect(function(dt)
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 4. LEAD TRACER (VERDE NEÓN DESDE LA MANO)
+        -- 4. LEAD TRACER (VERDE NEÓN)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
@@ -642,7 +640,7 @@ UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.39, 0, 0.39, 0)
+DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
@@ -674,7 +672,7 @@ local function processGlowAtCoordinates(inputPosition)
     local relX = (localX / buttonSize.X) - 0.5
     
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.27}):Play()
 end
 
 local function fadeGlowReflection()
