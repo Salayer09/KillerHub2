@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.2.0 [PROXIMITY SMOOTHING & JUMP PREDICTION]
+-- 👻 KILLER HUB | SHERIFF V6.2.5 [TRACER SMOOTHNESS UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -17,13 +17,14 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 local SheriffConfig = {
     SilentAim = false,
     PredictionMode = "Predictiva 2.0 (Aceleración)",
-    HorizontalPred = 0.145, -- Incrementado ligeramente para compensar trayectorias largas
-    VerticalPred = 0.035,   -- Reducido la base para evitar el tiro al cielo
+    HorizontalPred = 0.145, 
+    VerticalPred = 0.035,   
     WallCheck = true,       
     PredictTracer = false,
     ShowPingTracer = false,    
     ShowLagTracer = false,     
     ShowLeadTracer = true,     
+    TracerSmoothness = 0.25, -- VALOR POR DEFECTO (0.25 = Equilibrado, 1 = Instantáneo)
     UseWeaponDetector = false, 
     AutoUnequip = false,        
     ShowShootButton = false,
@@ -49,7 +50,8 @@ local function saveConfig()
             AutoUnequip = SheriffConfig.AutoUnequip,
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
-            ShowLagTracer = SheriffConfig.ShowLagTracer
+            ShowLagTracer = SheriffConfig.ShowLagTracer,
+            TracerSmoothness = SheriffConfig.TracerSmoothness
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -65,6 +67,7 @@ local function loadConfig()
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
             SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
+            SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
             if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
@@ -101,6 +104,7 @@ SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0,
     SheriffConfig.VerticalPred = valor / 1000
 end)
 
+-- SECCIÓN DE TRACERS OPTIMIZADA
 SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
 
 SheriffTab:CreateToggle("TracerPredToggle", "Mostrar Tracer de Impacto (Rojo)", function(estado)
@@ -122,12 +126,23 @@ SheriffTab:CreateToggle("LeadTracerToggle", "Activar Lead Tracer (Mano Verde Ne�
     saveConfig()
 end)
 
+-- NUEVO SLIDER SOLICITADO
+SheriffTab:CreateSlider("TracerSmoothSlider", "Suavizado de Tracers (1 = Instantáneo)", 1, 100, function(valor)
+    -- Si es 1, se vuelve 100% instantáneo (sin Lerp). Valores más altos suavizan más.
+    if valor == 1 then
+        SheriffConfig.TracerSmoothness = 1
+    else
+        SheriffConfig.TracerSmoothness = math.clamp(1 / valor, 0.01, 0.99)
+    end
+    saveConfig()
+end)
+
 SheriffTab:CreateSlider("LeadTimeSlider", "Ver anticipación (Mano)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
+SheriffTab:CreateSection("Conditions de Interfaz / Tácticas")
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
@@ -296,9 +311,6 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- ============================================================================
--- 🚀 MOTOR DE PREDICCIÓN REDISEÑADO (ANTI-TIRO AL CIELO Y JUMP PREDICTION)
--- ============================================================================
 local function getPredictedPosition(targetChar, targetPart)
     if not targetChar or not targetPart then return nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -316,17 +328,14 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- 1. MITIGACIÓN CRÍTICA DE PROXIMIDAD (Evita disparar al cielo si está cerca)
     local proximityFactor = 1
     if distance < 14 then
-        -- Desciende exponencialmente el peso de la predicción conforme se acerca
         proximityFactor = math.clamp((distance - 2) / 12, 0.35, 1)
     end
 
     local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 55 then rawVelocity = rawVelocity.Unit * 16 end
 
-    -- Cambio de dirección (Inercia estructural)
     local dotProduct = 1
     if previousTargetVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
         dotProduct = rawVelocity.Unit:Dot(previousTargetVelocity.Unit)
@@ -354,21 +363,14 @@ local function getPredictedPosition(targetChar, targetPart)
     
     local distanceFactor = math.clamp(distance / 22, 0.05, 1.1) * proximityFactor
 
-    -- Ajuste fino de la predicción horizontal (Más agresiva en distancias medias/largas)
     local hFactor = (SheriffConfig.HorizontalPred * 1.15) * speedFactor
     local timeFrame = (hFactor + ping) * distanceFactor
 
-    -- 2. JUMP PREDICTION AVANZADA (Física parabólica simulada)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or smoothedVelocity.Y > 0.5 or smoothedVelocity.Y < -0.5 then
-        -- Usamos una aproximación de la gravedad para predecir la caída real en el tiempo de vuelo de la bala
         local gravity = 196.2 
         local verticalTime = ping * SheriffConfig.VerticalPred * proximityFactor
-        
-        -- Formula: V0*t + 0.5*g*t^2
         local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * gravity * (verticalTime ^ 2))
-        
-        -- Si está muy cerca, reducimos drásticamente la alteración vertical para mantener estabilidad
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
     end
@@ -382,11 +384,9 @@ local function getPredictedPosition(targetChar, targetPart)
         
         local accAmortiguacion = isLowFPS and 0.02 or 0.08
         local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
-        
         local horizontalPrediction = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
         
         if ping > 0.22 then horizontalPrediction = horizontalPrediction * 0.80 end
-        
         finalPrediction = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z) + verticalOffset
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
@@ -401,7 +401,6 @@ local function getPredictedPosition(targetChar, targetPart)
         finalPrediction = targetPosition + horizontalOffset + verticalOffset
     end
 
-    -- Control de piso para evitar predecir abajo del mapa
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -420,35 +419,38 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 MOTOR DE TRACERS COMPLETO Y CONTROLADO
+-- 🟩 MOTOR DE TRACERS INTERPOLADO POR SLIDER
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 45, 167) 
 PingLine.Thickness = 1.0
 PingLine.Visible = false
-PingLine.ZIndex = 1
 table.insert(_G.KillerHubLines, PingLine)
 
 local LagLine = Drawing.new("Line")
 LagLine.Color = Color3.fromRGB(114, 39, 214) 
 LagLine.Thickness = 1.0
 LagLine.Visible = false
-LagLine.ZIndex = 2
 table.insert(_G.KillerHubLines, LagLine)
 
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = Color3.fromRGB(103, 255, 89) 
 LeadLine.Thickness = 1.0
 LeadLine.Visible = false
-LeadLine.ZIndex = 3
 table.insert(_G.KillerHubLines, LeadLine)
 
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35)
 PredictionLine.Thickness = 1.2 
 PredictionLine.Visible = false
-PredictionLine.ZIndex = 4
 table.insert(_G.KillerHubLines, PredictionLine)
+
+-- Variables de persistencia para el suavizado de pantalla (2D Vectors)
+local currentScreenPred = Vector2.new(0,0)
+local currentScreenPing = Vector2.new(0,0)
+local currentScreenLag = Vector2.new(0,0)
+local currentScreenLead = Vector2.new(0,0)
+local firstFrame = true
 
 local vec2New, vec3New = Vector2.new, Vector3.new
 local worldToViewport = Camera.WorldToViewportPoint
@@ -463,6 +465,7 @@ RunService.RenderStepped:Connect(function(dt)
 
     if not hasGun or not murderer or not murderer.Character then
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false
+        firstFrame = true
         return
     end
 
@@ -479,37 +482,53 @@ RunService.RenderStepped:Connect(function(dt)
         local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16, 0, 1)
         local hFactor = SheriffConfig.HorizontalPred * speedFactor
         local vFactor = SheriffConfig.VerticalPred * speedFactor
+        
+        -- Obtener el factor de suavizado configurado en el slider
+        local tSmooth = SheriffConfig.TracerSmoothness
 
+        -- 1. TRACER DE IMPACTO (ROJO)
         local predictedPos = getPredictedPosition(targetChar, bestPart)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
+                
                 PredictionLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                PredictionLine.To = vec2New(screenPos.X, screenPos.Y)
+                PredictionLine.To = currentScreenPred
                 PredictionLine.Visible = true
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
+        -- 2. TRACER DE PING (AZUL)
         if SheriffConfig.ShowPingTracer then
             local pingPos = bestPart.Position + (smoothedVelocity * ping * distFactor)
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
+                
                 PingLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                PingLine.To = vec2New(screenPos.X, screenPos.Y)
+                PingLine.To = currentScreenPing
                 PingLine.Visible = true
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
+        -- 3. TRACER DE LAG (VIOLETA)
         if SheriffConfig.ShowLagTracer then
             local lagPos = bestPart.Position + (vec3New(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
+                
                 LagLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                LagLine.To = vec2New(screenPos.X, screenPos.Y)
+                LagLine.To = currentScreenLag
                 LagLine.Visible = true
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
+        -- 4. LEAD TRACER (VERDE NEÓN DESDE LA MANO)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
@@ -526,13 +545,19 @@ RunService.RenderStepped:Connect(function(dt)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
 
             if handOnScreen and targetOnScreen then
+                local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
+                currentScreenLead = (firstFrame or tSmooth == 1) and target2D or currentScreenLead:Lerp(target2D, tSmooth)
+                
                 LeadLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
-                LeadLine.To = vec2New(targetScreenPos.X, targetScreenPos.Y)
+                LeadLine.To = currentScreenLead
                 LeadLine.Visible = true
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
+        
+        firstFrame = false
     else
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false
+        firstFrame = true
     end
 end)
 
@@ -617,7 +642,7 @@ UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
+DecalTexture.Size = UDim2.new(0.39, 0, 0.39, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
 DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
@@ -649,7 +674,7 @@ local function processGlowAtCoordinates(inputPosition)
     local relX = (localX / buttonSize.X) - 0.5
     
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.02}):Play()
 end
 
 local function fadeGlowReflection()
