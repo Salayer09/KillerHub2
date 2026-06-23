@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.0 [💎 OMNI REMOTELOCK UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.6.3 [🔥 THE REPAIR UPDATE - BUG FIXED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -183,7 +183,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO CON INTERCEPTACIÓN DE DATOS (LEAK REMOTO)
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO Y DESGLOSADO DE TRACERS
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -204,10 +204,6 @@ local lastDeltaTime = 0.016
 local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
-
--- Variables del Leak de Servidor (PlayerDataChanged)
-local datosJugadores = {}
-local fixedMurderer = nil
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
@@ -232,18 +228,6 @@ task.spawn(function()
     end
 end)
 
--- Hook e Interceptación del Remoto PlayerDataChanged
-task.spawn(function()
-    local playerDataChanged = ReplicatedStorage:WaitForChild("PlayerDataChanged", 10)
-    if playerDataChanged and playerDataChanged:IsA("RemoteEvent") then
-        playerDataChanged.OnClientEvent:Connect(function(tablaInterna)
-            if type(tablaInterna) == "table" then
-                datosJugadores = tablaInterna
-            end
-        end)
-    end
-end)
-
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -260,35 +244,11 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 🔒 TARGET LOCK POR INTERCEPTACIÓN DE ROL INTERNO (MM2 DATALEAK)
 local function getMurderer()
-    -- 1. Intenta leer directamente la tabla interceptada de PlayerDataChanged
-    for nombreJugador, info in pairs(datosJugadores) do
-        if type(info) == "table" and info.Role == "Murderer" then
-            local targetPlayer = Players:FindFirstChild(nombreJugador)
-            if targetPlayer and targetPlayer ~= LocalPlayer then
-                local char = targetPlayer.Character
-                if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-                    fixedMurderer = targetPlayer
-                    return targetPlayer
-                end
-            end
-        end
-    end
-    
-    -- 2. Failsafe: Respaldo clásico si el remoto aún no se activa o cambia la ronda
-    if fixedMurderer and fixedMurderer.Parent and fixedMurderer.Character then
-        local char = fixedMurderer.Character
-        if char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
-            return fixedMurderer
-        end
-    end
-
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
             local char = player.Character
-            if char and char:FindFirstChild("Knife") then
-                fixedMurderer = player
+            if (char and char:FindFirstChild("Knife")) or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife")) then
                 return player
             end
         end
@@ -362,17 +322,19 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
 
-    -- 🛑 ANTICIPACIÓN AL FRENO (STOP PREDICTION)
+    -- 🛠️ MEJORA 2: ANTICIPACIÓN AL FRENO (STOP PREDICTION PRO)
+    -- Si la velocidad es menor a 5 studs/s, asumimos parada inmediata. Anulamos predicción.
     if rawVelocity.Magnitude < 5 then
-        previousTargetVelocity = Vector3.new(0,0,0)
-        smoothedVelocity = Vector3.new(0,0,0)
-        return targetPosition, targetPosition, targetPosition 
+        smoothedVelocity = Vector3.new(0, 0, 0)
+        previousTargetVelocity = Vector3.new(0, 0, 0)
+        lastRawVelocity = Vector3.new(0, 0, 0)
+        return targetPosition, targetPosition, targetPosition
     end
 
     if lastTargetChar ~= targetChar then
-        smoothedVelocity = rawVelocity
+        smoothedVelocity = hrp.AssemblyLinearVelocity
         previousTargetVelocity = smoothedVelocity
-        lastRawVelocity = rawVelocity
+        lastRawVelocity = hrp.AssemblyLinearVelocity
         lastTargetChar = targetChar
     end
 
@@ -399,20 +361,27 @@ local function getPredictedPosition(targetChar, targetPart)
     local responseSpeed = isLowFPS and 11.0 or 15.5
     local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
+    
+    if smoothedVelocity.Magnitude < 0.05 then 
+        previousTargetVelocity = smoothedVelocity
+        return targetPosition, targetPosition, targetPosition 
+    end
 
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16.705, 0, 1.2)
 
-    -- 📡 SERVER TIME EN BASE A LATENCIA EN SEGUNDOS
-    local ping = math.clamp(cachedPingValue, 0.01, 0.5)
-    local serverFrameTime = ping + clampedDT 
+    local fpsBuffer = isLowFPS and 0.040 or 0.030
+    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
     
     local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
     local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
-    local timeFrameTotal = (hFactor + serverFrameTime) * distanceFactor
-    local timeFramePingOnly = serverFrameTime * distanceFactor
-    local timeFrameLagOnly = hFactor * distanceFactor
+    -- 🛠️ MEJORA 1: REDISEÑO DE "SERVER TIME" BASADO EN MULTIPLICADOR DE PING
+    -- Multiplicador normalizado donde ~100ms (0.1) mantiene base 1x. Si el ping sube, escala directamente la longitud.
+    local pingScaling = ping * 10
+    local timeFrameTotal = hFactor * pingScaling * distanceFactor
+    local timeFramePingOnly = ping * distanceFactor
+    local timeFrameLagOnly = hFactor * pingScaling * distanceFactor * 0.5
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
@@ -429,12 +398,6 @@ local function getPredictedPosition(targetChar, targetPart)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
         
-        -- Ajuste fino: Incremento de empuje en líneas rectas perfectas (Dot Product alto)
-        if dotProduct > 0.98 then
-            linealPred = linealPred * 1.05
-            aceleracionPred = aceleracionPred * 1.05
-        end
-
         if distance < 13 then finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
         else finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) end
         if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
@@ -478,7 +441,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
         local gravity = 196.2 
-        local verticalTime = serverFrameTime * SheriffConfig.VerticalPred * proximityFactor
+        local verticalTime = ping * SheriffConfig.VerticalPred * proximityFactor
         local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * gravity * (verticalTime ^ 2))
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
@@ -506,7 +469,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR COMPLETO DE TRACERS
+-- 🟩 RENDERIZADOR COMPLETO DE CAPAS
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
@@ -668,7 +631,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO - ARREGLADO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -750,12 +713,13 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
--- 🛸 ARRASTRE FLUIDO PRESERVADO
+-- 🛸 SISTEMA DE ARRASTRE (REESCRITO DESDE CERO - ANTIBUGS)
 local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
         
+        -- ✨ LLAMADA CORREGIDA: `fireAtMurdererDirectly` (Ya no crashea)
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
@@ -798,7 +762,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS (SILENT AIM PASIVO)
+-- ⚡ REMOTOS MODIFICADOS
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -832,12 +796,5 @@ if ClientServices then
         return prediction or oldGetMouseTargetCFrame(self, ...)
     end
 end
-
--- Limpieza automática del candado al salir de la ronda
-game.Players.PlayerRemoving:Connect(function(player)
-    if fixedMurderer == player then
-        fixedMurderer = nil
-    end
-end)
 
 return KillerHub
