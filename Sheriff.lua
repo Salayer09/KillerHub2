@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.3.5 [INTERNAL HYBRID LAYER TRACER UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.6.1 [PREDICTION SAVE FIX - VERIFIED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -17,18 +17,15 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 local SheriffConfig = {
     SilentAim = false,
     PredictionMode = "Híbrido Absoluto (Omni)", 
-    HorizontalPred = 0.145, 
-    VerticalPred = 0.035,   
+    HorizontalPred = 0.145, -- Valor Base si no hay archivo
+    VerticalPred = 0.035,   -- Valor Base si no hay archivo
     WallCheck = true,    
     
-    -- Tracers generales e internos del Hybrid
-    PredictTracer = false,
+    -- Tracers Sincronizados
+    PredictTracer = true,      
     ShowPingTracer = false,    
     ShowLagTracer = false,     
     ShowLeadTracer = true,     
-    ShowHybridBaseTracer = false,   -- NUEVO: Fase 1 Hybrid
-    ShowHybridZigZagTracer = false, -- NUEVO: Fase 2 Hybrid
-    ShowHybridVertTracer = false,   -- NUEVO: Fase 3 Hybrid
     
     TracerSmoothness = 0.60, 
     UseWeaponDetector = false, 
@@ -45,12 +42,15 @@ local SheriffConfig = {
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
+-- ✨ SISTEMA DE GUARDADO CORREGIDO (AHORA INCLUYE LOS SLIDERS DE PREDICCIÓN)
 local function saveConfig()
     if writefile then
         local data = {
             ButtonX = SheriffConfig.ButtonX,
             ButtonY = SheriffConfig.ButtonY,
             PredictionMode = SheriffConfig.PredictionMode,
+            HorizontalPred = SheriffConfig.HorizontalPred, -- ¡Arreglado!
+            VerticalPred = SheriffConfig.VerticalPred,     -- ¡Arreglado!
             LeadTimePred = SheriffConfig.LeadTimePred,
             TracerSmoothness = SheriffConfig.TracerSmoothness,
             UseWeaponDetector = SheriffConfig.UseWeaponDetector,
@@ -58,15 +58,13 @@ local function saveConfig()
             PredictTracer = SheriffConfig.PredictTracer,
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
-            ShowLagTracer = SheriffConfig.ShowLagTracer,
-            ShowHybridBaseTracer = SheriffConfig.ShowHybridBaseTracer,
-            ShowHybridZigZagTracer = SheriffConfig.ShowHybridZigZagTracer,
-            ShowHybridVertTracer = SheriffConfig.ShowHybridVertTracer
+            ShowLagTracer = SheriffConfig.ShowLagTracer
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
 end
 
+-- ✨ SISTEMA DE CARGA CORREGIDO (INYECTA LOS VALORES DIRECTO AL MOTOR MATEMÁTICO)
 local function loadConfig()
     if readfile and isfile and isfile(CONFIG_FILE) then
         local success, data = pcall(function()
@@ -76,6 +74,8 @@ local function loadConfig()
             SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
             SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
+            SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred -- ¡Arreglado!
+            SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     -- ¡Arreglado!
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
@@ -84,9 +84,6 @@ local function loadConfig()
             if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
             if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
             if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
-            if data.ShowHybridBaseTracer ~= nil then SheriffConfig.ShowHybridBaseTracer = data.ShowHybridBaseTracer end
-            if data.ShowHybridZigZagTracer ~= nil then SheriffConfig.ShowHybridZigZagTracer = data.ShowHybridZigZagTracer end
-            if data.ShowHybridVertTracer ~= nil then SheriffConfig.ShowHybridVertTracer = data.ShowHybridVertTracer end
         end
     end
 end
@@ -112,31 +109,26 @@ end)
 
 SheriffTab:CreateSlider("HorizontalPredSlider", "Predicción Horizontal", 0, 300, function(valor)
     SheriffConfig.HorizontalPred = valor / 1000 
+    saveConfig() -- Guarda instantáneamente al arrastrar
 end)
 
 SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0, 120, function(valor)
     SheriffConfig.VerticalPred = valor / 1000
+    saveConfig() -- Guarda instantáneamente al arrastrar
 end)
 
-SheriffTab:CreateSection("Líneas de Trayectoria (Tracers)")
+SheriffTab:CreateSection("Líneas de Trayectoria")
 
--- MULTI-DROPDOWN ACTUALIZADO CON LAS CAPAS INTERNAS DEL MOTOR HÍBRIDO
 SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", {
-    "Impacto (Rojo)", 
+    "Impacto Final (Rojo)", 
     "Ping (Azul)", 
     "Lag (Violeta)", 
-    "Lead (Verde)", 
-    "Hybrid: Base Horizontal (Blanco)",
-    "Hybrid: Filtro Anti-ZigZag (Naranja)",
-    "Hybrid: Dirección Vertical (Amarillo)"
+    "Lead (Verde)"
 }, function(tablaFlags)
-    SheriffConfig.PredictTracer = tablaFlags["Impacto (Rojo)"]
+    SheriffConfig.PredictTracer = tablaFlags["Impacto Final (Rojo)"]
     SheriffConfig.ShowPingTracer = tablaFlags["Ping (Azul)"]
     SheriffConfig.ShowLagTracer = tablaFlags["Lag (Violeta)"]
     SheriffConfig.ShowLeadTracer = tablaFlags["Lead (Verde)"]
-    SheriffConfig.ShowHybridBaseTracer = tablaFlags["Hybrid: Base Horizontal (Blanco)"]
-    SheriffConfig.ShowHybridZigZagTracer = tablaFlags["Hybrid: Filtro Anti-ZigZag (Naranja)"]
-    SheriffConfig.ShowHybridVertTracer = tablaFlags["Hybrid: Dirección Vertical (Amarillo)"]
     saveConfig()
 end)
 
@@ -149,7 +141,7 @@ SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = I
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("LeadTimeSlider", "Ver anticipación (Mano)", 0, 100, function(valor)
+SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
     saveConfig()
 end)
@@ -175,9 +167,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
     if btn then 
         btn.Size = UDim2.new(0, valor, 0, valor) 
         if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24)) end
-        if btn:FindFirstChild("GlowOverlay") and btn.GlowOverlay:FindFirstChild("UICorner") then
-            btn.GlowOverlay.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24))
-        end
     end
 end)
 
@@ -196,7 +185,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO CON ESTABILIZACIÓN DE RED AVANZADA
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO Y DESGLOSADO DE TRACERS
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -210,19 +199,13 @@ local UserInputService = game:GetService("UserInputService")
 local lastVelocity = Vector3.new(0,0,0)
 local previousTargetVelocity = Vector3.new(0,0,0) 
 local smoothedVelocity = Vector3.new(0,0,0)
+local lastRawVelocity = Vector3.new(0,0,0) 
 local lastTargetChar = nil
 local lastDeltaTime = 0.016
 
 local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
-
--- CACHÉ DE COORDENADAS INTERNAS EXCLUSIVAS DEL PROCESO HYBRID (OMNI)
-local debugHybridLayers = {
-    BaseHorizontal = Vector3.new(0,0,0),
-    AntiZigZag = Vector3.new(0,0,0),
-    VerticalOnly = Vector3.new(0,0,0)
-}
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
@@ -331,16 +314,17 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 local function getPredictedPosition(targetChar, targetPart)
-    if not targetChar or not targetPart then return nil end
+    if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     
-    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil end
+    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = hrp.AssemblyLinearVelocity
         previousTargetVelocity = smoothedVelocity
+        lastRawVelocity = hrp.AssemblyLinearVelocity
         lastTargetChar = targetChar
     end
 
@@ -353,183 +337,166 @@ local function getPredictedPosition(targetChar, targetPart)
     end
 
     local rawVelocity = hrp.AssemblyLinearVelocity
-    if rawVelocity.Magnitude > 55 then rawVelocity = rawVelocity.Unit * 16 end
-
-    local dotProduct = 1
-    if previousTargetVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
-        dotProduct = rawVelocity.Unit:Dot(previousTargetVelocity.Unit)
+    if rawVelocity.Magnitude > 16.705 then 
+        rawVelocity = rawVelocity.Unit * 16.705 
     end
 
-    if dotProduct < 0.3 then rawVelocity = rawVelocity * math.clamp(dotProduct, 0.1, 0.5) end
-    if rawVelocity.Magnitude < previousTargetVelocity.Magnitude * 0.4 then rawVelocity = rawVelocity * 0.15 end
+    local dotProduct = 1
+    if lastRawVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
+        dotProduct = rawVelocity.Unit:Dot(lastRawVelocity.Unit)
+    end
+    lastRawVelocity = rawVelocity 
 
     local clampedDT = math.min(lastDeltaTime, 0.05) 
     local isLowFPS = lastDeltaTime > 0.033
 
-    local adaptiveWeight = isLowFPS and 0.4 or math.clamp(1 - math.exp(-20 * clampedDT), 0.02, 0.8)
-    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, math.clamp(adaptiveWeight, 0.02, 0.95))
+    local responseSpeed = isLowFPS and 11.0 or 15.5
+    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
     
     if smoothedVelocity.Magnitude < 0.05 then 
         previousTargetVelocity = smoothedVelocity
-        return targetPosition 
+        return targetPosition, targetPosition, targetPosition 
     end
 
     local currentSpeed = smoothedVelocity.Magnitude
-    local speedFactor = math.clamp(currentSpeed / 16, 0, 1.2)
+    local speedFactor = math.clamp(currentSpeed / 16.705, 0, 1.2)
 
-    local fpsBuffer = isLowFPS and 0.045 or 0.033
+    local fpsBuffer = isLowFPS and 0.040 or 0.030
     local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
     
-    local distanceFactor = math.clamp(distance / 22, 0.05, 1.1) * proximityFactor
+    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
+    local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
-    local hFactor = (SheriffConfig.HorizontalPred * 1.15) * speedFactor
-    local timeFrame = (hFactor + ping) * distanceFactor
+    local timeFrameTotal = (hFactor + ping) * distanceFactor
+    local timeFramePingOnly = ping * distanceFactor
+    local timeFrameLagOnly = hFactor * distanceFactor
 
-    -- 1. CAPA VERTICAL (AISLADA PARA EL TRACER AMARILLO)
+    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
+    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
+    if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
+    local accAmortiguacion = isLowFPS and 0.02 or 0.06
+    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
+
+    local finalHorizontal = Vector3.new(0,0,0)
+    local pingHorizontal = Vector3.new(0,0,0)
+    local lagHorizontal = Vector3.new(0,0,0)
+
+    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
+        local linealPred = (smoothedVelocity * timeFrameTotal)
+        local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
+        local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
+        
+        if distance < 13 then finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
+        else finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
+        if ping > 0.22 then finalHorizontal = finalHorizontal * 0.85 end
+
+        local linealPing = (smoothedVelocity * timeFramePingOnly)
+        local adaptativoPing = (smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)))
+        local aceleracionPing = (smoothedVelocity * timeFramePingOnly)
+        if distance < 13 then pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
+        else pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if dotProduct < 0.88 then pingHorizontal = pingHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
+        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.85 end
+
+        local linealLag = (smoothedVelocity * timeFrameLagOnly)
+        local adaptativoLag = (smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)))
+        local aceleracionLag = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
+        if distance < 13 then lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
+        else lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if dotProduct < 0.88 then lagHorizontal = lagHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
+
+    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
+        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
+        if ping > 0.22 then finalHorizontal = finalHorizontal * 0.80 end
+
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly)
+        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.80 end
+
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
+
+    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
+        local function getAdaptOffset(t)
+            local dH = t
+            if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
+            return Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+        end
+        finalHorizontal = getAdaptOffset(timeFrameTotal)
+        pingHorizontal = getAdaptOffset(timeFramePingOnly)
+        lagHorizontal = getAdaptOffset(timeFrameLagOnly)
+
+    elseif SheriffConfig.PredictionMode == "Lineal Estable" then
+        local sTotal = timeFrameTotal * (isLowFPS and 0.85 or 0.95)
+        local sPing = timeFramePingOnly * (isLowFPS and 0.85 or 0.95)
+        local sLag = timeFrameLagOnly * (isLowFPS and 0.85 or 0.95)
+        
+        finalHorizontal = Vector3.new(smoothedVelocity.X * sTotal, 0, smoothedVelocity.Z * sTotal)
+        pingHorizontal = Vector3.new(smoothedVelocity.X * sPing, 0, smoothedVelocity.Z * sPing)
+        lagHorizontal = Vector3.new(smoothedVelocity.X * sLag, 0, smoothedVelocity.Z * sLag)
+    end
+
     local verticalOffset = Vector3.new(0, 0, 0)
-    if humanoid.FloorMaterial == Enum.Material.Air or smoothedVelocity.Y > 0.5 or smoothedVelocity.Y < -0.5 then
+    if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
         local gravity = 196.2 
         local verticalTime = ping * SheriffConfig.VerticalPred * proximityFactor
         local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * gravity * (verticalTime ^ 2))
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
     end
-    debugHybridLayers.VerticalOnly = targetPosition + verticalOffset
 
-    -- PROCESO INTERNO DEL MOTOR HÍBRIDO (OBTENCIÓN DE SUB-PREDICCIONES)
-    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
-    if rawAcceleration.Magnitude > 120 then rawAcceleration = rawAcceleration.Unit * 12 end
-    
-    local accAmortiguacion = isLowFPS and 0.02 or 0.08
-    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
-    
-    local linealPred = (smoothedVelocity * timeFrame)
-    local adaptativoPred = (smoothedVelocity * (timeFrame * math.clamp(dotProduct, 0.4, 1.0)))
-    local aceleracionPred = (smoothedVelocity * timeFrame) + (0.5 * stableAcceleration * (timeFrame ^ 2))
-
-    local finalPrediction = targetPosition
-
-    -- EJECUCIÓN LÓGICA ORIGINAL
-    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        local horizontalPrediction
-        if distance < 13 then
-            horizontalPrediction = linealPred:Lerp(adaptativoPred, 0.5)
-        else
-            local factorLargaDistancia = math.clamp((distance - 13) / 32, 0, 0.75)
-            local baseEstable = linealPred:Lerp(adaptativoPred, 0.3)
-            horizontalPrediction = baseEstable:Lerp(aceleracionPred, factorLargaDistancia)
-        end
-        
-        -- CAPTURA DE FASE 1: BASE HORIZONTAL (BLANCO)
-        debugHybridLayers.BaseHorizontal = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z)
-        
-        -- APLICACIÓN DEL FILTRO ANTI ZIG-ZAG
-        if dotProduct < 0.70 then
-            horizontalPrediction = horizontalPrediction * 0.25
-        end
-        if ping > 0.22 then horizontalPrediction = horizontalPrediction * 0.82 end
-        
-        -- CAPTURA DE FASE 2: TRAS CORRECCIÓN ANTI ZIG-ZAG (NARANJA)
-        debugHybridLayers.AntiZigZag = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z)
-        
-        finalPrediction = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z) + verticalOffset
-
-    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local horizontalPrediction = aceleracionPred
-        if ping > 0.22 then horizontalPrediction = horizontalPrediction * 0.80 end
-        finalPrediction = targetPosition + Vector3.new(horizontalPrediction.X, 0, horizontalPrediction.Z) + verticalOffset
-        -- Respaldos estáticos para debug en otros modos
-        debugHybridLayers.BaseHorizontal = finalPrediction
-        debugHybridLayers.AntiZigZag = finalPrediction
-
-    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dynamicH = timeFrame
-        if dotProduct < 0.85 then dynamicH = dynamicH * math.clamp(dotProduct, 0.2, 1.0) end
-        local horizontalOffset = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dynamicH
-        finalPrediction = targetPosition + horizontalOffset + verticalOffset
-        debugHybridLayers.BaseHorizontal = finalPrediction
-        debugHybridLayers.AntiZigZag = finalPrediction
-
-    elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        local stableTime = timeFrame * (isLowFPS and 0.85 or 0.95)
-        local horizontalOffset = Vector3.new(smoothedVelocity.X * stableTime, 0, smoothedVelocity.Z * stableTime)
-        finalPrediction = targetPosition + horizontalOffset + verticalOffset
-        debugHybridLayers.BaseHorizontal = finalPrediction
-        debugHybridLayers.AntiZigZag = finalPrediction
-    end
+    local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
+    local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z)
 
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
             local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
-            if finalPrediction.Y < minAllowedY then
-                finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z)
-            end
+            if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
         end
     end
 
     previousTargetVelocity = smoothedVelocity
     lastVelocity = smoothedVelocity
 
-    return finalPrediction
+    return finalPrediction, pingPrediction, lagPrediction
 end
 
 -- ============================================================================
--- 🟩 MOTOR DE TRACERS INTERPOLADO EFICIENTE
+-- 🟩 RENDERIZADOR COMPLETO Y TOTALMENTE VINCULADO
 -- ============================================================================
+local PredictionLine = Drawing.new("Line")
+PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
+PredictionLine.Thickness = 1.5
+PredictionLine.Visible = false
+table.insert(_G.KillerHubLines, PredictionLine)
+
 local PingLine = Drawing.new("Line")
-PingLine.Color = Color3.fromRGB(0, 45, 167) 
-PingLine.Thickness = 1.0
+PingLine.Color = Color3.fromRGB(0, 100, 255) 
+PingLine.Thickness = 1.2
 PingLine.Visible = false
 table.insert(_G.KillerHubLines, PingLine)
 
 local LagLine = Drawing.new("Line")
-LagLine.Color = Color3.fromRGB(114, 39, 214) 
-LagLine.Thickness = 1.0
+LagLine.Color = Color3.fromRGB(150, 50, 255) 
+LagLine.Thickness = 1.2
 LagLine.Visible = false
 table.insert(_G.KillerHubLines, LagLine)
 
 local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(103, 255, 89) 
-LeadLine.Thickness = 1.0
+LeadLine.Color = Color3.fromRGB(0, 255, 100) 
+LeadLine.Thickness = 1.5
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
-
--- NUEVOS TRACERS CORREGIDOS: EXCLUSIVOS DE LAS CAPAS MATEMÁTICAS DEL HYBRID
-local HybridBaseLine = Drawing.new("Line")
-HybridBaseLine.Color = Color3.fromRGB(255, 255, 255) -- Blanco
-HybridBaseLine.Thickness = 1.0
-HybridBaseLine.Visible = false
-table.insert(_G.KillerHubLines, HybridBaseLine)
-
-local HybridZigZagLine = Drawing.new("Line")
-HybridZigZagLine.Color = Color3.fromRGB(255, 120, 0) -- Naranja
-HybridZigZagLine.Thickness = 1.0
-HybridZigZagLine.Visible = false
-table.insert(_G.KillerHubLines, HybridZigZagLine)
-
-local HybridVertLine = Drawing.new("Line")
-HybridVertLine.Color = Color3.fromRGB(255, 235, 40) -- Amarillo
-HybridVertLine.Thickness = 1.0
-HybridVertLine.Visible = false
-table.insert(_G.KillerHubLines, HybridVertLine)
-
--- TRACER CRÍTICO FINAL (DE IMPACTO - ROJO EN LA CAPA SUPERIOR)
-local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = Color3.fromRGB(255, 35, 35)
-PredictionLine.Thickness = 1.4
-PredictionLine.Visible = false
-table.insert(_G.KillerHubLines, PredictionLine)
 
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
 local currentScreenLag = Vector2.new(0,0)
 local currentScreenLead = Vector2.new(0,0)
-local currentScreenHBase = Vector2.new(0,0)
-local currentScreenHZig = Vector2.new(0,0)
-local currentScreenHVert = Vector2.new(0,0)
 local firstFrame = true
 
 local vec2New, vec3New = Vector2.new, Vector3.new
@@ -545,7 +512,6 @@ RunService.RenderStepped:Connect(function(dt)
 
     if not hasGun or not murderer or not murderer.Character then
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        HybridBaseLine.Visible = false; HybridZigZagLine.Visible = false; HybridVertLine.Visible = false;
         firstFrame = true
         return
     end
@@ -558,44 +524,44 @@ RunService.RenderStepped:Connect(function(dt)
     if bestPart and localHrp then
         local distance = (bestPart.Position - localHrp.Position).Magnitude
         local distFactor = math.clamp((distance - 4) / 16, 0, 1)
-        local ping = math.clamp(cachedPingValue, 0.01, 0.4)
-      
-        local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16, 0, 1)
-        local hFactor = SheriffConfig.HorizontalPred * speedFactor
-        local vFactor = SheriffConfig.VerticalPred * speedFactor
-        
         local tSmooth = SheriffConfig.TracerSmoothness
+        
+        local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
+        local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
-        -- ALIMENTAR LAS VARIABLES DE CACHÉ INTERNAS CORRIENDO EL MOTOR
-        local predictedPos = getPredictedPosition(targetChar, bestPart)
+        if predictedPos and SheriffConfig.PredictTracer then
+            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
+            if onScreen then
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
+                PredictionLine.From = screenOrigin
+                PredictionLine.To = currentScreenPred
+                PredictionLine.Visible = true
+            else PredictionLine.Visible = false end
+        else PredictionLine.Visible = false end
 
-        -- 1. TRACER DE PING (AZUL)
-        if SheriffConfig.ShowPingTracer then
-            local pingPos = bestPart.Position + (smoothedVelocity * ping * distFactor)
+        if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
                 currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
-                PingLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                PingLine.From = screenOrigin
                 PingLine.To = currentScreenPing
                 PingLine.Visible = true
             else PingLine.Visible = false end
         else PingLine.Visible = false end
 
-        -- 2. TRACER DE LAG (VIOLETA)
-        if SheriffConfig.ShowLagTracer then
-            local lagPos = bestPart.Position + (vec3New(smoothedVelocity.X * hFactor, smoothedVelocity.Y * vFactor, smoothedVelocity.Z * hFactor) * distFactor)
+        if lagPos and SheriffConfig.ShowLagTracer then
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
                 currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
-                LagLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+                LagLine.From = screenOrigin
                 LagLine.To = currentScreenLag
                 LagLine.Visible = true
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 3. LEAD TRACER (VERDE NEÓN)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
@@ -619,59 +585,10 @@ RunService.RenderStepped:Connect(function(dt)
                 LeadLine.Visible = true
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
-
-        -- 4. VISUAL HYBRID L1: BASE HORIZONTAL (BLANCO)
-        if SheriffConfig.ShowHybridBaseTracer and debugHybridLayers.BaseHorizontal then
-            local screenPos, onScreen = worldToViewport(Camera, debugHybridLayers.BaseHorizontal)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenHBase = (firstFrame or tSmooth == 1) and target2D or currentScreenHBase:Lerp(target2D, tSmooth)
-                HybridBaseLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                HybridBaseLine.To = currentScreenHBase
-                HybridBaseLine.Visible = true
-            else HybridBaseLine.Visible = false end
-        else HybridBaseLine.Visible = false end
-
-        -- 5. VISUAL HYBRID L2: FILTRO ANTI-ZIGZAG (NARANJA)
-        if SheriffConfig.ShowHybridZigZagTracer and debugHybridLayers.AntiZigZag then
-            local screenPos, onScreen = worldToViewport(Camera, debugHybridLayers.AntiZigZag)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenHZig = (firstFrame or tSmooth == 1) and target2D or currentScreenHZig:Lerp(target2D, tSmooth)
-                HybridZigZagLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                HybridZigZagLine.To = currentScreenHZig
-                HybridZigZagLine.Visible = true
-            else HybridZigZagLine.Visible = false end
-        else HybridZigZagLine.Visible = false end
-
-        -- 6. VISUAL HYBRID L3: DIRECCIÓN VERTICAL (AMARILLO)
-        if SheriffConfig.ShowHybridVertTracer and debugHybridLayers.VerticalOnly then
-            local screenPos, onScreen = worldToViewport(Camera, debugHybridLayers.VerticalOnly)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenHVert = (firstFrame or tSmooth == 1) and target2D or currentScreenHVert:Lerp(target2D, tSmooth)
-                HybridVertLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                HybridVertLine.To = currentScreenHVert
-                HybridVertLine.Visible = true
-            else HybridVertLine.Visible = false end
-        else HybridVertLine.Visible = false end
-
-        -- 7. TRACER DE IMPACTO FINAL CONSOLIDADO (ROJO) -> EN LA CAPA SUPERIOR
-        if predictedPos and SheriffConfig.PredictTracer then
-            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
-                PredictionLine.From = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
-                PredictionLine.To = currentScreenPred
-                PredictionLine.Visible = true
-            else PredictionLine.Visible = false end
-        else PredictionLine.Visible = false end
         
         firstFrame = false
     else
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        HybridBaseLine.Visible = false; HybridZigZagLine.Visible = false; HybridVertLine.Visible = false;
         firstFrame = true
     end 
 end)
@@ -712,7 +629,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT FLUIDO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -784,10 +701,8 @@ Label.Parent = ShootButton
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
-    
     local localX = inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / buttonSize.X) - 0.5
-    
     UiGradient.Offset = Vector2.new(relX * 1.5, 0)
     TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25}):Play()
 end
@@ -859,8 +774,7 @@ if ClientServices then
             local murderer = getMurderer()
             if murderer and murderer.Character then
                 local targetChar = murderer.Character
-                local bestPart = getBestTargetPart(targetChar) 
-                
+                local bestPart = getBestTargetPart(targetChar)
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart)
                     if predictedPos then return CFrame.new(predictedPos) end
