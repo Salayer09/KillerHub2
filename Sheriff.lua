@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.9 [🔥 PURE PHYSICAL PHYSICS & SAFETY ULTIMATE]
+-- 👻 KILLER HUB | SHERIFF V6.7.2 [🔥 HYBRID MERGE & OPTIMIZED PHYSICALS - FIXED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -63,28 +63,41 @@ local function saveConfig()
     end
 end
 
+-- ============================================================
+-- FIX DE CONFIGURACIÓN (Fusión v6.6.7 + v6.7.2 Completa)
+-- ============================================================
 local function loadConfig()
-    if readfile and isfile and isfile(CONFIG_FILE) then
-        local success, data = pcall(function()
-            return HttpService:JSONDecode(readfile(CONFIG_FILE))
-        end)
-        if success and type(data) == "table" then
-            SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
-            SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
-            SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
-            SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred 
-            SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     
-            SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
-            SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness -- CORREGIDO: Typo de variable arreglado
-            if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
-            if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
-            if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
-            if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
-            if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
-            if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
+    local success, result = pcall(function()
+        if isfile and isfile(CONFIG_FILE) then
+            local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if data then
+                -- Cargamos absolutamente TODO lo que se guarda para que no se pierda nada
+                SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
+                SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
+                SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
+                SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred
+                SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred
+                SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
+                SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
+                
+                if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
+                if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
+                if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
+                if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
+                if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
+                if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
+                return true
+            end
         end
+        return false
+    end)
+    
+    if not success then
+        warn("Error al cargar la configuración: " .. tostring(result))
     end
 end
+
+-- ¡ACTUACIÓN CLAVE! Ejecutamos la carga de datos aquí para que el script empiece con tus ajustes guardados
 loadConfig()
 
 -- ============================================================================
@@ -317,7 +330,16 @@ local function getMurderer()
 
     if potentialMurderer then
         currentTarget = potentialMurderer
-        lastTargetTime = os.clock() 
+        lastTargetTime = os.clock()
+    else
+        if currentTarget and currentTarget.Parent and currentTarget.Character then
+            local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)
+            if os.clock() - lastTargetTime < 1.0 and not isDead then
+                return currentTarget
+            end
+        end
+        currentTarget = nil
     end
 
     return currentTarget
@@ -442,12 +464,9 @@ local function getPredictedPosition(targetChar, targetPart)
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
     if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local accAmortiguacion = isLowFPS factories and 0.02 or 0.06
+    local accAmortiguacion = isLowFPS and 0.02 or 0.06
     local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
 
-    -- ============================================================================
-    -- 📐 DESACOPLAMIENTO DE TIEMPOS FÍSICOS REALES (ANTI-DECORACIÓN)
-    -- ============================================================================
     local timeFrameTotal = hFactor * (ping * 10) * distanceFactor
     local timeFramePingOnly = cachedPingValue * distanceFactor
     local timeFrameLagOnly = clampedDT * distanceFactor
@@ -519,8 +538,8 @@ local function getPredictedPosition(targetChar, targetPart)
             local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end -- CORREGIDO: Eje Z real
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end -- CORREGIDO: Eje Z real
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
         end
     end
 
@@ -597,7 +616,6 @@ RunService.RenderStepped:Connect(function(dt)
         local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
-        -- 1. PROCESAR TRACERS SECUNDARIOS (BASE)
         if lagPos and SheriffConfig.ShowLagTracer then
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
@@ -644,7 +662,6 @@ RunService.RenderStepped:Connect(function(dt)
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
 
-        -- 2. PROCESAR TRACER PRINCIPAL ROJO (AL FINAL PARA SOBRESCRIBIR PÍXELES)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
@@ -667,7 +684,6 @@ local function fireAtMurdererDirectly()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChildOfClass("Humanoid") then return end
     
-    -- LINEA DE SEGURIDAD: Si tu propio HRP no existe en este frame, frena la función de golpe
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end 
 
@@ -688,7 +704,6 @@ local function fireAtMurdererDirectly()
                     RunService.Heartbeat:Wait() 
                 end 
                 if gun:FindFirstChild("Shoot") then
-                    -- Usamos la variable segura 'hrp' en lugar de indexar directo
                     local originCFrame = hrp.CFrame
                     if hrp:FindFirstChild("GunRaycastAttachment") then
                         originCFrame = hrp.GunRaycastAttachment.WorldCFrame
@@ -696,7 +711,6 @@ local function fireAtMurdererDirectly()
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
                 
-                -- Fast Unequip Adaptativo Basado en Ping
                 if SheriffConfig.AutoUnequip then 
                     local adaptiveDelay = math.clamp(cachedPingValue * 0.5, 0.015, 0.05)
                     task.wait(adaptiveDelay) 
