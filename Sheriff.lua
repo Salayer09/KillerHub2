@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.5 [🔥 TRUE NET-TRACERS & LAYER ORDER UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.6.6 [🔥 ENGINE DEBUGGING & DRAWING Z-INDEX FIX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -398,7 +398,6 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
 
-    -- SI FRENA INSTANTÁNEAMENTE RESETA LA VELOCIDAD
     if rawVelocity.Magnitude < 5 then
         smoothedVelocity = Vector3.new(0, 0, 0)
         previousTargetVelocity = Vector3.new(0, 0, 0)
@@ -455,28 +454,65 @@ local function getPredictedPosition(targetChar, targetPart)
     local accAmortiguacion = isLowFPS and 0.02 or 0.06
     local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
 
-    -- 🔴 CÁLCULO PRINCIPAL IMPERIO (DEL AIM SILENCIOSO) - INTACTO
+    -- 🔍 ESCALAS DE TIEMPO INTERNAS DEL CODIGO DEL AIM (Para Testeo Visual)
     local timeFrameTotal = hFactor * (ping * 10) * distanceFactor
-    local finalHorizontal = Vector3.new(0,0,0)
+    local timeFramePingOnly = ping * distanceFactor
+    local timeFrameLagOnly = timeFrameTotal * 0.5
 
+    local finalHorizontal = Vector3.new(0,0,0)
+    local pingHorizontal = Vector3.new(0,0,0)
+    local lagHorizontal = Vector3.new(0,0,0)
+
+    -- Sincronización matemática estricta por Modos para depuración analítica
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
+        -- 🔴 Ecuación Final Aim
         local linealPred = (smoothedVelocity * timeFrameTotal)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
-        
         if distance < 13 then finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
         else finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) end
         if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.85 end
 
+        -- 🔵 Espejo exacto para ver el comportamiento del Ping en Omni
+        local linealPing = (smoothedVelocity * timeFramePingOnly)
+        local adaptativoPing = (smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)))
+        local aceleracionPing = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
+        if distance < 13 then pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
+        else pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if dotProduct < 0.88 then pingHorizontal = pingHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
+        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.85 end
+
+        -- 🟣 Espejo exacto para ver el comportamiento del Lag en Omni
+        local linealLag = (smoothedVelocity * timeFrameLagOnly)
+        local adaptativoLag = (smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)))
+        local aceleracionLag = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
+        if distance < 13 then lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
+        else lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if dotProduct < 0.88 then lagHorizontal = lagHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
+
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
+        -- 🔴 Ecuación Final Aim
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.80 end
 
+        -- 🔵 Espejo exacto para el Ping
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
+        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.80 end
+
+        -- 🟣 Espejo exacto para el Lag
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
+
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dH = timeFrameTotal
-        if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
-        finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+        local function getAdaptOffset(t)
+            local dH = t
+            if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
+            return Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+        end
+        -- Distribución de espejos matemáticos idénticos
+        finalHorizontal = getAdaptOffset(timeFrameTotal)
+        pingHorizontal = getAdaptOffset(timeFramePingOnly)
+        lagHorizontal = getAdaptOffset(timeFrameLagOnly)
     end
 
     local verticalOffset = Vector3.new(0, 0, 0)
@@ -487,20 +523,11 @@ local function getPredictedPosition(targetChar, targetPart)
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
     end
+
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
+    local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
 
-    -- 🔵 TRUE PING TRACER MATH (Aislado, Mide puramente la latencia del jugador al Server)
-    local purePingTime = math.clamp(cachedPingValue, 0.01, 0.5)
-    local pingHorizontalPure = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * purePingTime
-    local pingVerticalPure = Vector3.new(0, (humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1) and ((smoothedVelocity.Y * purePingTime) - (0.5 * 196.2 * (purePingTime ^ 2))) or 0, 0)
-    local pingPrediction = targetPosition + pingHorizontalPure + pingVerticalPure
-
-    -- 🟣 TRUE LAG TRACER MATH (Aislado, Mide la latencia de Red + Pérdida de Cuadros por FPS locales)
-    local lagTimePure = purePingTime + clampedDT
-    local lagHorizontalPure = (Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * lagTimePure) + (0.5 * Vector3.new(stableAcceleration.X, 0, stableAcceleration.Z) * (lagTimePure ^ 2))
-    local lagPrediction = targetPosition + lagHorizontalPure
-
-    -- Ajustes de piso para evitar desvíos subterráneos
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -519,31 +546,35 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR COMPLETO DE CAPAS
+-- 🟩 RENDERIZADOR COMPLETO CON CAPAS POR Z-INDEX CONTROLADO
 -- ============================================================================
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 2.2 -- Más grueso para dominar visualmente
+PredictionLine.Thickness = 2.2 
+PredictionLine.ZIndex = 5  -- 🔥 FORZAR CAPA MÁXIMA SUPERIOR (SIEMPRE ARRIBA)
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
+
+local LeadLine = Drawing.new("Line")
+LeadLine.Color = Color3.fromRGB(0, 255, 100) 
+LeadLine.Thickness = 1.5
+LeadLine.ZIndex = 4  -- Segunda Capa
+LeadLine.Visible = false
+table.insert(_G.KillerHubLines, LeadLine)
 
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
 PingLine.Thickness = 1.2
+PingLine.ZIndex = 3  -- Tercera Capa
 PingLine.Visible = false
 table.insert(_G.KillerHubLines, PingLine)
 
 local LagLine = Drawing.new("Line")
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
 LagLine.Thickness = 1.2
+LagLine.ZIndex = 2  -- Capa Base Inferior
 LagLine.Visible = false
 table.insert(_G.KillerHubLines, LagLine)
-
-local LeadLine = Drawing.new("Line")
-LeadLine.Color = Color3.fromRGB(0, 255, 100) 
-LeadLine.Thickness = 1.5
-LeadLine.Visible = false
-table.insert(_G.KillerHubLines, LeadLine)
 
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
@@ -581,7 +612,7 @@ RunService.RenderStepped:Connect(function(dt)
         local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
-        -- 1. PROCESAR PRIMERO TRACERS SECUNDARIOS (CAPA INFERIOR)
+        -- Actualización de renderizado estructurada
         if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
@@ -628,7 +659,6 @@ RunService.RenderStepped:Connect(function(dt)
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
 
-        -- 2. PROCESAR AL FINAL EL TRACER ROJO PRINCIPAL (CAPA SUPERIOR - POR ENCIMA)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
