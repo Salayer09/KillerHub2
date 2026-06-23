@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.1 [PREDICTION SAVE FIX - VERIFIED]
+-- 👻 KILLER HUB | SHERIFF V6.6.2 [TRACER LAYER & CLEANUP UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -17,8 +17,8 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 local SheriffConfig = {
     SilentAim = false,
     PredictionMode = "Híbrido Absoluto (Omni)", 
-    HorizontalPred = 0.145, -- Valor Base si no hay archivo
-    VerticalPred = 0.035,   -- Valor Base si no hay archivo
+    HorizontalPred = 0.145, 
+    VerticalPred = 0.035,   
     WallCheck = true,    
     
     -- Tracers Sincronizados
@@ -42,15 +42,14 @@ local SheriffConfig = {
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
--- ✨ SISTEMA DE GUARDADO CORREGIDO (AHORA INCLUYE LOS SLIDERS DE PREDICCIÓN)
 local function saveConfig()
     if writefile then
         local data = {
             ButtonX = SheriffConfig.ButtonX,
             ButtonY = SheriffConfig.ButtonY,
             PredictionMode = SheriffConfig.PredictionMode,
-            HorizontalPred = SheriffConfig.HorizontalPred, -- ¡Arreglado!
-            VerticalPred = SheriffConfig.VerticalPred,     -- ¡Arreglado!
+            HorizontalPred = SheriffConfig.HorizontalPred, 
+            VerticalPred = SheriffConfig.VerticalPred,     
             LeadTimePred = SheriffConfig.LeadTimePred,
             TracerSmoothness = SheriffConfig.TracerSmoothness,
             UseWeaponDetector = SheriffConfig.UseWeaponDetector,
@@ -64,7 +63,6 @@ local function saveConfig()
     end
 end
 
--- ✨ SISTEMA DE CARGA CORREGIDO (INYECTA LOS VALORES DIRECTO AL MOTOR MATEMÁTICO)
 local function loadConfig()
     if readfile and isfile and isfile(CONFIG_FILE) then
         local success, data = pcall(function()
@@ -74,8 +72,8 @@ local function loadConfig()
             SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
             SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
             SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
-            SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred -- ¡Arreglado!
-            SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     -- ¡Arreglado!
+            SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred 
+            SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
             SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
@@ -102,19 +100,20 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check
     SheriffConfig.WallCheck = estado
 end)
 
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo", "Lineal Estable"}, function(seleccionado)
+-- 🗑️ MODALIDAD LINEAL ELIMINADA DE LA LISTA
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
 
 SheriffTab:CreateSlider("HorizontalPredSlider", "Predicción Horizontal", 0, 300, function(valor)
     SheriffConfig.HorizontalPred = valor / 1000 
-    saveConfig() -- Guarda instantáneamente al arrastrar
+    saveConfig() 
 end)
 
 SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0, 120, function(valor)
     SheriffConfig.VerticalPred = valor / 1000
-    saveConfig() -- Guarda instantáneamente al arrastrar
+    saveConfig() 
 end)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
@@ -382,6 +381,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local pingHorizontal = Vector3.new(0,0,0)
     local lagHorizontal = Vector3.new(0,0,0)
 
+    -- 🔍 MATEMÁTICA LIMPIA: CÁLCULOS EXCLUSIVOS DE MODOS AVANZADOS
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
         local linealPred = (smoothedVelocity * timeFrameTotal)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
@@ -425,15 +425,6 @@ local function getPredictedPosition(targetChar, targetPart)
         finalHorizontal = getAdaptOffset(timeFrameTotal)
         pingHorizontal = getAdaptOffset(timeFramePingOnly)
         lagHorizontal = getAdaptOffset(timeFrameLagOnly)
-
-    elseif SheriffConfig.PredictionMode == "Lineal Estable" then
-        local sTotal = timeFrameTotal * (isLowFPS and 0.85 or 0.95)
-        local sPing = timeFramePingOnly * (isLowFPS and 0.85 or 0.95)
-        local sLag = timeFrameLagOnly * (isLowFPS and 0.85 or 0.95)
-        
-        finalHorizontal = Vector3.new(smoothedVelocity.X * sTotal, 0, smoothedVelocity.Z * sTotal)
-        pingHorizontal = Vector3.new(smoothedVelocity.X * sPing, 0, smoothedVelocity.Z * sPing)
-        lagHorizontal = Vector3.new(smoothedVelocity.X * sLag, 0, smoothedVelocity.Z * sLag)
     end
 
     local verticalOffset = Vector3.new(0, 0, 0)
@@ -467,14 +458,8 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR COMPLETO Y TOTALMENTE VINCULADO
+-- 🟩 RENDERIZADOR COMPLETO (ORDEN DE CAPAS CONTROLADO)
 -- ============================================================================
-local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 1.5
-PredictionLine.Visible = false
-table.insert(_G.KillerHubLines, PredictionLine)
-
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
 PingLine.Thickness = 1.2
@@ -492,6 +477,13 @@ LeadLine.Color = Color3.fromRGB(0, 255, 100)
 LeadLine.Thickness = 1.5
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
+
+-- ✨ REUBICADO AL FINAL: Al crearse al último, el motor gráfico la dibuja EN CIMA de todas las anteriores.
+local PredictionLine = Drawing.new("Line")
+PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
+PredictionLine.Thickness = 1.8 -- Le subí un pelín el grosor para que destaque aún más
+PredictionLine.Visible = false
+table.insert(_G.KillerHubLines, PredictionLine)
 
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
@@ -717,7 +709,7 @@ local DRAG_THRESHOLD = 8
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        task.spawn(fireAtMurdererDirectly)
+        task.spawn(fireAtMurderDirectly)
         
         if not SheriffConfig.ButtonLocked then
             dragStart = input.Position
