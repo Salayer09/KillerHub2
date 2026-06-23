@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.2 [TRACER LAYER & CLEANUP UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.6.3 [🔥 THE REPAIR UPDATE - BUG FIXED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -100,7 +100,6 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check
     SheriffConfig.WallCheck = estado
 end)
 
--- 🗑️ MODALIDAD LINEAL ELIMINADA DE LA LISTA
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
@@ -381,7 +380,6 @@ local function getPredictedPosition(targetChar, targetPart)
     local pingHorizontal = Vector3.new(0,0,0)
     local lagHorizontal = Vector3.new(0,0,0)
 
-    -- 🔍 MATEMÁTICA LIMPIA: CÁLCULOS EXCLUSIVOS DE MODOS AVANZADOS
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
         local linealPred = (smoothedVelocity * timeFrameTotal)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
@@ -458,7 +456,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR COMPLETO (ORDEN DE CAPAS CONTROLADO)
+-- 🟩 RENDERIZADOR COMPLETO DE CAPAS
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
@@ -478,10 +476,9 @@ LeadLine.Thickness = 1.5
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
 
--- ✨ REUBICADO AL FINAL: Al crearse al último, el motor gráfico la dibuja EN CIMA de todas las anteriores.
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 1.8 -- Le subí un pelín el grosor para que destaque aún más
+PredictionLine.Thickness = 1.8 
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
 
@@ -621,7 +618,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO - ARREGLADO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -703,26 +700,26 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
-local dragging, dragStart, startPos, dragInput = false, nil, nil, nil
-local DRAG_THRESHOLD = 8
-
+-- 🛸 SISTEMA DE ARRASTRE (REESCRITO DESDE CERO - ANTIBUGS)
+local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        task.spawn(fireAtMurderDirectly)
+        
+        -- ✨ LLAMADA CORREGIDA: `fireAtMurdererDirectly` (Ya no crashea)
+        task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
+            dragging = true
             dragStart = input.Position
             startPos = ShootButton.Position
-            dragging = false
+            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
-                    if dragging then
-                        SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                        SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                        saveConfig()
-                    end
-                    dragStart, dragging = nil, false
+                    dragging = false
+                    SheriffConfig.ButtonX = ShootButton.Position.X.Scale
+                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    saveConfig()
                 end
             end)
         end
@@ -736,18 +733,18 @@ ShootButton.InputEnded:Connect(function(input)
 end)
 
 ShootButton.InputChanged:Connect(function(input)
-    if not SheriffConfig.ButtonLocked and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragStart then
+    if input == dragInput and dragging then
         local delta = input.Position - dragStart
-        if not dragging and delta.Magnitude > DRAG_THRESHOLD then dragging = true end
-        if dragging then
-             ShootButton.Position = UDim2.new(startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0)
-        end
+        ShootButton.Position = UDim2.new(
+            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+            startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
+        )
     end
 end)
 
