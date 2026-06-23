@@ -317,7 +317,7 @@ local function getMurderer()
 
     if potentialMurderer then
         currentTarget = potentialMurderer
-        lastTargetTime = osclock()
+        lastTargetTime = os.clock() -- ¡CORREGIDO AQUÍ! Ya tiene su punto correspondiente.
     else
         if currentTarget and currentTarget.Parent and currentTarget.Character then
             local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
