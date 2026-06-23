@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.7 [🔥 EXECUTOR DRAWING OVERRIDE FIXED]
+-- 👻 KILLER HUB | SHERIFF V6.6.8 [🔥 PURE PHYSICAL PHYSICS TRACERS CONVERTED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -75,7 +75,7 @@ local function loadConfig()
             SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred 
             SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
-            SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
+            SheracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
             if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
@@ -317,16 +317,7 @@ local function getMurderer()
 
     if potentialMurderer then
         currentTarget = potentialMurderer
-        lastTargetTime = os.clock() -- ¡CORREGIDO AQUÍ! Ya tiene su punto correspondiente.
-    else
-        if currentTarget and currentTarget.Parent and currentTarget.Character then
-            local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
-            local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)
-            if os.clock() - lastTargetTime < 1.0 and not isDead then
-                return currentTarget
-            end
-        end
-        currentTarget = nil
+        lastTargetTime = os.clock() 
     end
 
     return currentTarget
@@ -454,9 +445,12 @@ local function getPredictedPosition(targetChar, targetPart)
     local accAmortiguacion = isLowFPS and 0.02 or 0.06
     local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
 
+    -- ============================================================================
+    -- 📐 DESACOPLAMIENTO DE TIEMPOS FÍSICOS REALES (ANTI-DECORACIÓN)
+    -- ============================================================================
     local timeFrameTotal = hFactor * (ping * 10) * distanceFactor
-    local timeFramePingOnly = ping * distanceFactor
-    local timeFrameLagOnly = timeFrameTotal * 0.5
+    local timeFramePingOnly = cachedPingValue * distanceFactor
+    local timeFrameLagOnly = clampedDT * distanceFactor
 
     local finalHorizontal = Vector3.new(0,0,0)
     local pingHorizontal = Vector3.new(0,0,0)
@@ -525,8 +519,8 @@ local function getPredictedPosition(targetChar, targetPart)
             local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, minAllowedY) end
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, minAllowedY) end
         end
     end
 
@@ -539,7 +533,6 @@ end
 -- ============================================================================
 -- 🟩 RENDERIZADOR JERÁRQUICO POR ORDEN DE NACIMIENTO DE MEMORIA (Z-INDEX BYPASS)
 -- ============================================================================
--- Se crean de abajo hacia arriba. Las capas inferiores nacen primero.
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
 LagLine.Thickness = 1.2
@@ -561,11 +554,9 @@ LeadLine.ZIndex = 4
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
 
--- La línea ROJA nace al ÚLTIMO en el script. En ejecutores con ZIndex roto,
--- el motor gráfico dibuja encima lo último que se creó. Esto garantiza su prioridad.
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 2.4 -- Ligeramente más gruesa para dominar visualmente
+PredictionLine.Thickness = 2.4 
 PredictionLine.ZIndex = 5  
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
@@ -698,8 +689,11 @@ local function fireAtMurdererDirectly()
                     end
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
+                
+                -- Fast Unequip Adaptativo Basado en Ping
                 if SheriffConfig.AutoUnequip then 
-                    task.wait(0.02) 
+                    local adaptiveDelay = math.clamp(cachedPingValue * 0.5, 0.015, 0.05)
+                    task.wait(adaptiveDelay) 
                     humanoid:UnequipTools() 
                 end 
             end
