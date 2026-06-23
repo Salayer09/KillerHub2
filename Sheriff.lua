@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.3 [🔥 THE REPAIR UPDATE - BUG FIXED]
+-- 👻 KILLER HUB | SHERIFF V6.6.4 [🔥 NETWORK SCRAPER & TARGET LOCK UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -205,6 +205,14 @@ local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
 
+-- 📡 BASES DE DATOS DEL RASPADO DE RED (De tu script ESP)
+local playerRoles = {}
+local playerDeadStatus = {}
+
+-- Variables del Target Lock
+local currentTarget = nil
+local lastTargetTime = 0
+
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
     if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
@@ -228,6 +236,33 @@ task.spawn(function()
     end
 end)
 
+-- 🛰️ RECEPTOR DE EVENTOS DE RED DE MM2 (Cero desincronización)
+local function parsePlayerData(tabla)
+    if type(tabla) == "table" then
+        for name, data in pairs(tabla) do
+            if type(data) == "table" then
+                if data.Role then playerRoles[name] = data.Role end
+                if data.Dead ~= nil then playerDeadStatus[name] = data.Dead end
+            end
+        end
+    end
+end
+
+local PlayerDataChanged = ReplicatedStorage:FindFirstChild("PlayerDataChanged", true)
+if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then
+    PlayerDataChanged.OnClientEvent:Connect(parsePlayerData)
+end
+
+local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
+if RoundStart and RoundStart:IsA("RemoteEvent") then
+    RoundStart.OnClientEvent:Connect(function(arg1, arg2)
+        table.clear(playerRoles)
+        table.clear(playerDeadStatus)
+        parsePlayerData(arg2)
+        parsePlayerData(arg1)
+    end)
+end
+
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -244,16 +279,66 @@ local function getGunLocation()
     return nil, nil
 end
 
+-- 🎯 DETECTOR CON FILTRO TARGET SWITCH Y RESPALDO ULTRA-AVANZADO
 local function getMurderer()
+    -- 1. Verificar si el objetivo guardado en caché sigue cumpliendo los requisitos (Target Lock activo)
+    if currentTarget and currentTarget.Parent and currentTarget.Character then
+        local name = currentTarget.Name
+        local char = currentTarget.Character
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        
+        local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[name] == true)
+        
+        local backpack = currentTarget:FindFirstChild("Backpack")
+        local hasKnife = (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife"))
+        local isStillMurderer = (playerRoles[name] == "Murderer") or hasKnife
+
+        if isStillMurderer and not isDead then
+            lastTargetTime = os.clock() -- Refrescar estampa de tiempo
+            return currentTarget
+        elseif os.clock() - lastTargetTime < 1.0 and not isDead then
+            -- Margen de gracia de 1 segundo si guardó el cuchillo o salió de rango visual brevemente
+            return currentTarget
+        end
+    end
+
+    -- 2. Si no hay target o expiró el tiempo de gracia, escanear la partida usando el Raspador de Red + Armas
+    local potentialMurderer = nil
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
+            local name = player.Name
             local char = player.Character
-            if (char and char:FindFirstChild("Knife")) or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife")) then
-                return player
+            local backpack = player:FindFirstChild("Backpack")
+            
+            local hasKnife = (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife"))
+            if hasKnife then playerRoles[name] = "Murderer" end -- Forzar respaldo físico
+
+            local isDead = (char and char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0) or (playerDeadStatus[name] == true)
+
+            if playerRoles[name] == "Murderer" and not isDead then
+                potentialMurderer = player
+                break
             end
         end
     end
-    return nil
+
+    -- 3. Asignar el nuevo objetivo al bloqueo
+    if potentialMurderer then
+        currentTarget = potentialMurderer
+        lastTargetTime = os.clock()
+    else
+        -- Mantener el último recurso si está dentro de la ventana de amortiguación
+        if currentTarget and currentTarget.Parent and currentTarget.Character then
+            local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
+            local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)
+            if os.clock() - lastTargetTime < 1.0 and not isDead then
+                return currentTarget
+            end
+        end
+        currentTarget = nil
+    end
+
+    return currentTarget
 end
 
 local function isTargetVisible(targetPart, murdererChar)
@@ -322,8 +407,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
 
-    -- 🛠️ MEJORA 2: ANTICIPACIÓN AL FRENO (STOP PREDICTION PRO)
-    -- Si la velocidad es menor a 5 studs/s, asumimos parada inmediata. Anulamos predicción.
+    -- 🛠️ MEJORA: ANTICIPACIÓN AL FRENO (STOP PREDICTION PRO)
     if rawVelocity.Magnitude < 5 then
         smoothedVelocity = Vector3.new(0, 0, 0)
         previousTargetVelocity = Vector3.new(0, 0, 0)
@@ -376,8 +460,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
     local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
-    -- 🛠️ MEJORA 1: REDISEÑO DE "SERVER TIME" BASADO EN MULTIPLICADOR DE PING
-    -- Multiplicador normalizado donde ~100ms (0.1) mantiene base 1x. Si el ping sube, escala directamente la longitud.
+    -- 🛠️ MEJORA: REDISEÑO DE "SERVER TIME" BASADO EN MULTIPLICADOR DE PING
     local pingScaling = ping * 10
     local timeFrameTotal = hFactor * pingScaling * distanceFactor
     local timeFramePingOnly = ping * distanceFactor
@@ -471,6 +554,12 @@ end
 -- ============================================================================
 -- 🟩 RENDERIZADOR COMPLETO DE CAPAS
 -- ============================================================================
+local PredictionLine = Drawing.new("Line")
+PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
+PredictionLine.Thickness = 1.8 
+PredictionLine.Visible = false
+table.insert(_G.KillerHubLines, PredictionLine)
+
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
 PingLine.Thickness = 1.2
@@ -488,12 +577,6 @@ LeadLine.Color = Color3.fromRGB(0, 255, 100)
 LeadLine.Thickness = 1.5
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
-
-local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 1.8 
-PredictionLine.Visible = false
-table.insert(_G.KillerHubLines, PredictionLine)
 
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
@@ -631,7 +714,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO - ARREGLADO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -713,13 +796,10 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
--- 🛸 SISTEMA DE ARRASTRE (REESCRITO DESDE CERO - ANTIBUGS)
 local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        
-        -- ✨ LLAMADA CORREGIDA: `fireAtMurdererDirectly` (Ya no crashea)
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
