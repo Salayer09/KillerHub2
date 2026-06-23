@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.3 [🔥 THE REPAIR UPDATE - BUG FIXED]
+-- 👻 KILLER HUB | SHERIFF V6.7.0 [💎 PRO EXPERT UPDATE - TOTAL BULLET REGISTER]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -183,7 +183,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO Y DESGLOSADO DE TRACERS
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO (CON MEJORAS DE HIT RATE PRO)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -204,6 +204,7 @@ local lastDeltaTime = 0.016
 local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
+local fixedMurderer = nil -- [MEJORA 1: MEMORIA DE OBJETIVO]
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
@@ -244,11 +245,17 @@ local function getGunLocation()
     return nil, nil
 end
 
+-- 🔒 [MEJORA 1 IMPLEMENTADA]: TARGET LOCK CON MEMORIA DE RONDA
 local function getMurderer()
+    if fixedMurderer and fixedMurderer.Parent and fixedMurderer.Character and fixedMurderer.Character:FindFirstChild("Humanoid") and fixedMurderer.Character.Humanoid.Health > 0 then
+        return fixedMurderer
+    end
+    
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
             local char = player.Character
             if (char and char:FindFirstChild("Knife")) or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife")) then
+                fixedMurderer = player 
                 return player
             end
         end
@@ -319,14 +326,23 @@ local function getPredictedPosition(targetChar, targetPart)
     
     if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil end
 
+    local targetPosition = targetPart.Position
+    local rawVelocity = hrp.AssemblyLinearVelocity
+
+    -- 🛑 [MEJORA 2 IMPLEMENTADA]: ANTICIPACIÓN AL FRENO (STOP PREDICTION)
+    if rawVelocity.Magnitude < 5 then
+        previousTargetVelocity = Vector3.new(0,0,0)
+        smoothedVelocity = Vector3.new(0,0,0)
+        return targetPosition, targetPosition, targetPosition 
+    end
+
     if lastTargetChar ~= targetChar then
-        smoothedVelocity = hrp.AssemblyLinearVelocity
+        smoothedVelocity = rawVelocity
         previousTargetVelocity = smoothedVelocity
-        lastRawVelocity = hrp.AssemblyLinearVelocity
+        lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
     end
 
-    local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
     local proximityFactor = 1
@@ -334,7 +350,6 @@ local function getPredictedPosition(targetChar, targetPart)
         proximityFactor = math.clamp((distance - 2) / 12, 0.35, 1)
     end
 
-    local rawVelocity = hrp.AssemblyLinearVelocity
     if rawVelocity.Magnitude > 16.705 then 
         rawVelocity = rawVelocity.Unit * 16.705 
     end
@@ -351,23 +366,19 @@ local function getPredictedPosition(targetChar, targetPart)
     local responseSpeed = isLowFPS and 11.0 or 15.5
     local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
-    
-    if smoothedVelocity.Magnitude < 0.05 then 
-        previousTargetVelocity = smoothedVelocity
-        return targetPosition, targetPosition, targetPosition 
-    end
 
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16.705, 0, 1.2)
 
-    local fpsBuffer = isLowFPS and 0.040 or 0.030
-    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
+    -- 📡 [MEJORA 3 IMPLEMENTADA]: SERVER TIME EN BASE A LATENCIA DOMINANTE
+    local ping = math.clamp(cachedPingValue, 0.01, 0.5)
+    local serverFrameTime = ping + clampedDT 
     
     local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
     local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
-    local timeFrameTotal = (hFactor + ping) * distanceFactor
-    local timeFramePingOnly = ping * distanceFactor
+    local timeFrameTotal = (hFactor + serverFrameTime) * distanceFactor
+    local timeFramePingOnly = serverFrameTime * distanceFactor
     local timeFrameLagOnly = hFactor * distanceFactor
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
@@ -428,7 +439,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
         local gravity = 196.2 
-        local verticalTime = ping * SheriffConfig.VerticalPred * proximityFactor
+        local verticalTime = serverFrameTime * SheriffConfig.VerticalPred * proximityFactor
         local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * gravity * (verticalTime ^ 2))
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
@@ -618,7 +629,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO - ARREGLADO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -700,13 +711,12 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
--- 🛸 SISTEMA DE ARRASTRE (REESCRITO DESDE CERO - ANTIBUGS)
+-- 🛸 SISTEMA DE ARRASTRE FLUIDO
 local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
         
-        -- ✨ LLAMADA CORREGIDA: `fireAtMurdererDirectly` (Ya no crashea)
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
@@ -783,5 +793,12 @@ if ClientServices then
         return prediction or oldGetMouseTargetCFrame(self, ...)
     end
 end
+
+-- Limpieza automática del Target Lock al cambiar de servidor / reiniciar script
+game.Players.PlayerRemoving:Connect(function(player)
+    if fixedMurderer == player then
+        fixedMurderer = nil
+    end
+end)
 
 return KillerHub
