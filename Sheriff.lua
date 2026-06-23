@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.4 [🔥 NETWORK SCRAPER & TARGET LOCK UPDATE]
+-- 👻 KILLER HUB | SHERIFF V6.6.5 [🔥 TRUE NET-TRACERS & LAYER ORDER UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -205,11 +205,9 @@ local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
 
--- 📡 BASES DE DATOS DEL RASPADO DE RED (De tu script ESP)
 local playerRoles = {}
 local playerDeadStatus = {}
 
--- Variables del Target Lock
 local currentTarget = nil
 local lastTargetTime = 0
 
@@ -236,7 +234,6 @@ task.spawn(function()
     end
 end)
 
--- 🛰️ RECEPTOR DE EVENTOS DE RED DE MM2 (Cero desincronización)
 local function parsePlayerData(tabla)
     if type(tabla) == "table" then
         for name, data in pairs(tabla) do
@@ -279,9 +276,7 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 🎯 DETECTOR CON FILTRO TARGET SWITCH Y RESPALDO ULTRA-AVANZADO
 local function getMurderer()
-    -- 1. Verificar si el objetivo guardado en caché sigue cumpliendo los requisitos (Target Lock activo)
     if currentTarget and currentTarget.Parent and currentTarget.Character then
         local name = currentTarget.Name
         local char = currentTarget.Character
@@ -294,15 +289,13 @@ local function getMurderer()
         local isStillMurderer = (playerRoles[name] == "Murderer") or hasKnife
 
         if isStillMurderer and not isDead then
-            lastTargetTime = os.clock() -- Refrescar estampa de tiempo
+            lastTargetTime = os.clock() 
             return currentTarget
         elseif os.clock() - lastTargetTime < 1.0 and not isDead then
-            -- Margen de gracia de 1 segundo si guardó el cuchillo o salió de rango visual brevemente
             return currentTarget
         end
     end
 
-    -- 2. Si no hay target o expiró el tiempo de gracia, escanear la partida usando el Raspador de Red + Armas
     local potentialMurderer = nil
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
@@ -311,7 +304,7 @@ local function getMurderer()
             local backpack = player:FindFirstChild("Backpack")
             
             local hasKnife = (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife"))
-            if hasKnife then playerRoles[name] = "Murderer" end -- Forzar respaldo físico
+            if hasKnife then playerRoles[name] = "Murderer" end 
 
             local isDead = (char and char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0) or (playerDeadStatus[name] == true)
 
@@ -322,12 +315,10 @@ local function getMurderer()
         end
     end
 
-    -- 3. Asignar el nuevo objetivo al bloqueo
     if potentialMurderer then
         currentTarget = potentialMurderer
         lastTargetTime = os.clock()
     else
-        -- Mantener el último recurso si está dentro de la ventana de amortiguación
         if currentTarget and currentTarget.Parent and currentTarget.Character then
             local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
             local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)
@@ -407,7 +398,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
 
-    -- 🛠️ MEJORA: ANTICIPACIÓN AL FRENO (STOP PREDICTION PRO)
+    -- SI FRENA INSTANTÁNEAMENTE RESETA LA VELOCIDAD
     if rawVelocity.Magnitude < 5 then
         smoothedVelocity = Vector3.new(0, 0, 0)
         previousTargetVelocity = Vector3.new(0, 0, 0)
@@ -423,7 +414,6 @@ local function getPredictedPosition(targetChar, targetPart)
     end
 
     local distance = (targetPosition - localHrp.Position).Magnitude
-
     local proximityFactor = 1
     if distance < 14 then
         proximityFactor = math.clamp((distance - 2) / 12, 0.35, 1)
@@ -456,15 +446,8 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local fpsBuffer = isLowFPS and 0.040 or 0.030
     local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    
     local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
     local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
-
-    -- 🛠️ MEJORA: REDISEÑO DE "SERVER TIME" BASADO EN MULTIPLICADOR DE PING
-    local pingScaling = ping * 10
-    local timeFrameTotal = hFactor * pingScaling * distanceFactor
-    local timeFramePingOnly = ping * distanceFactor
-    local timeFrameLagOnly = hFactor * pingScaling * distanceFactor * 0.5
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
@@ -472,9 +455,9 @@ local function getPredictedPosition(targetChar, targetPart)
     local accAmortiguacion = isLowFPS and 0.02 or 0.06
     local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
 
+    -- 🔴 CÁLCULO PRINCIPAL IMPERIO (DEL AIM SILENCIOSO) - INTACTO
+    local timeFrameTotal = hFactor * (ping * 10) * distanceFactor
     local finalHorizontal = Vector3.new(0,0,0)
-    local pingHorizontal = Vector3.new(0,0,0)
-    local lagHorizontal = Vector3.new(0,0,0)
 
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
         local linealPred = (smoothedVelocity * timeFrameTotal)
@@ -486,39 +469,14 @@ local function getPredictedPosition(targetChar, targetPart)
         if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.85 end
 
-        local linealPing = (smoothedVelocity * timeFramePingOnly)
-        local adaptativoPing = (smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)))
-        local aceleracionPing = (smoothedVelocity * timeFramePingOnly)
-        if distance < 13 then pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
-        else pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) end
-        if dotProduct < 0.88 then pingHorizontal = pingHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
-        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.85 end
-
-        local linealLag = (smoothedVelocity * timeFrameLagOnly)
-        local adaptativoLag = (smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)))
-        local aceleracionLag = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
-        if distance < 13 then lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
-        else lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) end
-        if dotProduct < 0.88 then lagHorizontal = lagHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
-
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.80 end
 
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly)
-        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.80 end
-
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
-
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local function getAdaptOffset(t)
-            local dH = t
-            if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
-            return Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
-        end
-        finalHorizontal = getAdaptOffset(timeFrameTotal)
-        pingHorizontal = getAdaptOffset(timeFramePingOnly)
-        lagHorizontal = getAdaptOffset(timeFrameLagOnly)
+        local dH = timeFrameTotal
+        if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
+        finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
     end
 
     local verticalOffset = Vector3.new(0, 0, 0)
@@ -529,11 +487,20 @@ local function getPredictedPosition(targetChar, targetPart)
         if distance < 10 then pY = pY * 0.2 end
         verticalOffset = Vector3.new(0, pY, 0)
     end
-
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
-    local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z)
 
+    -- 🔵 TRUE PING TRACER MATH (Aislado, Mide puramente la latencia del jugador al Server)
+    local purePingTime = math.clamp(cachedPingValue, 0.01, 0.5)
+    local pingHorizontalPure = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * purePingTime
+    local pingVerticalPure = Vector3.new(0, (humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1) and ((smoothedVelocity.Y * purePingTime) - (0.5 * 196.2 * (purePingTime ^ 2))) or 0, 0)
+    local pingPrediction = targetPosition + pingHorizontalPure + pingVerticalPure
+
+    -- 🟣 TRUE LAG TRACER MATH (Aislado, Mide la latencia de Red + Pérdida de Cuadros por FPS locales)
+    local lagTimePure = purePingTime + clampedDT
+    local lagHorizontalPure = (Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * lagTimePure) + (0.5 * Vector3.new(stableAcceleration.X, 0, stableAcceleration.Z) * (lagTimePure ^ 2))
+    local lagPrediction = targetPosition + lagHorizontalPure
+
+    -- Ajustes de piso para evitar desvíos subterráneos
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
@@ -556,7 +523,7 @@ end
 -- ============================================================================
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 1.8 
+PredictionLine.Thickness = 2.2 -- Más grueso para dominar visualmente
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
 
@@ -614,17 +581,7 @@ RunService.RenderStepped:Connect(function(dt)
         local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
-        if predictedPos and SheriffConfig.PredictTracer then
-            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
-                PredictionLine.From = screenOrigin
-                PredictionLine.To = currentScreenPred
-                PredictionLine.Visible = true
-            else PredictionLine.Visible = false end
-        else PredictionLine.Visible = false end
-
+        -- 1. PROCESAR PRIMERO TRACERS SECUNDARIOS (CAPA INFERIOR)
         if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
@@ -670,6 +627,18 @@ RunService.RenderStepped:Connect(function(dt)
                 LeadLine.Visible = true
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
+
+        -- 2. PROCESAR AL FINAL EL TRACER ROJO PRINCIPAL (CAPA SUPERIOR - POR ENCIMA)
+        if predictedPos and SheriffConfig.PredictTracer then
+            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
+            if onScreen then
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
+                PredictionLine.From = screenOrigin
+                PredictionLine.To = currentScreenPred
+                PredictionLine.Visible = true
+            else PredictionLine.Visible = false end
+        else PredictionLine.Visible = false end
         
         firstFrame = false
     else
