@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.7.0 [💎 PRO EXPERT UPDATE - TOTAL BULLET REGISTER]
+-- 👻 KILLER HUB | SHERIFF V6.8.0 [💎 OMNI REMOTELOCK UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -183,7 +183,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO (CON MEJORAS DE HIT RATE PRO)
+-- 🧠 MOTOR CINEMÁTICO INTEGRADO CON INTERCEPTACIÓN DE DATOS (LEAK REMOTO)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -204,7 +204,10 @@ local lastDeltaTime = 0.016
 local pingHistory = {}
 local maxPingHistorySize = 12
 local cachedPingValue = 0.06
-local fixedMurderer = nil -- [MEJORA 1: MEMORIA DE OBJETIVO]
+
+-- Variables del Leak de Servidor (PlayerDataChanged)
+local datosJugadores = {}
+local fixedMurderer = nil
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
@@ -229,6 +232,18 @@ task.spawn(function()
     end
 end)
 
+-- Hook e Interceptación del Remoto PlayerDataChanged
+task.spawn(function()
+    local playerDataChanged = ReplicatedStorage:WaitForChild("PlayerDataChanged", 10)
+    if playerDataChanged and playerDataChanged:IsA("RemoteEvent") then
+        playerDataChanged.OnClientEvent:Connect(function(tablaInterna)
+            if type(tablaInterna) == "table" then
+                datosJugadores = tablaInterna
+            end
+        end)
+    end
+end)
+
 local wallcastParams = RaycastParams.new()
 wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -245,17 +260,35 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 🔒 [MEJORA 1 IMPLEMENTADA]: TARGET LOCK CON MEMORIA DE RONDA
+-- 🔒 TARGET LOCK POR INTERCEPTACIÓN DE ROL INTERNO (MM2 DATALEAK)
 local function getMurderer()
-    if fixedMurderer and fixedMurderer.Parent and fixedMurderer.Character and fixedMurderer.Character:FindFirstChild("Humanoid") and fixedMurderer.Character.Humanoid.Health > 0 then
-        return fixedMurderer
+    -- 1. Intenta leer directamente la tabla interceptada de PlayerDataChanged
+    for nombreJugador, info in pairs(datosJugadores) do
+        if type(info) == "table" and info.Role == "Murderer" then
+            local targetPlayer = Players:FindFirstChild(nombreJugador)
+            if targetPlayer and targetPlayer ~= LocalPlayer then
+                local char = targetPlayer.Character
+                if char and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                    fixedMurderer = targetPlayer
+                    return targetPlayer
+                end
+            end
+        end
     end
     
+    -- 2. Failsafe: Respaldo clásico si el remoto aún no se activa o cambia la ronda
+    if fixedMurderer and fixedMurderer.Parent and fixedMurderer.Character then
+        local char = fixedMurderer.Character
+        if char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+            return fixedMurderer
+        end
+    end
+
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
             local char = player.Character
-            if (char and char:FindFirstChild("Knife")) or (player:FindFirstChild("Backpack") and player.Backpack:FindFirstChild("Knife")) then
-                fixedMurderer = player 
+            if char and char:FindFirstChild("Knife") then
+                fixedMurderer = player
                 return player
             end
         end
@@ -329,7 +362,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
 
-    -- 🛑 [MEJORA 2 IMPLEMENTADA]: ANTICIPACIÓN AL FRENO (STOP PREDICTION)
+    -- 🛑 ANTICIPACIÓN AL FRENO (STOP PREDICTION)
     if rawVelocity.Magnitude < 5 then
         previousTargetVelocity = Vector3.new(0,0,0)
         smoothedVelocity = Vector3.new(0,0,0)
@@ -370,7 +403,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local currentSpeed = smoothedVelocity.Magnitude
     local speedFactor = math.clamp(currentSpeed / 16.705, 0, 1.2)
 
-    -- 📡 [MEJORA 3 IMPLEMENTADA]: SERVER TIME EN BASE A LATENCIA DOMINANTE
+    -- 📡 SERVER TIME EN BASE A LATENCIA EN SEGUNDOS
     local ping = math.clamp(cachedPingValue, 0.01, 0.5)
     local serverFrameTime = ping + clampedDT 
     
@@ -396,6 +429,12 @@ local function getPredictedPosition(targetChar, targetPart)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
         
+        -- Ajuste fino: Incremento de empuje en líneas rectas perfectas (Dot Product alto)
+        if dotProduct > 0.98 then
+            linealPred = linealPred * 1.05
+            aceleracionPred = aceleracionPred * 1.05
+        end
+
         if distance < 13 then finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
         else finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) end
         if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
@@ -467,7 +506,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR COMPLETO DE CAPAS
+-- 🟩 RENDERIZADOR COMPLETO DE TRACERS
 -- ============================================================================
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
@@ -711,7 +750,7 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
--- 🛸 SISTEMA DE ARRASTRE FLUIDO
+-- 🛸 ARRASTRE FLUIDO PRESERVADO
 local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -759,7 +798,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS
+-- ⚡ REMOTOS MODIFICADOS (SILENT AIM PASIVO)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -794,7 +833,7 @@ if ClientServices then
     end
 end
 
--- Limpieza automática del Target Lock al cambiar de servidor / reiniciar script
+-- Limpieza automática del candado al salir de la ronda
 game.Players.PlayerRemoving:Connect(function(player)
     if fixedMurderer == player then
         fixedMurderer = nil
