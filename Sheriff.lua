@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.6.8 [🔥 PURE PHYSICAL PHYSICS TRACERS CONVERTED]
+-- 👻 KILLER HUB | SHERIFF V6.6.9 [🔥 PURE PHYSICAL PHYSICS & SAFETY ULTIMATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -75,7 +75,7 @@ local function loadConfig()
             SheriffConfig.HorizontalPred = data.HorizontalPred or SheriffConfig.HorizontalPred 
             SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred     
             SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
-            SheracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
+            SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness -- CORREGIDO: Typo de variable arreglado
             if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
             if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
             if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
@@ -442,7 +442,7 @@ local function getPredictedPosition(targetChar, targetPart)
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
     if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local accAmortiguacion = isLowFPS and 0.02 or 0.06
+    local accAmortiguacion = isLowFPS factories and 0.02 or 0.06
     local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
 
     -- ============================================================================
@@ -519,8 +519,8 @@ local function getPredictedPosition(targetChar, targetPart)
             local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, minAllowedY) end
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, minAllowedY) end
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end -- CORREGIDO: Eje Z real
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end -- CORREGIDO: Eje Z real
         end
     end
 
@@ -666,6 +666,11 @@ end)
 local function fireAtMurdererDirectly()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChildOfClass("Humanoid") then return end
+    
+    -- LINEA DE SEGURIDAD: Si tu propio HRP no existe en este frame, frena la función de golpe
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end 
+
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     local gun, parent = getGunLocation()
     local murderer = getMurderer()
@@ -683,9 +688,10 @@ local function fireAtMurdererDirectly()
                     RunService.Heartbeat:Wait() 
                 end 
                 if gun:FindFirstChild("Shoot") then
-                    local originCFrame = char.HumanoidRootPart.CFrame
-                    if char.HumanoidRootPart:FindFirstChild("GunRaycastAttachment") then
-                        originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame
+                    -- Usamos la variable segura 'hrp' en lugar de indexar directo
+                    local originCFrame = hrp.CFrame
+                    if hrp:FindFirstChild("GunRaycastAttachment") then
+                        originCFrame = hrp.GunRaycastAttachment.WorldCFrame
                     end
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
