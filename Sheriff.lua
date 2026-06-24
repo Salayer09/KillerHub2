@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 ANTI-BAITING DYNAMIC PATCH - OPTIMIZED]
+-- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 TRACERS VISUAL REAL-TIME FIX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -343,7 +343,7 @@ local function getMurderer()
 
     if potentialMurderer then
         currentTarget = potentialMurderer
-        lastTargetTime = os clock()
+        lastTargetTime = os.clock()
     else
         if currentTarget and currentTarget.Parent and currentTarget.Character then
             local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
@@ -429,13 +429,7 @@ local function getPredictedPosition(targetChar, targetPart)
         predictionWeight = (distance - minZone) / (maxZone - minZone) 
     end
 
-    if rawVelocity.Magnitude < 4 then
-        smoothedVelocity = Vector3.new(0, 0, 0)
-        previousTargetVelocity = Vector3.new(0, 0, 0)
-        lastRawVelocity = Vector3.new(0, 0, 0)
-        return targetPosition, targetPosition, targetPosition
-    end
-
+    -- FIX: Eliminada la limpieza a cero forzada si la magnitud es baja para evitar congelamiento visual
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity
         previousTargetVelocity = smoothedVelocity
@@ -491,9 +485,9 @@ local function getPredictedPosition(targetChar, targetPart)
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
         if distance >= 13 and dotProduct >= 0.75 then 
             local extraAcc = 0.5 * stableAcceleration
-            finalHorizontal = finalHorizontal:Lerp(finalHorizontal + (extraAcc * (timeFrameTotal ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
-            pingHorizontal = pingHorizontal:Lerp(pingHorizontal + (extraAcc * (timeFramePingOnly ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
-            lagHorizontal = lagHorizontal:Lerp(lagHorizontal + (extraAcc * (timeFrameLagOnly ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
+            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
+            pingHorizontal = pingHorizontal + (extraAcc * (timeFramePingOnly ^ 2))
+            lagHorizontal = lagHorizontal + (extraAcc * (timeFrameLagOnly ^ 2))
         end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local accCalc = (dotProduct >= 0.75) and (0.5 * stableAcceleration) or Vector3.new(0,0,0)
@@ -523,7 +517,7 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
     local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagPrediction.X, 0, lagHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
 
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
@@ -540,7 +534,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO
+-- 🌌 LINEAS DE RENDERIZADO (FIXED REAL-TIME FREQUENCY)
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -608,6 +602,7 @@ RunService.RenderStepped:Connect(function(dt)
         local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
+        -- FIX TRACERS CONTINUOS: Forzado de actualización frame por frame sin importar velocidad
         if lagPos and SheriffConfig.ShowLagTracer then
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
@@ -634,10 +629,6 @@ RunService.RenderStepped:Connect(function(dt)
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
             local leadPredictedPos = bestPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
-            if smoothedVelocity.Y < -0.5 then
-                local floorY = getFloorHeight(bestPart, targetChar)
-                if floorY and leadPredictedPos.Y < (floorY + 1) then leadPredictedPos = vec3New(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z) end
-            end
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
             if handOnScreen and targetOnScreen then
@@ -692,7 +683,6 @@ local function fireAtMurdererDirectly()
                 isFiringCooldown = true 
                 local wasInBackpack = (parent == LocalPlayer.Backpack)
                 
-                -- Si el arma estaba guardada en la mochila, la equipamos de forma controlada
                 if wasInBackpack then 
                     humanoid:EquipTool(gun)
                     local timeout = 0
@@ -702,7 +692,6 @@ local function fireAtMurdererDirectly()
                     end
                 end 
                 
-                -- Se manda el disparo con la CFrame calculada
                 if gun.Parent == char and gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
                     if hrp:FindFirstChild("GunRaycastAttachment") then 
@@ -711,12 +700,9 @@ local function fireAtMurdererDirectly()
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
                 
-                -- CORRECCIÓN TÁCTICA INTELIGENTE:
-                -- Guardar el arma SÓLO si estaba guardada antes de presionar el botón (Modo Oculto).
-                -- Si tú ya la tenías equipada manualmente (Modo Combate), NO se guarda automáticamente.
                 if SheriffConfig.AutoUnequip and wasInBackpack then 
                     task.spawn(function()
-                        task.wait(0.04) -- Delay justo para el registro del servidor
+                        task.wait(0.04) 
                         if gun.Parent == char then
                             humanoid:UnequipTools() 
                         end
