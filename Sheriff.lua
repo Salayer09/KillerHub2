@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.6 [🔥 WALLCHECK FIXED & LOSS-PREVENTION OPTIMIZED]
+-- 👻 KILLER HUB | SHERIFF V6.8.3 [🔥 ULTRA ADAPTIVE PVP MOTOR - INTERFACE PATCHED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -20,7 +20,7 @@ local SheriffConfig = {
     HorizontalPred = 0.145, 
     VerticalPred = 0.035,   
     WallCheck = true,    
-    CloseRangeZone = 7, 
+    CloseRangeZone = 8, -- Calibrado óptimo para tus 199ms de ping
     
     -- Tracers Sincronizados Reales
     PredictTracer = true,      
@@ -30,7 +30,7 @@ local SheriffConfig = {
     
     TracerSmoothness = 0.60, 
     UseWeaponDetector = false, 
-    AutoUnequip = false,        
+    AutoUnequip = true, -- Activado por defecto para un Fast Unequip fluido
     ShowShootButton = false,
     ButtonSize = 95,
     ButtonOpacity = 0.95, 
@@ -116,6 +116,7 @@ SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absolut
     saveConfig()
 end)
 
+-- Multiplicamos por 1000 visualmente para que se muestre en números enteros nativos (ej: 145)
 SheriffTab:CreateSlider("HorizontalPredSlider", "Predicción Horizontal", 0, 300, function(valor)
     SheriffConfig.HorizontalPred = valor / 1000 
     saveConfig() 
@@ -175,7 +176,28 @@ SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function
     SheriffConfig.ShowShootButton = estado
 end)
 
--- El escalado dinámico del botón ahora busca directamente las referencias locales cacheadas abajo
+SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, function(valor)
+    SheriffConfig.ButtonSize = valor
+    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
+    if btn then 
+        btn.Size = UDim2.new(0, valor, 0, valor) 
+        if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24)) end
+    end
+end)
+
+SheriffTab:CreateSlider("VoidBtnOpacity", "Opacidad del Botón", 10, 100, function(valor)
+    SheriffConfig.ButtonOpacity = valor / 100
+    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
+    if btn then
+        btn.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
+        if btn:FindFirstChild("DecalTexture") then btn.DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity end
+        if btn:FindFirstChild("Label") then btn.Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity end
+    end
+end)
+
+SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function(estado)
+    SheriffConfig.ButtonLocked = estado
+end)
 
 -- ============================================================================
 -- 🧠 MOTOR CINEMÁTICO ADAPTATIVO AVANZADO + FILTRO ANTI-BAITING
@@ -196,9 +218,8 @@ local lastTargetChar = nil
 local lastDeltaTime = 0.016
 local emaDeltaTime = 0.016 
 
--- CONFIGURACIÓN DEL JITTER BUFFER AVANZADO
 local pingHistory = {}
-local maxPingHistorySize = 15
+local maxPingHistorySize = 12
 local cachedPingValue = 0.06
 
 local playerRoles = {}
@@ -207,30 +228,16 @@ local currentTarget = nil
 local lastTargetTime = 0
 local isFiringCooldown = false
 
--- IMPLEMENTACIÓN DEL FILTRO ANTIRRUIDO POR MEDIANA ABSOLUTA
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
     if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
-    
-    local sortedPing = {}
+    local sum = 0
+    local maxRecentPing = 0
     for _, p in ipairs(pingHistory) do
-        table.insert(sortedPing, p)
+        sum = sum + p
+        if p > maxRecentPing then maxRecentPing = p end
     end
-    table.sort(sortedPing)
-    
-    local count = #sortedPing
-    local medianPing = 0
-    if count % 2 == 0 then
-        medianPing = (sortedPing[count / 2] + sortedPing[(count / 2) + 1]) / 2
-    else
-        medianPing = sortedPing[math.ceil(count / 2)]
-    end
-    
-    if rawPing > medianPing * 1.60 and #pingHistory >= 5 then
-        return medianPing
-    end
-    
-    return (medianPing * 0.70) + (rawPing * 0.30)
+    return ( (sum / #pingHistory) * 0.65 ) + (maxRecentPing * 0.35)
 end
 
 task.spawn(function()
@@ -343,7 +350,7 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🛠️ DISPARO Y REVISIÓN DE PAREDES (OPTIMIZADO Y CORREGIDO)
+-- 🛡️ FILTRO DE VISIBILIDAD REFORZADO (ANTI-WALLBUG)
 -- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
@@ -353,42 +360,47 @@ local function isTargetVisible(targetPart, murdererChar)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     
-    local gun = char:FindFirstChild("Gun")
+    local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
+    -- Exclusión instantánea de avatares irrelevantes
     local ignoreList = {char, murdererChar, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character then table.insert(ignoreList, p.Character) end
+        if p.Character and p.Character ~= murdererChar then 
+            table.insert(ignoreList, p.Character) 
+        end
     end
+    
     wallcastParams.FilterDescendantsInstances = ignoreList
     
+    -- SEGURIDAD 1: Evitar disparo fantasma si el cañón ya está metido físicamente en un muro
+    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
+    if selfWallCheck and selfWallCheck.Instance.CanCollide then 
+        return false 
+    end
+    
+    -- SEGURIDAD 2: Raycast principal de trayectoria hacia el Murderer
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
     if not pathCheck then 
         return true 
     end 
     
-    local instance = pathCheck.Instance
-    -- Modificado: Si choca contra algo colisionable, está totalmente obstruido
-    if instance.CanCollide == true and instance.Transparency < 0.75 then
-        return false
+    -- SEGURIDAD 3: Análisis preciso de colisión estructural y transparencia estricta
+    local hitInstance = pathCheck.Instance
+    if hitInstance.CanCollide == true or hitInstance.Transparency < 0.95 then
+        return false 
     end
     
-    return true 
+    return true
 end
 
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
     local hrp = murdererChar:FindFirstChild("HumanoidRootPart")
     local head = murdererChar:FindFirstChild("Head")
-    
-    -- SOLUCIÓN: Si WallCheck está activo, no forzar un retorno a ciegas si el objetivo está oculto
-    if SheriffConfig.WallCheck then
-        if hrp and isTargetVisible(hrp, murdererChar) then return hrp end
-        if head and isTargetVisible(head, murdererChar) then return head end
-        return nil -- Evita disparar a través de coberturas macizas
-    else
-        return hrp or head -- Si está desactivado, dispara directo sin importar obstáculos
-    end
+    if hrp and isTargetVisible(hrp, murdererChar) then return hrp
+    elseif head and isTargetVisible(head, murdererChar) then return head end
+    return hrp or head
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -524,95 +536,7 @@ local function getPredictedPosition(targetChar, targetPart)
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL BOTÓN E INTERFAZ ANTES DEL RENDERING (OPTIMIZACIÓN DE ÁREA)
--- ============================================================================
-local VoidGui = Instance.new("ScreenGui")
-VoidGui.Name = "KillerHub_VoidGui"
-VoidGui.ResetOnSpawn = false
-VoidGui.Parent = game:GetService("CoreGui")
-
-local ShootButton = Instance.new("ImageButton")
-ShootButton.Name = "ShootButton"
-ShootButton.Size = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
-ShootButton.Position = UDim2.new(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
-ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26)
-ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
-ShootButton.BorderSizePixel = 0  
-ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true 
-ShootButton.Parent = VoidGui
-
-local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
-Corner.Parent = ShootButton
-
-local GlowOverlay = Instance.new("Frame")
-GlowOverlay.Name = "GlowOverlay"
-GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
-GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
-GlowOverlay.BackgroundTransparency = 1
-GlowOverlay.ZIndex = ShootButton.ZIndex + 1
-GlowOverlay.Parent = ShootButton
-
-local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = Corner.CornerRadius
-GlowCorner.Parent = GlowOverlay
-
-local UiGradient = Instance.new("UIGradient")
-UiGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 8, 43)),    
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))
-})
-UiGradient.Rotation = 45 
-UiGradient.Parent = GlowOverlay
-
-local DecalTexture = Instance.new("ImageLabel")
-DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
-DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
-DecalTexture.BackgroundTransparency = 1
-DecalTexture.Image = "rbxassetid://125754446555599"
-DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
-DecalTexture.ZIndex = ShootButton.ZIndex + 2
-DecalTexture.Parent = ShootButton
-
-TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
-
-local Label = Instance.new("TextLabel")
-Label.Name = "Label"
-Label.Size = UDim2.new(1, 0, 0.2, 0)
-Label.Position = UDim2.new(0, 0, 0.75, 0)
-Label.BackgroundTransparency = 1
-Label.Text = "SHOOT"
-Label.TextColor3 = Color3.fromRGB(255, 255, 255)
-Label.TextSize = 15
-Label.Font = Enum.Font.GothamBold
-Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
-Label.ZIndex = ShootButton.ZIndex + 2
-Label.Parent = ShootButton
-
--- Conectar los sliders de la UI directamente a las referencias locales cacheadas
-SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, function(valor)
-    SheriffConfig.ButtonSize = valor
-    if ShootButton then 
-        ShootButton.Size = UDim2.new(0, valor, 0, valor) 
-        if Corner then Corner.CornerRadius = UDim.new(0, math.floor(valor * 0.24)) end
-    end
-end)
-
-SheriffTab:CreateSlider("VoidBtnOpacity", "Opacidad del Botón", 10, 100, function(valor)
-    SheriffConfig.ButtonOpacity = valor / 100
-    if ShootButton then
-        ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
-        DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
-        Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
-    end
-end)
-
--- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO (Y MANEJO DE RENDERING BAJO CONSUMO)
+-- 🌌 LINEAS DE RENDERIZADO
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -658,11 +582,8 @@ RunService.RenderStepped:Connect(function(dt)
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
-    
-    -- OPTIMIZACIÓN: Se usa la variable directa local en lugar de FindFirstChild cada frame
-    if VoidGui then 
-        VoidGui.Enabled = SheriffConfig.ShowShootButton and hasGun 
-    end
+    local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui")
+    if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
 
     if not hasGun or not murderer or not murderer.Character then
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
@@ -671,18 +592,9 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar) 
+    local bestPart = getBestTargetPart(targetChar) or targetChar:FindFirstChild("HumanoidRootPart") 
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
-
-    -- Si el WallCheck está activo y no hay parte visible limpia, ocultamos líneas de tiro
-    if not bestPart and SheriffConfig.WallCheck then
-        PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        firstFrame = true
-        return
-    end
-
-    bestPart = bestPart or targetChar:FindFirstChild("HumanoidRootPart")
 
     if bestPart and localHrp then
         local distance = (bestPart.Position - localHrp.Position).Magnitude
@@ -751,15 +663,18 @@ RunService.RenderStepped:Connect(function(dt)
     end 
 end)
 
+-- ============================================================================
+-- ⚡ MOTOR DE DISPARO INSTANTÁNEO CON EQUIPADO AUTOMÁTICO
+-- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
     
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChildOfClass("Humanoid") then return end
     local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end 
-
     local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or humanoid.Health <= 0 then return end 
+
     local gun, parent = getGunLocation()
     local murderer = getMurderer()
 
@@ -767,68 +682,37 @@ local function fireAtMurdererDirectly()
         local targetChar = murderer.Character
         local bestPart = getBestTargetPart(targetChar) 
         
-        -- Si WallCheck está activo y no hay una zona limpia para impactar, abortar disparo
-        if not bestPart and SheriffConfig.WallCheck then return end
-        bestPart = bestPart or targetChar:FindFirstChild("HumanoidRootPart")
-
-        if bestPart then 
+        if bestPart and isTargetVisible(bestPart, targetChar) then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
                 
+                -- Fuerza el equipamiento en el inventario inmediatamente sin pausas
                 local originallyInBackpack = (parent == LocalPlayer.Backpack)
                 if originallyInBackpack then 
                     humanoid:EquipTool(gun) 
-                    local timeout = 0
-                    while gun.Parent ~= char and timeout < 6 do
-                        RunService.Heartbeat:Wait()
-                        timeout = timeout + 1
-                    end
                 end 
-
-                local gunHandle = gun:FindFirstChild("Handle")
-                local originRay = gunHandle and gunHandle.Position or hrp.Position
                 
-                local ignoreList = {char, targetChar, Camera}
-                for _, p in ipairs(Players:GetPlayers()) do
-                    if p.Character then table.insert(ignoreList, p.Character) end
-                end
-                wallcastParams.FilterDescendantsInstances = ignoreList
-                
-                -- SOLUCIÓN EXTRAPOLADA PARA CORTA DISTANCIA (ARMA TAPADA POR COBERTURA LOCAL)
-                if SheriffConfig.WallCheck then
-                    -- 1. Verificar si hay algo bloqueando la salida inmediata del cañón (3 studs al frente)
-                    local closeObstacle = workspace:Raycast(originRay, (predictedPos - originRay).Unit * 3, wallcastParams)
-                    if closeObstacle and closeObstacle.Instance.CanCollide then
-                        isFiringCooldown = false
-                        return
-                    end
-
-                    -- 2. Verificar la trayectoria completa al objetivo predicho
-                    local obstacleCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
-                    if obstacleCheck and obstacleCheck.Instance.CanCollide and obstacleCheck.Instance.Transparency < 0.75 then
-                        isFiringCooldown = false
-                        return 
-                    end
-                end
-                
-                local shotExecuted = false
+                -- Disparo asíncrono inmediato mandando los CFrames analizados
                 if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
-                    if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
-                    
-                    gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                    shotExecuted = true
-                end 
-                
-                if SheriffConfig.AutoUnequip and originallyInBackpack and shotExecuted then 
-                    task.wait(math.clamp(cachedPingValue * 0.3, 0.015, 0.04)) 
-                    if gun.Parent == char then
-                        humanoid:UnequipTools() 
+                    if hrp:FindFirstChild("GunRaycastAttachment") then 
+                        originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                     end
+                    gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
                 
-                task.wait(0.04) 
+                -- Fast Unequip automatizado: Remueve el arma sutilmente tras el registro del tiro
+                if SheriffConfig.AutoUnequip and originallyInBackpack then 
+                    task.spawn(function()
+                        task.wait(0.03) 
+                        if gun.Parent == char then
+                            humanoid:UnequipTools() 
+                        end
+                    end)
+                end 
+                
+                task.wait(0.05)
                 isFiringCooldown = false
             end
         end
@@ -836,8 +720,75 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- LÓGICA DE MOVIMIENTO INTERACTIVO DEL BOTÓN
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
 -- ============================================================================
+local VoidGui = Instance.new("ScreenGui")
+VoidGui.Name = "KillerHub_VoidGui"
+VoidGui.ResetOnSpawn = false
+VoidGui.Parent = game:GetService("CoreGui")
+
+local ShootButton = Instance.new("ImageButton")
+ShootButton.Name = "ShootButton"
+ShootButton.Size = UDim2.new(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
+ShootButton.Position = UDim2.new(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
+ShootButton.BackgroundColor3 = Color3.fromRGB(15, 6, 26)
+ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
+ShootButton.BorderSizePixel = 0  
+ShootButton.AutoButtonColor = false 
+ShootButton.ClipsDescendants = true 
+ShootButton.Parent = VoidGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
+Corner.Parent = ShootButton
+
+local GlowOverlay = Instance.new("Frame")
+GlowOverlay.Name = "GlowOverlay"
+GlowOverlay.Size = UDim2.new(1, 0, 1, 0)
+GlowOverlay.Position = UDim2.new(0, 0, 0, 0)
+GlowOverlay.BackgroundTransparency = 1
+GlowOverlay.ZIndex = ShootButton.ZIndex + 1
+GlowOverlay.Parent = ShootButton
+
+local GlowCorner = Instance.new("UICorner")
+GlowCorner.CornerRadius = Corner.CornerRadius
+GlowCorner.Parent = GlowOverlay
+
+local UiGradient = Instance.new("UIGradient")
+UiGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 8, 43)),    
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(131, 46, 222)),  
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 8, 43))
+})
+UiGradient.Rotation = 45 
+UiGradient.Parent = GlowOverlay
+
+local DecalTexture = Instance.new("ImageLabel")
+DecalTexture.Name = "DecalTexture"
+DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
+DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
+DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
+DecalTexture.BackgroundTransparency = 1
+DecalTexture.Image = "rbxassetid://125754446555599"
+DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
+DecalTexture.ZIndex = ShootButton.ZIndex + 2
+DecalTexture.Parent = ShootButton
+
+TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
+
+local Label = Instance.new("TextLabel")
+Label.Name = "Label"
+Label.Size = UDim2.new(1, 0, 0.2, 0)
+Label.Position = UDim2.new(0, 0, 0.75, 0)
+Label.BackgroundTransparency = 1
+Label.Text = "SHOOT"
+Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+Label.TextSize = 15
+Label.Font = Enum.Font.GothamBold
+Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
+Label.ZIndex = ShootButton.ZIndex + 2
+Label.Parent = ShootButton
+
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
@@ -855,6 +806,8 @@ local dragging, dragInput, dragStart, startPos
 ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
+        
+        -- Disparo Relámpago en un hilo separado instantáneo
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
@@ -896,7 +849,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE (HOOKS)
+-- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -911,28 +864,9 @@ if ClientServices then
             if murderer and murderer.Character then
                 local targetChar = murderer.Character
                 local bestPart = getBestTargetPart(targetChar)
-                
-                -- Si el WallCheck está activo y el hook no tiene trayectoria limpia, se cancela para usar el disparo normal
-                if not bestPart and SheriffConfig.WallCheck then return nil end
-                bestPart = bestPart or targetChar:FindFirstChild("HumanoidRootPart")
-
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart)
-                    if predictedPos then 
-                        -- Doble filtro de seguridad para el Silent Aim pasivo
-                        if SheriffConfig.WallCheck then
-                            local char = LocalPlayer.Character
-                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                            local originRay = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or (hrp and hrp.Position)
-                            if originRay then
-                                local pathCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
-                                if pathCheck and pathCheck.Instance.CanCollide and pathCheck.Instance.Transparency < 0.75 then
-                                    return nil
-                                end
-                            end
-                        end
-                        return CFrame.new(predictedPos) 
-                    end
+                    if predictedPos then return CFrame.new(predictedPos) end
                 end
             end
         end
