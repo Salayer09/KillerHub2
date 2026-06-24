@@ -71,7 +71,6 @@ local function loadConfig()
         if isfile and isfile(CONFIG_FILE) then
             local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
             if data then
-                -- Cargamos absolutamente TODO lo que se guarda para que no se pierda nada
                 SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
                 SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
                 SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
@@ -97,7 +96,6 @@ local function loadConfig()
     end
 end
 
--- ¡ACTUACIÓN CLAVE! Ejecutamos la carga de datos aquí para que el script empiece con tus ajustes guardados
 loadConfig()
 
 -- ============================================================================
@@ -400,6 +398,9 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- ============================================================================
+-- 🎯 MOTOR CINEMÁTICO MEJORADO PARA PVP (FIX DISTANCIAS CORTAS Y LARGAS)
+-- ============================================================================
 local function getPredictedPosition(targetChar, targetPart)
     if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -426,9 +427,10 @@ local function getPredictedPosition(targetChar, targetPart)
     end
 
     local distance = (targetPosition - localHrp.Position).Magnitude
+    
     local proximityFactor = 1
     if distance < 14 then
-        proximityFactor = math.clamp((distance - 2) / 12, 0.35, 1)
+        proximityFactor = math.clamp((distance - 2) / 12, 0.10, 1)
     end
 
     if rawVelocity.Magnitude > 16.705 then 
@@ -458,8 +460,9 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local fpsBuffer = isLowFPS and 0.040 or 0.030
     local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15) * proximityFactor
-    local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
+    
+    local distanceFactor = math.clamp(distance / 20, 0.05, 2.50) * proximityFactor
+    local hFactor = SheriffConfig.HorizontalPred * speedFactor
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
@@ -479,40 +482,61 @@ local function getPredictedPosition(targetChar, targetPart)
         local linealPred = (smoothedVelocity * timeFrameTotal)
         local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
-        if distance < 13 then finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
-        else finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        
+        if distance < 13 then 
+            finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
+            if distance < 10 then
+                finalHorizontal = finalHorizontal * (distance / 10)
+            end
+        else 
+            finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) 
+        end
+        
         if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.85 end
 
         local linealPing = (smoothedVelocity * timeFramePingOnly)
         local adaptativoPing = (smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionPing = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
-        if distance < 13 then pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
-        else pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if distance < 13 then 
+            pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
+            if distance < 10 then pingHorizontal = pingHorizontal * (distance / 10) end
+        else 
+            pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) 
+        end
         if dotProduct < 0.88 then pingHorizontal = pingHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
         if ping > 0.22 then pingHorizontal = pingHorizontal * 0.85 end
 
         local linealLag = (smoothedVelocity * timeFrameLagOnly)
         local adaptativoLag = (smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)))
         local aceleracionLag = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
-        if distance < 13 then lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
-        else lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) end
+        if distance < 13 then 
+            lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
+            if distance < 10 then lagHorizontal = lagHorizontal * (distance / 10) end
+        else 
+            lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) 
+        end
         if dotProduct < 0.88 then lagHorizontal = lagHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
 
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
+        if distance < 10 then finalHorizontal = finalHorizontal * (distance / 10) end
         if ping > 0.22 then finalHorizontal = finalHorizontal * 0.80 end
 
         pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
+        if distance < 10 then pingHorizontal = pingHorizontal * (distance / 10) end
         if ping > 0.22 then pingHorizontal = pingHorizontal * 0.80 end
 
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
+        if distance < 10 then lagHorizontal = lagHorizontal * (distance / 10) end
 
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
         local function getAdaptOffset(t)
             local dH = t
             if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
-            return Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+            local out = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+            if distance < 10 then out = out * (distance / 10) end
+            return out
         end
         finalHorizontal = getAdaptOffset(timeFrameTotal)
         pingHorizontal = getAdaptOffset(timeFramePingOnly)
