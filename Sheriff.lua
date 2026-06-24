@@ -554,28 +554,28 @@ end
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
-LagLine.Thickness = 1.2
+LagLine.Thickness = 1.1
 LagLine.ZIndex = 2  
 LagLine.Visible = false
 table.insert(_G.KillerHubLines, LagLine)
 
 local PingLine = Drawing.new("Line")
 PingLine.Color = Color3.fromRGB(0, 100, 255) 
-PingLine.Thickness = 1.2
+PingLine.Thickness = 1.1
 PingLine.ZIndex = 3  
 PingLine.Visible = false
 table.insert(_G.KillerHubLines, PingLine)
 
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = Color3.fromRGB(0, 255, 100) 
-LeadLine.Thickness = 1.5
+LeadLine.Thickness = 1.1
 LeadLine.ZIndex = 4  
 LeadLine.Visible = false
 table.insert(_G.KillerHubLines, LeadLine)
 
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = Color3.fromRGB(255, 35, 35) 
-PredictionLine.Thickness = 2.4 
+PredictionLine.Thickness = 1.5 
 PredictionLine.ZIndex = 5  
 PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
