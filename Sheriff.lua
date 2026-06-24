@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.5 [⚡ INSTANT EQUIP & GHOST UNEQUIP UPDATE - PATCHED]
+-- 👻 KILLER HUB | SHERIFF V6.8.5 [⚡ INSTANT EQUIP & GHOST UNEQUIP UPDATE]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -499,16 +499,16 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
     local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagPrediction.X, 0, lagPrediction.Z) + verticalOffset
 
-    if smoothedVelocity.Y < -0.1 then
+        if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * (humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1)) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
             if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
-            -- [🛠️ BUG VISUAL CORREGIDO]: Se reemplazó la variable inexistente y el cruce con finalPrediction.Z por lagPrediction
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
+            -- ✨ ¡CORREGIDO AQUÍ! Ahora usa lagPrediction.Z de forma independiente
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end 
         end
     end
 
@@ -599,7 +599,8 @@ RunService.RenderStepped:Connect(function(dt)
         if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
-                (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
+                local target2D = vec2New(screenPos.X, screenPos.Y)
+                currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
                 PingLine.From = screenOrigin
                 PingLine.To = currentScreenPing
                 PingLine.Visible = true
@@ -703,6 +704,7 @@ local function fireAtMurdererDirectly()
                 return 
             end
 
+            -- [⚡ INTEGRACIÓN INSTANT-EQUIP]: Forzar equipación síncrona sin yield de frame
             local originallyInBackpack = (parent == LocalPlayer.Backpack)
             if originallyInBackpack then 
                 humanoid:EquipTool(gun) 
@@ -713,10 +715,13 @@ local function fireAtMurdererDirectly()
                 local originCFrame = hrp.CFrame
                 if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
                 
+                -- Ejecuta el disparo de forma inmediata en la red corporativa/servidor de Roblox
                 gun.Shoot:FireServer(originCFrame, CFrame.new(targetPositionToUse))
                 shotExecuted = true
             end 
             
+            -- [⚡ MEJORA GHOST UNEQUIP ULTRA FAST]: Guarda el arma al instante
+            -- Un mini delay de 10 milisegundos para evitar pérdidas de paquetes (Packet loss)
             if SheriffConfig.AutoUnequip and shotExecuted then 
                 task.wait(0.01) 
                 humanoid:UnequipTools()
