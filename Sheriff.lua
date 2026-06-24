@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.5 [🔒 STRICT WALL CHECK & ANTI-BAITING PATCH]
+-- 👻 KILLER HUB | SHERIFF V6.8.7 [🔒 PERMANENT TRACERS & INTEL SHOOT MOTOR]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -19,7 +19,7 @@ local SheriffConfig = {
     PredictionMode = "Híbrido Absoluto (Omni)", 
     HorizontalPred = 0.145, 
     VerticalPred = 0.035,   
-    WallCheck = true, -- Forzado estricto por defecto
+    WallCheck = true, 
     CloseRangeZone = 8, 
     AntiBaiting = true,
     
@@ -360,7 +360,7 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🛡️ WALL CHECK ULTRA ESTRICTO CON FILTRADO DE COMPONENTES SIMÉTRICOS
+-- 🛡️ LÓGICA FILTRADA DEL WALL CHECK (SOLO AFECTA BALAS, NO TRACERS)
 -- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
@@ -382,7 +382,7 @@ local function isTargetVisible(targetPart, murdererChar)
     
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    -- DETECTOR 1: Comportamiento estrictamente nativo. Si tu torso está tapado, se frena.
+    -- DETECTOR 1: Freno si tu torso está totalmente incrustado en un muro
     local selfWallCheck = workspace:Raycast(hrp.Position, (originPos - hrp.Position), wallcastParams)
     if selfWallCheck then 
         local instance = selfWallCheck.Instance
@@ -391,7 +391,7 @@ local function isTargetVisible(targetPart, murdererChar)
         end
     end
     
-    -- DETECTOR 2: Raycast principal directo al hueso del Murderer
+    -- DETECTOR 2: Raycast directo desde el cañón del arma al hueso del objetivo
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
     if pathCheck then
         local hitInstance = pathCheck.Instance
@@ -400,7 +400,7 @@ local function isTargetVisible(targetPart, murdererChar)
         end
     end
     
-    -- DETECTOR 3: Rayo de seguridad desde los ojos (Cámara) para simular visibilidad real del jugador
+    -- DETECTOR 3: Rayo de confirmación visual desde la perspectiva de la Cámara
     local cameraCheck = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, wallcastParams)
     if cameraCheck then
         local hitInstance = cameraCheck.Instance
@@ -412,13 +412,14 @@ local function isTargetVisible(targetPart, murdererChar)
     return true
 end
 
+-- Tracers siempre devuelven el hueso sin importar las paredes para ESP permanente
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
     local hrp = murdererChar:FindFirstChild("HumanoidRootPart")
     local head = murdererChar:FindFirstChild("Head")
-    if hrp and isTargetVisible(hrp, murdererChar) then return hrp
-    elseif head and isTargetVisible(head, murdererChar) then return head end
-    return nil -- Cambiado a nil para forzar bloqueo si no es visible estrictamente
+    if hrp then return hrp
+    elseif head then return head end
+    return nil
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -686,7 +687,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO INSTANTÁNEO CON EQUIPADO AUTOMÁTICO
+-- ⚡ MOTOR DE DISPARO INTELIGENTE (AUTO-EQUIPAR SIEMPRE & AUTO-DESEQUIPAR CONDICIONAL)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -704,14 +705,19 @@ local function fireAtMurdererDirectly()
         local targetChar = murderer.Character
         local bestPart = getBestTargetPart(targetChar) 
         
+        -- BLOQUEO DE SEGURIDAD: Solo dispara si pasa la validación estricta de colisión
         if bestPart and isTargetVisible(bestPart, targetChar) then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
                 
+                -- Detectamos si el arma estaba guardada originalmente en la mochila
                 local originallyInBackpack = (parent == LocalPlayer.Backpack)
+                
+                -- SIEMPRE se equipa automáticamente si estaba en la mochila
                 if originallyInBackpack then 
                     humanoid:EquipTool(gun) 
+                    task.wait(0.01) -- Micro-espera para que el motor registre el equipamiento en red
                 end 
                 
                 if gun:FindFirstChild("Shoot") then
@@ -722,6 +728,7 @@ local function fireAtMurdererDirectly()
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
                 
+                -- SOLO desequipa automáticamente si la opción está activa Y el script la sacó
                 if SheriffConfig.AutoUnequip and originallyInBackpack then 
                     task.spawn(function()
                         task.wait(0.03) 
@@ -739,7 +746,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
+-- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO - DISEÑO VOID)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_VoidGui"
@@ -867,7 +874,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE
+-- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE (SILENT AIM PASIVO CON CANDADO)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -882,7 +889,8 @@ if ClientServices then
             if murderer and murderer.Character then
                 local targetChar = murderer.Character
                 local bestPart = getBestTargetPart(targetChar)
-                if bestPart then
+                -- Silent Aim Pasivo también respeta la validación estricta de colisión
+                if bestPart and isTargetVisible(bestPart, targetChar) then
                     local predictedPos = getPredictedPosition(targetChar, bestPart)
                     if predictedPos then return CFrame.new(predictedPos) end
                 end
