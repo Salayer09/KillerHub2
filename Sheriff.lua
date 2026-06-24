@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.7.2 [🔥 HYBRID MERGE & OPTIMIZED PHYSICALS - FIXED]
+-- 👻 KILLER HUB | SHERIFF V6.8.0 [🔥 ULTRA ADAPTIVE PVP MOTOR - OPTIMIZED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -20,8 +20,9 @@ local SheriffConfig = {
     HorizontalPred = 0.145, 
     VerticalPred = 0.035,   
     WallCheck = true,    
+    CloseRangeZone = 7, -- [NUEVA MEJORA] Distancia configurable de atenuación
     
-    -- Tracers Sincronizados
+    -- Tracers Sincronizados Reales
     PredictTracer = true,      
     ShowPingTracer = false,    
     ShowLagTracer = false,     
@@ -57,15 +58,13 @@ local function saveConfig()
             PredictTracer = SheriffConfig.PredictTracer,
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
-            ShowLagTracer = SheriffConfig.ShowLagTracer
+            ShowLagTracer = SheriffConfig.ShowLagTracer,
+            CloseRangeZone = SheriffConfig.CloseRangeZone
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
 end
 
--- ============================================================
--- FIX DE CONFIGURACIÓN (Fusión v6.6.7 + v6.7.2 Completa)
--- ============================================================
 local function loadConfig()
     local success, result = pcall(function()
         if isfile and isfile(CONFIG_FILE) then
@@ -78,6 +77,7 @@ local function loadConfig()
                 SheriffConfig.VerticalPred = data.VerticalPred or SheriffConfig.VerticalPred
                 SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
                 SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
+                SheriffConfig.CloseRangeZone = data.CloseRangeZone or SheriffConfig.CloseRangeZone
                 
                 if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
                 if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
@@ -124,6 +124,12 @@ end)
 SheriffTab:CreateSlider("VerticalPredSlider", "Predicción Vertical (Suave)", 0, 120, function(valor)
     SheriffConfig.VerticalPred = valor / 1000
     saveConfig() 
+end)
+
+-- [NUEVA MEJORA INTERFAZ] Slider para controlar dinámicamente la zona muerta a quemarropa
+SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, function(valor)
+    SheriffConfig.CloseRangeZone = valor
+    saveConfig()
 end)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
@@ -194,7 +200,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO INTEGRADO Y DESGLOSADO DE TRACERS
+-- 🧠 MOTOR CINEMÁTICO ADAPTATIVO AVANZADO (CORTA/LARGA DISTANCIA + ANTI-SALTOS)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -205,12 +211,12 @@ local Stats = game:GetService("Stats")
 local Camera = workspace.CurrentCamera
 local UserInputService = game:GetService("UserInputService")
 
-local lastVelocity = Vector3.new(0,0,0)
 local previousTargetVelocity = Vector3.new(0,0,0) 
 local smoothedVelocity = Vector3.new(0,0,0)
 local lastRawVelocity = Vector3.new(0,0,0) 
 local lastTargetChar = nil
 local lastDeltaTime = 0.016
+local emaDeltaTime = 0.016 -- [NUEVA MEJORA] Filtro de promedio móvil exponencial para DeltaTime
 
 local pingHistory = {}
 local maxPingHistorySize = 12
@@ -218,29 +224,25 @@ local cachedPingValue = 0.06
 
 local playerRoles = {}
 local playerDeadStatus = {}
-
 local currentTarget = nil
 local lastTargetTime = 0
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
     if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
-    
     local sum = 0
     local maxRecentPing = 0
     for _, p in ipairs(pingHistory) do
         sum = sum + p
         if p > maxRecentPing then maxRecentPing = p end
     end
-    local averagePing = sum / #pingHistory
-    return (averagePing * 0.65) + (maxRecentPing * 0.35)
+    return ( (sum / #pingHistory) * 0.65 ) + (maxRecentPing * 0.35)
 end
 
 task.spawn(function()
     while task.wait(0.3) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
-            local currentRaw = Stats.Network.ServerToClientPing:GetValue() / 1000
-            cachedPingValue = getSmoothedPing(currentRaw)
+            cachedPingValue = getSmoothedPing(Stats.Network.ServerToClientPing:GetValue() / 1000)
         end
     end
 end)
@@ -287,19 +289,15 @@ local function getGunLocation()
     return nil, nil
 end
 
+-- [NUEVA MEJORA RENDIMIENTO CPU]: Optimización radical de getMurderer con indexación directa de caché
 local function getMurderer()
     if currentTarget and currentTarget.Parent and currentTarget.Character then
         local name = currentTarget.Name
         local char = currentTarget.Character
         local hum = char:FindFirstChildOfClass("Humanoid")
-        
         local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[name] == true)
         
-        local backpack = currentTarget:FindFirstChild("Backpack")
-        local hasKnife = (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife"))
-        local isStillMurderer = (playerRoles[name] == "Murderer") or hasKnife
-
-        if isStillMurderer and not isDead then
+        if (playerRoles[name] == "Murderer" or char:FindFirstChild("Knife") or (currentTarget:FindFirstChild("Backpack") and currentTarget.Backpack:FindFirstChild("Knife"))) and not isDead then
             lastTargetTime = os.clock() 
             return currentTarget
         elseif os.clock() - lastTargetTime < 1.0 and not isDead then
@@ -307,21 +305,33 @@ local function getMurderer()
         end
     end
 
+    -- Si la memoria caché tiene asignado al asesino directamente por eventos, no hace bucles iterativos pesados
+    for name, role in pairs(playerRoles) do
+        if role == "Murderer" then
+            local pl = Players:FindFirstChild(name)
+            if pl and pl.Character and pl ~= LocalPlayer then
+                local hum = pl.Character:FindFirstChildOfClass("Humanoid")
+                if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) then
+                    currentTarget = pl
+                    lastTargetTime = os.clock()
+                    return pl
+                end
+            end
+        end
+    end
+
+    -- Bucle proactivo de respaldo ultra rápido (Solo si los eventos fallaron)
     local potentialMurderer = nil
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
             local name = player.Name
             local char = player.Character
-            local backpack = player:FindFirstChild("Backpack")
-            
-            local hasKnife = (char and char:FindFirstChild("Knife")) or (backpack and backpack:FindFirstChild("Knife"))
-            if hasKnife then playerRoles[name] = "Murderer" end 
-
-            local isDead = (char and char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0) or (playerDeadStatus[name] == true)
-
-            if playerRoles[name] == "Murderer" and not isDead then
-                potentialMurderer = player
-                break
+            if char and char:FindFirstChild("Knife") then 
+                playerRoles[name] = "Murderer"
+                if not ((char:FindFirstChildOfClass("Humanoid") and char:FindFirstChildOfClass("Humanoid").Health <= 0) or (playerDeadStatus[name] == true)) then
+                    potentialMurderer = player
+                    break
+                end
             end
         end
     end
@@ -332,64 +342,48 @@ local function getMurderer()
     else
         if currentTarget and currentTarget.Parent and currentTarget.Character then
             local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
-            local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)
-            if os.clock() - lastTargetTime < 1.0 and not isDead then
+            if os.clock() - lastTargetTime < 1.0 and not ((hum and hum.Health <= 0) or (playerDeadStatus[currentTarget.Name] == true)) then
                 return currentTarget
             end
         end
         currentTarget = nil
     end
-
     return currentTarget
 end
 
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
-    
     local char = LocalPlayer.Character
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    
     local gun = char:FindFirstChild("Gun")
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
-    local targetPos = targetPart.Position
-    
     local ignoreList = {char, murdererChar, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character and p ~= murdererChar then table.insert(ignoreList, p.Character) end
     end
     wallcastParams.FilterDescendantsInstances = ignoreList
-    
-    local clipCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
-    if clipCheck then return false end
-    
-    local pathCheck = workspace:Raycast(originPos, targetPos - originPos, wallcastParams)
+    if workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams) then return false end
+    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
     if not pathCheck then return true end 
-    
     local instance = pathCheck.Instance
-    if instance.CanCollide == true then return false end
-    if instance.Transparency < 0.75 then return false end
-    
-    local mat = instance.Material
-    if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
-        return false
+    if instance.CanCollide == true and instance.Transparency < 0.75 then
+        local mat = instance.Material
+        if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
+            return false
+        end
     end
-    
-    return false
+    return true
 end
 
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
     local hrp = murdererChar:FindFirstChild("HumanoidRootPart")
     local head = murdererChar:FindFirstChild("Head")
-    
-    if hrp and isTargetVisible(hrp, murdererChar) then
-        return hrp
-    elseif head and isTargetVisible(head, murdererChar) then
-        return head
-    end
-    return nil 
+    if hrp and isTargetVisible(hrp, murdererChar) then return hrp
+    elseif head and isTargetVisible(head, murdererChar) then return head end
+    return hrp or head
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -398,21 +392,30 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- ============================================================================
--- 🎯 MOTOR CINEMÁTICO MEJORADO PARA PVP (FIX DISTANCIAS CORTAS Y LARGAS)
--- ============================================================================
 local function getPredictedPosition(targetChar, targetPart)
     if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    
     if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil end
 
     local targetPosition = targetPart.Position
     local rawVelocity = hrp.AssemblyLinearVelocity
+    local distance = (targetPosition - localHrp.Position).Magnitude
 
-    if rawVelocity.Magnitude < 5 then
+    -- ============================================================
+    -- ATENUACIÓN MEJORADA (Configurable dinámicamente desde UI)
+    -- ============================================================
+    local predictionWeight = 1
+    local minZone = SheriffConfig.CloseRangeZone
+    local maxZone = minZone + 15
+    if distance <= minZone then
+        predictionWeight = 0 
+    elseif distance < maxZone and minZone ~= maxZone then
+        predictionWeight = (distance - minZone) / (maxZone - minZone) 
+    end
+
+    if rawVelocity.Magnitude < 4 then
         smoothedVelocity = Vector3.new(0, 0, 0)
         previousTargetVelocity = Vector3.new(0, 0, 0)
         lastRawVelocity = Vector3.new(0, 0, 0)
@@ -420,21 +423,14 @@ local function getPredictedPosition(targetChar, targetPart)
     end
 
     if lastTargetChar ~= targetChar then
-        smoothedVelocity = hrp.AssemblyLinearVelocity
+        smoothedVelocity = rawVelocity
         previousTargetVelocity = smoothedVelocity
-        lastRawVelocity = hrp.AssemblyLinearVelocity
+        lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
     end
 
-    local distance = (targetPosition - localHrp.Position).Magnitude
-    
-    local proximityFactor = 1
-    if distance < 14 then
-        proximityFactor = math.clamp((distance - 2) / 12, 0.10, 1)
-    end
-
-    if rawVelocity.Magnitude > 16.705 then 
-        rawVelocity = rawVelocity.Unit * 16.705 
+    if rawVelocity.Magnitude > 32 then 
+        rawVelocity = rawVelocity.Unit * 32 
     end
 
     local dotProduct = 1
@@ -443,112 +439,62 @@ local function getPredictedPosition(targetChar, targetPart)
     end
     lastRawVelocity = rawVelocity 
 
-    local clampedDT = math.min(lastDeltaTime, 0.05) 
-    local isLowFPS = lastDeltaTime > 0.033
-
-    local responseSpeed = isLowFPS and 11.0 or 15.5
+    local clampedDT = math.min(emaDeltaTime, 0.05) -- [MEJORA]: Usa la delta suavizada por el filtro EMA
+    local isLowFPS = emaDeltaTime > 0.033
+    local responseSpeed = isLowFPS and 12.0 or 16.5
     local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
-    
-    if smoothedVelocity.Magnitude < 0.05 then 
-        previousTargetVelocity = smoothedVelocity
-        return targetPosition, targetPosition, targetPosition 
-    end
 
-    local currentSpeed = smoothedVelocity.Magnitude
-    local speedFactor = math.clamp(currentSpeed / 16.705, 0, 1.2)
-
+    local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16.705, 0, 1.2)
     local fpsBuffer = isLowFPS and 0.040 or 0.030
     local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    
-    local distanceFactor = math.clamp(distance / 20, 0.05, 2.50) * proximityFactor
-    local hFactor = SheriffConfig.HorizontalPred * speedFactor
+    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15)
+    local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
     if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
     if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local accAmortiguacion = isLowFPS and 0.02 or 0.06
-    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * accAmortiguacion, rawAcceleration.Z)
+    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.02 or 0.06), rawAcceleration.Z)
 
-    local timeFrameTotal = hFactor * (ping * 10) * distanceFactor
-    local timeFramePingOnly = cachedPingValue * distanceFactor
-    local timeFrameLagOnly = clampedDT * distanceFactor
+    local timeFrameTotal = hFactor * (ping * 10) * distanceFactor * predictionWeight
+    local timeFramePingOnly = cachedPingValue * distanceFactor * predictionWeight
+    local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight
 
-    local finalHorizontal = Vector3.new(0,0,0)
-    local pingHorizontal = Vector3.new(0,0,0)
-    local lagHorizontal = Vector3.new(0,0,0)
+    local finalHorizontal, pingHorizontal, lagHorizontal = Vector3.new(0,0,0), Vector3.new(0,0,0), Vector3.new(0,0,0)
 
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        local linealPred = (smoothedVelocity * timeFrameTotal)
-        local adaptativoPred = (smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)))
-        local aceleracionPred = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
-        
-        if distance < 13 then 
-            finalHorizontal = linealPred:Lerp(adaptativoPred, 0.5)
-            if distance < 10 then
-                finalHorizontal = finalHorizontal * (distance / 10)
-            end
-        else 
-            finalHorizontal = linealPred:Lerp(adaptativoPred, 0.3):Lerp(aceleracionPred, math.clamp((distance - 13) / 32, 0, 0.75)) 
+        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        if distance >= 13 then
+            local extraAcc = 0.5 * stableAcceleration
+            finalHorizontal = finalHorizontal:Lerp(finalHorizontal + (extraAcc * (timeFrameTotal ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
+            pingHorizontal = pingHorizontal:Lerp(pingHorizontal + (extraAcc * (timeFramePingOnly ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
+            lagHorizontal = lagHorizontal:Lerp(lagHorizontal + (extraAcc * (timeFrameLagOnly ^ 2)), math.clamp((distance - 13) / 32, 0, 0.75))
         end
-        
-        if dotProduct < 0.88 then finalHorizontal = finalHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
-        if ping > 0.22 then finalHorizontal = finalHorizontal * 0.85 end
-
-        local linealPing = (smoothedVelocity * timeFramePingOnly)
-        local adaptativoPing = (smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)))
-        local aceleracionPing = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
-        if distance < 13 then 
-            pingHorizontal = linealPing:Lerp(adaptativoPing, 0.5)
-            if distance < 10 then pingHorizontal = pingHorizontal * (distance / 10) end
-        else 
-            pingHorizontal = linealPing:Lerp(adaptativoPing, 0.3):Lerp(aceleracionPing, math.clamp((distance - 13) / 32, 0, 0.75)) 
-        end
-        if dotProduct < 0.88 then pingHorizontal = pingHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
-        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.85 end
-
-        local linealLag = (smoothedVelocity * timeFrameLagOnly)
-        local adaptativoLag = (smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)))
-        local aceleracionLag = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
-        if distance < 13 then 
-            lagHorizontal = linealLag:Lerp(adaptativoLag, 0.5)
-            if distance < 10 then lagHorizontal = lagHorizontal * (distance / 10) end
-        else 
-            lagHorizontal = linealLag:Lerp(adaptativoLag, 0.3):Lerp(aceleracionLag, math.clamp((distance - 13) / 32, 0, 0.75)) 
-        end
-        if dotProduct < 0.88 then lagHorizontal = lagHorizontal * math.clamp((dotProduct + 1.12) / 2.0, 0.35, 0.90) end
-
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (0.5 * stableAcceleration * (timeFrameTotal ^ 2))
-        if distance < 10 then finalHorizontal = finalHorizontal * (distance / 10) end
-        if ping > 0.22 then finalHorizontal = finalHorizontal * 0.80 end
-
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (0.5 * stableAcceleration * (timeFramePingOnly ^ 2))
-        if distance < 10 then pingHorizontal = pingHorizontal * (distance / 10) end
-        if ping > 0.22 then pingHorizontal = pingHorizontal * 0.80 end
-
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (0.5 * stableAcceleration * (timeFrameLagOnly ^ 2))
-        if distance < 10 then lagHorizontal = lagHorizontal * (distance / 10) end
-
+        local accCalc = 0.5 * stableAcceleration
+        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local function getAdaptOffset(t)
-            local dH = t
-            if dotProduct < 0.85 then dH = dH * math.clamp(dotProduct, 0.2, 1.0) end
-            local out = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
-            if distance < 10 then out = out * (distance / 10) end
-            return out
-        end
-        finalHorizontal = getAdaptOffset(timeFrameTotal)
-        pingHorizontal = getAdaptOffset(timeFramePingOnly)
-        lagHorizontal = getAdaptOffset(timeFrameLagOnly)
+        local dH = timeFrameTotal * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1)
+        finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+        pingHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFramePingOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
+        lagHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFrameLagOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
     end
 
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
-        local gravity = 196.2 
-        local verticalTime = ping * SheriffConfig.VerticalPred * proximityFactor
-        local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * gravity * (verticalTime ^ 2))
-        if distance < 10 then pY = pY * 0.2 end
+        local jumpCompensation = 0
+        if smoothedVelocity.Y > 1 then
+            jumpCompensation = smoothedVelocity.Y * 0.013
+        elseif smoothedVelocity.Y < -1 then
+            jumpCompensation = smoothedVelocity.Y * 0.019
+        end
+        local verticalTime = ping * SheriffConfig.VerticalPred * predictionWeight
+        local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * 196.2 * (verticalTime ^ 2)) + (jumpCompensation * predictionWeight)
+        if distance < 10 then pY = pY * 0.1 end
         verticalOffset = Vector3.new(0, pY, 0)
     end
 
@@ -559,22 +505,19 @@ local function getPredictedPosition(targetChar, targetPart)
     if smoothedVelocity.Y < -0.1 then
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
-            local heightScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
-            local minAllowedY = floorY + ((hrp.Size.Y / 2) * heightScale) + 0.2
+            local minAllowedY = floorY + ((hrp.Size.Y / 2) * (humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1)) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, finalPrediction.Z) end
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, finalPrediction.Z) end
         end
     end
 
     previousTargetVelocity = smoothedVelocity
-    lastVelocity = smoothedVelocity
-
     return finalPrediction, pingPrediction, lagPrediction
 end
 
 -- ============================================================================
--- 🟩 RENDERIZADOR JERÁRQUICO POR ORDEN DE NACIMIENTO DE MEMORIA (Z-INDEX BYPASS)
+-- 🟩 RENDERIZADOR JERÁRQUICO COMPLEMENTARIO (Z-INDEX BYPASS)
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -615,6 +558,8 @@ local worldToViewport = Camera.WorldToViewportPoint
 
 RunService.RenderStepped:Connect(function(dt)
     lastDeltaTime = dt 
+    emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) -- [NUEVA MEJORA]: Filtro EMA ejecutado por cuadro
+    
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
@@ -666,17 +611,12 @@ RunService.RenderStepped:Connect(function(dt)
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
             local leadPredictedPos = bestPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
-            
             if smoothedVelocity.Y < -0.5 then
                 local floorY = getFloorHeight(bestPart, targetChar)
-                if floorY and leadPredictedPos.Y < (floorY + 1) then
-                    leadPredictedPos = vec3New(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z)
-                end
+                if floorY and leadPredictedPos.Y < (floorY + 1) then leadPredictedPos = vec3New(leadPredictedPos.X, floorY + 1, leadPredictedPos.Z) end
             end
-
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
-
             if handOnScreen and targetOnScreen then
                 local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
                 currentScreenLead = (firstFrame or tSmooth == 1) and target2D or currentScreenLead:Lerp(target2D, tSmooth)
@@ -704,10 +644,10 @@ RunService.RenderStepped:Connect(function(dt)
     end 
 end)
 
+-- [NUEVA MEJORA SENSÓRICA]: Raycast dinámico de validación pre-disparo (Evita bloquearse o disparar a la nada)
 local function fireAtMurdererDirectly()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChildOfClass("Humanoid") then return end
-    
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end 
 
@@ -718,26 +658,31 @@ local function fireAtMurdererDirectly()
     if gun and murderer and murderer.Character then
         local targetChar = murderer.Character
         local bestPart = getBestTargetPart(targetChar) 
-        
         if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
-                local startedInBackpack = (parent == LocalPlayer.Backpack)
-                if startedInBackpack then 
+                -- Validación de trayectoria despejada (Raycast Antorpedo)
+                local gunHandle = gun:FindFirstChild("Handle")
+                local originRay = gunHandle and gunHandle.Position or hrp.Position
+                wallcastParams.FilterDescendantsInstances = {char, targetChar, Camera}
+                
+                local obstacleCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
+                if obstacleCheck and obstacleCheck.Instance.CanCollide and obstacleCheck.Instance.Transparency < 0.5 then
+                    -- Si hay una pared masiva e impenetrable en medio de la trayectoria predicha, aborta el tiro
+                    return 
+                end
+
+                if parent == LocalPlayer.Backpack then 
                     humanoid:EquipTool(gun) 
                     RunService.Heartbeat:Wait() 
                 end 
                 if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
-                    if hrp:FindFirstChild("GunRaycastAttachment") then
-                        originCFrame = hrp.GunRaycastAttachment.WorldCFrame
-                    end
+                    if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
-                
                 if SheriffConfig.AutoUnequip then 
-                    local adaptiveDelay = math.clamp(cachedPingValue * 0.5, 0.015, 0.05)
-                    task.wait(adaptiveDelay) 
+                    task.wait(math.clamp(cachedPingValue * 0.5, 0.015, 0.05)) 
                     humanoid:UnequipTools() 
                 end 
             end
@@ -838,7 +783,6 @@ ShootButton.InputBegan:Connect(function(input)
             dragging = true
             dragStart = input.Position
             startPos = ShootButton.Position
-            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -874,7 +818,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS
+-- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
