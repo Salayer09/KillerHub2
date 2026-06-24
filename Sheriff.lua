@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.3 [🔥 ULTRA ADAPTIVE PVP MOTOR - INTERFACE PATCHED]
+-- 👻 KILLER HUB | SHERIFF V6.8.5 [⚡ INSTANT EQUIP & GHOST UNEQUIP UPDATE - PATCHED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -506,8 +506,9 @@ local function getPredictedPosition(targetChar, targetPart)
         if floorY then
             local minAllowedY = floorY + ((hrp.Size.Y / 2) * (humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1)) + 0.2
             if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, finalPrediction.Z) end
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, finalPrediction.Z) end
+            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+            -- [🛠️ BUG VISUAL CORREGIDO]: Se reemplazó la variable inexistente y el cruce con finalPrediction.Z por lagPrediction
+            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
         end
     end
 
@@ -598,8 +599,7 @@ RunService.RenderStepped:Connect(function(dt)
         if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
+                (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
                 PingLine.From = screenOrigin
                 PingLine.To = currentScreenPing
                 PingLine.Visible = true
@@ -657,47 +657,73 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getBestTargetPart(targetChar) 
-        if bestPart then 
-            local predictedPos = getPredictedPosition(targetChar, bestPart)
-            if predictedPos then
-                isFiringCooldown = true 
-                
-                local gunHandle = gun:FindFirstChild("Handle")
-                local originRay = gunHandle and gunHandle.Position or hrp.Position
-                wallcastParams.FilterDescendantsInstances = {char, targetChar, Camera}
-                
-                local obstacleCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
-                if obstacleCheck and obstacleCheck.Instance.CanCollide and obstacleCheck.Instance.Transparency < 0.5 then
-                    isFiringCooldown = false
-                    return 
-                end
-
-                local originallyInBackpack = (parent == LocalPlayer.Backpack)
-                if originallyInBackpack then 
-                    humanoid:EquipTool(gun) 
-                    RunService.Heartbeat:Wait() 
-                end 
-                
-                local shotExecuted = false
-                if gun:FindFirstChild("Shoot") and gun.Parent == char then
-                    local originCFrame = hrp.CFrame
-                    if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
-                    
-                    gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                    shotExecuted = true
-                end 
-                
-                if SheriffConfig.AutoUnequip and originallyInBackpack and shotExecuted then 
-                    task.wait(math.clamp(cachedPingValue * 0.5, 0.025, 0.06)) 
-                    if gun.Parent == char then
-                        humanoid:UnequipTools() 
-                    end
-                end 
-                
-                task.wait(math.clamp(cachedPingValue, 0.05, 0.15))
-                isFiringCooldown = false
+        local hrpPart = targetChar:FindFirstChild("HumanoidRootPart")
+        local headPart = targetChar:FindFirstChild("Head")
+        
+        if hrpPart and headPart then 
+            isFiringCooldown = true 
+            
+            local gunHandle = gun:FindFirstChild("Handle")
+            local originRay = gunHandle and gunHandle.Position or hrp.Position
+            
+            local ignoreList = {char, targetChar, Camera}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p.Character and p.Character ~= targetChar then table.insert(ignoreList, p.Character) end
             end
+            wallcastParams.FilterDescendantsInstances = ignoreList
+            
+            local targetPositionToUse = nil
+            
+            if SheriffConfig.WallCheck then
+                local predictedTorso = getPredictedPosition(targetChar, hrpPart)
+                if predictedTorso then
+                    local obstacleCheckTorso = workspace:Raycast(originRay, predictedTorso - originRay, wallcastParams)
+                    local torsoBlocked = obstacleCheckTorso and obstacleCheckTorso.Instance.CanCollide and obstacleCheckTorso.Instance.Transparency < 0.5
+                    
+                    if not torsoBlocked then
+                        targetPositionToUse = predictedTorso
+                    else
+                        local predictedHead = getPredictedPosition(targetChar, headPart)
+                        if predictedHead then
+                            local obstacleCheckHead = workspace:Raycast(originRay, predictedHead - originRay, wallcastParams)
+                            local headBlocked = obstacleCheckHead and obstacleCheckHead.Instance.CanCollide and obstacleCheckHead.Instance.Transparency < 0.5
+                            
+                            if not headBlocked then
+                                targetPositionToUse = predictedHead 
+                            end
+                        end
+                    end
+                end
+            else
+                targetPositionToUse = getPredictedPosition(targetChar, hrpPart)
+            end
+
+            if not targetPositionToUse then
+                isFiringCooldown = false
+                return 
+            end
+
+            local originallyInBackpack = (parent == LocalPlayer.Backpack)
+            if originallyInBackpack then 
+                humanoid:EquipTool(gun) 
+            end 
+            
+            local shotExecuted = false
+            if gun:FindFirstChild("Shoot") then
+                local originCFrame = hrp.CFrame
+                if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
+                
+                gun.Shoot:FireServer(originCFrame, CFrame.new(targetPositionToUse))
+                shotExecuted = true
+            end 
+            
+            if SheriffConfig.AutoUnequip and shotExecuted then 
+                task.wait(0.01) 
+                humanoid:UnequipTools()
+            end 
+            
+            task.wait(math.clamp(cachedPingValue, 0.05, 0.15))
+            isFiringCooldown = false
         end
     end
 end
@@ -722,7 +748,6 @@ ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
--- [🛠️ OPTIMIZACIÓN DE ARRANQUE]: Asigna el redondeado correcto desde el primer instante en el inicio
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
 Corner.Parent = ShootButton
 
