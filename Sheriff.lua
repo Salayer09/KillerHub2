@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 ANTI-BAITING DYNAMIC PATCH]
+-- 👻 KILLER HUB | SHERIFF V6.8.5 [🔒 STRICT WALL CHECK & ANTI-BAITING PATCH]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -19,9 +19,9 @@ local SheriffConfig = {
     PredictionMode = "Híbrido Absoluto (Omni)", 
     HorizontalPred = 0.145, 
     VerticalPred = 0.035,   
-    WallCheck = true,    
+    WallCheck = true, -- Forzado estricto por defecto
     CloseRangeZone = 8, 
-    AntiBaiting = true, -- Nueva bandera del sistema dinámico
+    AntiBaiting = true,
     
     -- Tracers Sincronizados Reales
     PredictTracer = true,      
@@ -61,7 +61,8 @@ local function saveConfig()
             ShowPingTracer = SheriffConfig.ShowPingTracer,
             ShowLagTracer = SheriffConfig.ShowLagTracer,
             CloseRangeZone = SheriffConfig.CloseRangeZone,
-            AntiBaiting = SheriffConfig.AntiBaiting
+            AntiBaiting = SheriffConfig.AntiBaiting,
+            WallCheck = SheriffConfig.WallCheck
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -88,6 +89,7 @@ local function loadConfig()
                 if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
+                if data.WallCheck ~= nil then SheriffConfig.WallCheck = data.WallCheck end
                 return true
             end
         end
@@ -110,8 +112,9 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     SheriffConfig.SilentAim = estado
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check)", function(estado)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Estricto)", function(estado)
     SheriffConfig.WallCheck = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", function(estado)
@@ -356,6 +359,9 @@ local function getMurderer()
     return currentTarget
 end
 
+-- ============================================================================
+-- 🛡️ WALL CHECK ULTRA ESTRICTO CON FILTRADO DE COMPONENTES SIMÉTRICOS
+-- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -376,19 +382,31 @@ local function isTargetVisible(targetPart, murdererChar)
     
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
-    if selfWallCheck and selfWallCheck.Instance.CanCollide then 
-        return false 
+    -- DETECTOR 1: Comportamiento estrictamente nativo. Si tu torso está tapado, se frena.
+    local selfWallCheck = workspace:Raycast(hrp.Position, (originPos - hrp.Position), wallcastParams)
+    if selfWallCheck then 
+        local instance = selfWallCheck.Instance
+        if instance.CanCollide == true or instance.Transparency < 0.85 then
+            return false 
+        end
     end
     
+    -- DETECTOR 2: Raycast principal directo al hueso del Murderer
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
-    if not pathCheck then 
-        return true 
-    end 
+    if pathCheck then
+        local hitInstance = pathCheck.Instance
+        if hitInstance.CanCollide == true or hitInstance.Transparency < 0.85 then
+            return false 
+        end
+    end
     
-    local hitInstance = pathCheck.Instance
-    if hitInstance.CanCollide == true or hitInstance.Transparency < 0.95 then
-        return false 
+    -- DETECTOR 3: Rayo de seguridad desde los ojos (Cámara) para simular visibilidad real del jugador
+    local cameraCheck = workspace:Raycast(Camera.CFrame.Position, targetPart.Position - Camera.CFrame.Position, wallcastParams)
+    if cameraCheck then
+        local hitInstance = cameraCheck.Instance
+        if hitInstance.CanCollide == true or hitInstance.Transparency < 0.85 then
+            return false 
+        end
     end
     
     return true
@@ -400,7 +418,7 @@ local function getBestTargetPart(murdererChar)
     local head = murdererChar:FindFirstChild("Head")
     if hrp and isTargetVisible(hrp, murdererChar) then return hrp
     elseif head and isTargetVisible(head, murdererChar) then return head end
-    return hrp or head
+    return nil -- Cambiado a nil para forzar bloqueo si no es visible estrictamente
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -455,7 +473,6 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local baitingFactor = 1
     if dotProduct < 0.65 then
-        -- SISTEMA ANTI-BAITING: Mitiga el impacto predictivo si gira más de ~50 grados repentinamente
         if SheriffConfig.AntiBaiting then
             baitingFactor = math.clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
         else
@@ -597,7 +614,7 @@ RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar) or targetChar:FindFirstChild("HumanoidRootPart") 
+    local bestPart = getBestTargetPart(targetChar) 
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
