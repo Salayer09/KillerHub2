@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.3 [🔥 ULTRA ADAPTIVE PVP MOTOR - INTERFACE PATCHED]
+-- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 ANTI-BAITING DYNAMIC PATCH]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -20,7 +20,8 @@ local SheriffConfig = {
     HorizontalPred = 0.145, 
     VerticalPred = 0.035,   
     WallCheck = true,    
-    CloseRangeZone = 8, -- Calibrado óptimo para tus 199ms de ping
+    CloseRangeZone = 8, 
+    AntiBaiting = true, -- Nueva bandera del sistema dinámico
     
     -- Tracers Sincronizados Reales
     PredictTracer = true,      
@@ -30,7 +31,7 @@ local SheriffConfig = {
     
     TracerSmoothness = 0.60, 
     UseWeaponDetector = false, 
-    AutoUnequip = true, -- Activado por defecto para un Fast Unequip fluido
+    AutoUnequip = true, 
     ShowShootButton = false,
     ButtonSize = 95,
     ButtonOpacity = 0.95, 
@@ -59,7 +60,8 @@ local function saveConfig()
             ShowLeadTracer = SheriffConfig.ShowLeadTracer,
             ShowPingTracer = SheriffConfig.ShowPingTracer,
             ShowLagTracer = SheriffConfig.ShowLagTracer,
-            CloseRangeZone = SheriffConfig.CloseRangeZone
+            CloseRangeZone = SheriffConfig.CloseRangeZone,
+            AntiBaiting = SheriffConfig.AntiBaiting
         }
         writefile(CONFIG_FILE, HttpService:JSONEncode(data))
     end
@@ -85,6 +87,7 @@ local function loadConfig()
                 if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
                 if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
+                if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
                 return true
             end
         end
@@ -111,12 +114,16 @@ SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check
     SheriffConfig.WallCheck = estado
 end)
 
+SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", function(estado)
+    SheriffConfig.AntiBaiting = estado
+    saveConfig()
+end)
+
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
 
--- Multiplicamos por 1000 visualmente para que se muestre en números enteros nativos (ej: 145)
 SheriffTab:CreateSlider("HorizontalPredSlider", "Predicción Horizontal", 0, 300, function(valor)
     SheriffConfig.HorizontalPred = valor / 1000 
     saveConfig() 
@@ -349,9 +356,6 @@ local function getMurderer()
     return currentTarget
 end
 
--- ============================================================================
--- 🛡️ FILTRO DE VISIBILIDAD REFORZADO (ANTI-WALLBUG)
--- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -363,7 +367,6 @@ local function isTargetVisible(targetPart, murdererChar)
     local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
-    -- Exclusión instantánea de avatares irrelevantes
     local ignoreList = {char, murdererChar, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
         if p.Character and p.Character ~= murdererChar then 
@@ -373,19 +376,16 @@ local function isTargetVisible(targetPart, murdererChar)
     
     wallcastParams.FilterDescendantsInstances = ignoreList
     
-    -- SEGURIDAD 1: Evitar disparo fantasma si el cañón ya está metido físicamente en un muro
     local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
     if selfWallCheck and selfWallCheck.Instance.CanCollide then 
         return false 
     end
     
-    -- SEGURIDAD 2: Raycast principal de trayectoria hacia el Murderer
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
     if not pathCheck then 
         return true 
     end 
     
-    -- SEGURIDAD 3: Análisis preciso de colisión estructural y transparencia estricta
     local hitInstance = pathCheck.Instance
     if hitInstance.CanCollide == true or hitInstance.Transparency < 0.95 then
         return false 
@@ -455,7 +455,12 @@ local function getPredictedPosition(targetChar, targetPart)
 
     local baitingFactor = 1
     if dotProduct < 0.65 then
-        baitingFactor = math.clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
+        -- SISTEMA ANTI-BAITING: Mitiga el impacto predictivo si gira más de ~50 grados repentinamente
+        if SheriffConfig.AntiBaiting then
+            baitingFactor = math.clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
+        else
+            baitingFactor = math.clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
+        end
     end
 
     local clampedDT = math.min(emaDeltaTime, 0.05) 
@@ -687,13 +692,11 @@ local function fireAtMurdererDirectly()
             if predictedPos then
                 isFiringCooldown = true 
                 
-                -- Fuerza el equipamiento en el inventario inmediatamente sin pausas
                 local originallyInBackpack = (parent == LocalPlayer.Backpack)
                 if originallyInBackpack then 
                     humanoid:EquipTool(gun) 
                 end 
                 
-                -- Disparo asíncrono inmediato mandando los CFrames analizados
                 if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
                     if hrp:FindFirstChild("GunRaycastAttachment") then 
@@ -702,7 +705,6 @@ local function fireAtMurdererDirectly()
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                 end 
                 
-                -- Fast Unequip automatizado: Remueve el arma sutilmente tras el registro del tiro
                 if SheriffConfig.AutoUnequip and originallyInBackpack then 
                     task.spawn(function()
                         task.wait(0.03) 
@@ -807,7 +809,6 @@ ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
         
-        -- Disparo Relámpago en un hilo separado instantáneo
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
