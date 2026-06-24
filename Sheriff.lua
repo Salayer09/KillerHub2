@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.3 [🔥 ULTRA ADAPTIVE PVP MOTOR - INTERFACE PATCHED]
+-- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 LATENCY & WALLCHECK FIXED - OFFICIAL]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -335,7 +335,7 @@ local function getMurderer()
 
     if potentialMurderer then
         currentTarget = potentialMurderer
-        lastTargetTime = os.clock()
+        lastTargetTime = os clock()
     else
         if currentTarget and currentTarget.Parent and currentTarget.Character then
             local hum = currentTarget.Character:FindFirstChildOfClass("Humanoid")
@@ -348,30 +348,39 @@ local function getMurderer()
     return currentTarget
 end
 
+-- ============================================================================
+-- 🛠️ DISPARO Y REVISIÓN DE PAREDES TOTALMENTE RECONSTRUIDOS (FIXED)
+-- ============================================================================
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
+    
     local char = LocalPlayer.Character
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
+    
     local gun = char:FindFirstChild("Gun")
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
+    
+    -- Ignorar a TODOS los jugadores e inocentes para que solo las paredes bloqueen la vista
     local ignoreList = {char, murdererChar, Camera}
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and p ~= murdererChar then table.insert(ignoreList, p.Character) end
+        if p.Character then table.insert(ignoreList, p.Character) end
     end
     wallcastParams.FilterDescendantsInstances = ignoreList
-    if workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams) then return false end
+    
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
-    if not pathCheck then return true end 
+    if not pathCheck then 
+        return true -- Línea completamente limpia
+    end 
+    
+    -- Si golpea un objeto, verificar si es decorativo o transparente
     local instance = pathCheck.Instance
-    if instance.CanCollide == true and instance.Transparency < 0.75 then
-        local mat = instance.Material
-        if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
-            return false
-        end
+    if instance.CanCollide == false or instance.Transparency >= 0.75 then
+        return true
     end
-    return true
+    
+    return false -- Bloqueado por estructura sólida real
 end
 
 local function getBestTargetPart(murdererChar)
@@ -663,24 +672,36 @@ local function fireAtMurdererDirectly()
             if predictedPos then
                 isFiringCooldown = true 
                 
-                local gunHandle = gun:FindFirstChild("Handle")
-                local originRay = gunHandle and gunHandle.Position or hrp.Position
-                wallcastParams.FilterDescendantsInstances = {char, targetChar, Camera}
-                
-                local obstacleCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
-                if obstacleCheck and obstacleCheck.Instance.CanCollide and obstacleCheck.Instance.Transparency < 0.5 then
-                    isFiringCooldown = false
-                    return 
-                end
-
+                -- [🔥 FIX EQUIPO]: Esperar dinámicamente a que el arma pase al Character respetando tu latencia actual
                 local originallyInBackpack = (parent == LocalPlayer.Backpack)
                 if originallyInBackpack then 
                     humanoid:EquipTool(gun) 
-                    RunService.Heartbeat:Wait() 
+                    local timeout = 0
+                    while gun.Parent ~= char and timeout < 6 do
+                        RunService.Heartbeat:Wait()
+                        timeout = timeout + 1
+                    end
                 end 
+
+                -- [🛠️ FIX WALL CHECK REAL]: Comprobación limpia libre de errores de material y filtrando inocentes
+                local gunHandle = gun:FindFirstChild("Handle")
+                local originRay = gunHandle and gunHandle.Position or hrp.Position
                 
+                local ignoreList = {char, targetChar, Camera}
+                for _, p in ipairs(Players:GetPlayers()) do
+                    if p.Character then table.insert(ignoreList, p.Character) end
+                end
+                wallcastParams.FilterDescendantsInstances = ignoreList
+                
+                local obstacleCheck = workspace:Raycast(originRay, predictedPos - originRay, wallcastParams)
+                if obstacleCheck and obstacleCheck.Instance.CanCollide and obstacleCheck.Instance.Transparency < 0.75 then
+                    isFiringCooldown = false
+                    return -- Detener disparo si hay una pared real obstruyendo
+                end
+                
+                -- Ejecución del disparo sin candados lentos
                 local shotExecuted = false
-                if gun:FindFirstChild("Shoot") and gun.Parent == char then
+                if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
                     if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
                     
@@ -688,14 +709,15 @@ local function fireAtMurdererDirectly()
                     shotExecuted = true
                 end 
                 
+                -- Desequipar veloz optimizado con tu ping real
                 if SheriffConfig.AutoUnequip and originallyInBackpack and shotExecuted then 
-                    task.wait(math.clamp(cachedPingValue * 0.5, 0.025, 0.06)) 
+                    task.wait(math.clamp(cachedPingValue * 0.3, 0.015, 0.04)) 
                     if gun.Parent == char then
                         humanoid:UnequipTools() 
                     end
                 end 
                 
-                task.wait(math.clamp(cachedPingValue, 0.05, 0.15))
+                task.wait(0.04) -- Rediseño del Cooldown global para evitar bloqueos táctiles
                 isFiringCooldown = false
             end
         end
@@ -722,7 +744,6 @@ ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
--- [🛠️ OPTIMIZACIÓN DE ARRANQUE]: Asigna el redondeado correcto desde el primer instante en el inicio
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
 Corner.Parent = ShootButton
 
