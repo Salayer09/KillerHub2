@@ -1,5 +1,5 @@
 -- ============================================================================
---  ghost KILLER HUB | SHERIFF V6.9.0 ELITE [🔥 DYNAMIC HITBOX ENHANCER INTEGRATED]
+--  ghost KILLER HUB | SHERIFF V7.0.1 PREMIUM [👑 ULTRA-PULIDO & TOTAL FIX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -22,7 +22,7 @@ local SheriffConfig = {
     WallCheck = true,    
     CloseRangeZone = 8, 
     AntiBaiting = true, 
-    HitrateEnhancer = true, -- Flag nativo para el optimizador de impactos
+    HitrateEnhancer = true,
     
     -- Tracers Sincronizados Reales
     PredictTracer = true,      
@@ -45,7 +45,6 @@ local SheriffConfig = {
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
--- FIX CRÍTICO: saveConfig completamente envuelto en pcall
 local function saveConfig()
     local success, err = pcall(function()
         if writefile then
@@ -72,7 +71,6 @@ local function saveConfig()
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
     end)
-    
     if not success then
         warn("⚠️ KillerHub Info: No se pudo guardar la configuración de forma nativa: " .. tostring(err))
     end
@@ -107,7 +105,6 @@ local function loadConfig()
         end
         return false
     end)
-    
     if not success then
         warn("Error al cargar la configuración: " .. tostring(result))
     end
@@ -125,7 +122,7 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("HitrateEnhancerToggle", "Garantizar Impactos (Hitrate Enhancer)", function(estado)
+SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
     SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
@@ -189,7 +186,7 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)"
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
+SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
@@ -204,9 +201,9 @@ SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function
     SheriffConfig.ShowShootButton = estado
 end)
 
-SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, function(valor)
+SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
-    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
+    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui") and game:GetService("CoreGui").KillerHub_SheriffGui:FindFirstChild("ShootButton")
     if btn then 
         btn.Size = UDim2.new(0, valor, 0, valor) 
         if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.28)) end
@@ -215,7 +212,7 @@ end)
 
 SheriffTab:CreateSlider("VoidBtnOpacity", "Opacidad del Botón", 10, 100, function(valor)
     SheriffConfig.ButtonOpacity = valor / 100
-    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
+    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui") and game:GetService("CoreGui").KillerHub_SheriffGui:FindFirstChild("ShootButton")
     if btn then
         btn.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
         if btn:FindFirstChild("DecalTexture") then btn.DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity end
@@ -228,7 +225,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO ADAPTATIVO AVANZADO + FILTRO ANTI-BAITING
+-- 🧠 MOTOR CINEMÁTICO ADAPTATIVO + MEJORAS BALÍSTICAS EXACTAS
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -255,6 +252,7 @@ local playerDeadStatus = {}
 local currentTarget = nil
 local lastTargetTime = 0
 local isFiringCooldown = false
+local cachedMapFolder = nil
 
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
@@ -297,13 +295,17 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     RoundStart.OnClientEvent:Connect(function(arg1, arg2)
         table.clear(playerRoles)
         table.clear(playerDeadStatus)
+        
+        -- [SOLUCIÓN MAESTRA]: Retraso asíncrono para esperar la carga real de la geometría del mapa
+        task.spawn(function()
+            task.wait(3.0)
+            cachedMapFolder = nil
+        end)
+        
         parsePlayerData(arg2)
         parsePlayerData(arg1)
     end)
 end
-
-local wallcastParams = RaycastParams.new()
-wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local floorCastParams = RaycastParams.new()
 floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -370,6 +372,38 @@ local function getMurderer()
     return currentTarget
 end
 
+-- ============================================================================
+-- 🚀 DETECCION DE PAREDES CON SISTEMA DE CACHÉ ULTRA FLUIDA (0 LAG)
+-- ============================================================================
+local mapCastParams = RaycastParams.new()
+mapCastParams.FilterType = Enum.RaycastFilterType.Include
+
+local function obtenerCarpetaDelMapa()
+    if cachedMapFolder and cachedMapFolder.Parent == workspace and cachedMapFolder ~= workspace then
+        return cachedMapFolder
+    end
+
+    local posiblesNombres = {"Map", "MapFolder", "CurrentMap", "Stage", "Mundo"}
+    for _, nombre in ipairs(posiblesNombres) do
+        local encontrado = workspace:FindFirstChild(nombre)
+        if encontrado then 
+            cachedMapFolder = encontrado
+            return encontrado 
+        end
+    end
+    
+    for _, objeto in ipairs(workspace:GetChildren()) do
+        if (objeto:IsA("Folder") or objeto:IsA("Model")) 
+        and objeto.Name ~= "Players" 
+        and not game.Players:GetPlayerFromCharacter(objeto) 
+        and objeto ~= workspace.CurrentCamera then
+            cachedMapFolder = objeto
+            return objeto
+        end
+    end
+    return workspace 
+end
+
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
     if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
@@ -381,27 +415,24 @@ local function isTargetVisible(targetPart, murdererChar)
     local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
-    local ignoreList = {char, murdererChar, Camera}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p.Character and p.Character ~= murdererChar then 
-            table.insert(ignoreList, p.Character) 
-        end
-    end
+    local mapFolder = obtenerCarpetaDelMapa()
+    mapCastParams.FilterDescendantsInstances = { mapFolder }
     
-    wallcastParams.FilterDescendantsInstances = ignoreList
+    -- Si aún no hay mapa cargado y el plan B es el Workspace completo, desactivamos temporalmente para evitar falsos positivos
+    if mapFolder == workspace then return true end
     
-    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams)
-    if selfWallCheck and selfWallCheck.Instance.CanCollide then 
+    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, mapCastParams)
+    if selfWallCheck and selfWallCheck.Instance.CanCollide and selfWallCheck.Instance.Transparency < 0.9 then 
         return false 
     end
     
-    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
+    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, mapCastParams)
     if not pathCheck then 
         return true 
     end 
     
     local hitInstance = pathCheck.Instance
-    if hitInstance.CanCollide == true or hitInstance.Transparency < 0.95 then
+    if hitInstance.CanCollide == true and hitInstance.Transparency < 0.95 and not hitInstance:IsDescendantOf(murdererChar) then
         return false 
     end
     
@@ -435,24 +466,28 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
+    -- CONSTANTE FÍSICA: Velocidad de proyectil estandarizada del servidor MM2
+    local projectileSpeed = 275 
+    
+    -- Zona muerta adaptativa a quemarropa
     local predictionWeight = 1
-    local minZone = SheriffConfig.CloseRangeZone
-    local maxZone = minZone + 15
+    local minZone = SheriffConfig.CloseRangeZone or 8
     if distance <= minZone then
-        predictionWeight = 0 
-    elseif distance < maxZone and minZone ~= maxZone then
-        predictionWeight = (distance - minZone) / (maxZone - minZone) 
+        predictionWeight = 0
+    elseif distance < minZone + 15 then
+        predictionWeight = (distance - minZone) / 15
     end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity
-        previousTargetVelocity = smoothedVelocity
+        previousTargetVelocity = rawVelocity
         lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
     end
 
-    if rawVelocity.Magnitude > 32 then 
-        rawVelocity = rawVelocity.Unit * 32 
+    -- Abrazadera de seguridad contra desbordamientos físicos del motor
+    if rawVelocity.Magnitude > 35 then 
+        rawVelocity = rawVelocity.Unit * 35 
     end
 
     local dotProduct = 1
@@ -461,89 +496,92 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    local baitingFactor = 1
-    if dotProduct < 0.65 then
-        if SheriffConfig.AntiBaiting then
-            baitingFactor = math.clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
-        else
-            baitingFactor = math.clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
-        end
-    end
-
-    local clampedDT = math.min(activeDT, 0.05) 
-    local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 12.0 or 16.5
-    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
+    -- Suavizado Adaptativo Inteligente: Rompe inercias en amagues violentes
+    local responseSpeed = (dotProduct < 0.65) and 24.0 or 16.5
+    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * math.min(activeDT, 0.05)), 0.1, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
-    local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16.705, 0, 1.2)
-    local fpsBuffer = isLowFPS and 0.040 or 0.030
-    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15)
-    local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
+    -- Obtención de Aceleración mediante derivada discreta
+    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(activeDT, 0.001)
+    previousTargetVelocity = smoothedVelocity
 
-    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
-    if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.02 or 0.06), rawAcceleration.Z)
-
-    local timeFrameTotal = hFactor * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
-    local timeFramePingOnly = cachedPingValue * distanceFactor * predictionWeight * baitingFactor
-    local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight * baitingFactor
-
-    local finalHorizontal, pingHorizontal, lagHorizontal = Vector3.new(0,0,0), Vector3.new(0,0,0), Vector3.new(0,0,0)
-
-    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
-        if distance >= 13 and dotProduct >= 0.75 then 
-            local extraAcc = 0.5 * stableAcceleration
-            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
-            pingHorizontal = pingHorizontal + (extraAcc * (timeFramePingOnly ^ 2))
-            lagHorizontal = lagHorizontal + (extraAcc * (timeFrameLagOnly ^ 2))
-        end
-    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (dotProduct >= 0.75) and (0.5 * stableAcceleration) or Vector3.new(0,0,0)
-        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
-    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dH = timeFrameTotal * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1)
-        finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
-        pingHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFramePingOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
-        lagHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFrameLagOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
+    if rawAcceleration.Magnitude > 70 then 
+        rawAcceleration = rawAcceleration.Unit * 70 
     end
 
+    -- Tiempos de tránsito cinemático exactos
+    local t_ping = math.clamp(cachedPingValue, 0.005, 0.4)
+    local t_frame = math.min(activeDT, 0.05)
+    local t_bullet = distance / projectileSpeed
+
+    -- Factor adaptativo Anti-Baiting integrado
+    local baitingFactor = 1
+    if dotProduct < 0.70 and SheriffConfig.AntiBaiting then
+        baitingFactor = math.clamp((dotProduct + 1) / 2.2, 0.15, 0.6)
+    end
+
+    local timeTotal = (t_ping + t_frame + t_bullet) * predictionWeight * baitingFactor
+    local timePingOnly = (t_ping + t_bullet) * predictionWeight * baitingFactor
+    local timeLagOnly = (t_frame + t_bullet) * predictionWeight * baitingFactor
+
+    local function calculateKinematicPosition(t)
+        local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z)
+        local horizontalAcceleration = Vector3.new(rawAcceleration.X, 0, rawAcceleration.Z)
+        
+        -- Adaptación de escala matemática para respetar los valores originales de tus sliders
+        local hMultiplier = (SheriffConfig.HorizontalPred or 0.145) * 7.2
+        
+        -- Ecuación de Segundo Orden (MRUA): Posición + Vt + 0.5At²
+        local displacement = (horizontalVelocity * t * hMultiplier) + (0.5 * horizontalAcceleration * (t ^ 2) * hMultiplier)
+        
+        local maxShift = math.clamp(distance * 0.22, 1.2, 5.5)
+        if displacement.Magnitude > maxShift then
+            displacement = displacement.Unit * maxShift
+        end
+        return targetPosition + displacement
+    end
+
+    local finalPrediction, pingPrediction, lagPrediction
+
+    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
+        finalPrediction = calculateKinematicPosition(timeTotal)
+        pingPrediction = calculateKinematicPosition(timePingOnly)
+        lagPrediction = calculateKinematicPosition(timeLagOnly)
+    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
+        finalPrediction = calculateKinematicPosition(timeTotal)
+        pingPrediction = calculateKinematicPosition(timePingOnly)
+        lagPrediction = calculateKinematicPosition(timeLagOnly)
+    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
+        local dH = dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1
+        finalPrediction = calculateKinematicPosition(timeTotal * dH)
+        pingPrediction = calculateKinematicPosition(timePingOnly * dH)
+        lagPrediction = calculateKinematicPosition(timeLagOnly * dH)
+    end
+
+    -- Cálculo exacto de Trayectorias Balísticas en Caída Libre (Ecuación de Proyectiles)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
-        local jumpCompensation = 0
-        if smoothedVelocity.Y > 1 then
-            jumpCompensation = smoothedVelocity.Y * 0.013
-        elseif smoothedVelocity.Y < -1 then
-            jumpCompensation = smoothedVelocity.Y * 0.019
-        end
-        local verticalTime = ping * SheriffConfig.VerticalPred * predictionWeight
-        local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * 196.2 * (verticalTime ^ 2)) + (jumpCompensation * predictionWeight)
-        if distance < 10 then pY = pY * 0.1 end
+        local vMultiplier = (SheriffConfig.VerticalPred or 0.035) * 28.5
+        local t_vertical = timeTotal * vMultiplier
+        
+        local pY = (smoothedVelocity.Y * t_vertical) - (0.5 * workspace.Gravity * (t_vertical ^ 2))
         verticalOffset = Vector3.new(0, pY, 0)
     end
 
-    local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
-    local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
+    finalPrediction = finalPrediction + verticalOffset
+    pingPrediction = pingPrediction + verticalOffset
+    lagPrediction = lagPrediction + verticalOffset
 
-    if smoothedVelocity.Y < -0.1 then
-        local floorY = getFloorHeight(hrp, targetChar)
-        if floorY then
-            local minAllowedY = floorY + ((hrp.Size.Y / 2) * (humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1)) + 0.2
-            if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, finalPrediction.Z) end
-            if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, finalPrediction.Z) end
-        end
+    -- Sistema avanzado de anclaje de piso para evitar colisiones subterráneas
+    local floorY = getFloorHeight(hrp, targetChar)
+    if floorY then
+        local bodyScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
+        local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
+        if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
+        if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+        if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
     end
 
-    previousTargetVelocity = smoothedVelocity
     return finalPrediction, pingPrediction, lagPrediction
 end
 
@@ -594,7 +632,7 @@ RunService.RenderStepped:Connect(function(dt)
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
-    local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui")
+    local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
     if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
 
     if not hasGun or not murderer or not murderer.Character then
@@ -672,7 +710,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO OPTIMIZADO (HITRATE ENHANCER INTEGRADO)
+-- ⚡ MOTOR DE DISPARO TOTALMENTE FIXEADO (INTELLIGENT AUTO-EQUIP SIN BUG)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -694,26 +732,18 @@ local function fireAtMurdererDirectly()
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
-                local wasInBackpack = (parent == LocalPlayer.Backpack)
-                
-                -- INTERCEPTOR HITRATE: Expande la caja del oponente de forma adaptativa antes de tirar
-                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-                local originalSize = targetHrp and targetHrp.Size
-                
-                if SheriffConfig.HitrateEnhancer and targetHrp and originalSize then
-                    local expansionFactor = math.clamp(cachedPingValue * 25, 2.2, 5.8) 
-                    targetHrp.Size = vec3New(expansionFactor, expansionFactor, expansionFactor)
-                    targetHrp.CanCollide = false 
-                end
+                local wasInBackpack = (parent == LocalPlayer.Backpack) or (gun.Parent ~= char)
 
                 if wasInBackpack then 
                     humanoid:EquipTool(gun)
+                    
                     task.spawn(function()
-                        local timeout = 0
-                        while gun.Parent ~= char and timeout < 10 do
-                            task.wait(0.01)
-                            timeout = timeout + 1
+                        local attempts = 0
+                        while gun.Parent ~= char and attempts < 15 do
+                            task.wait(0.005) 
+                            attempts = attempts + 1
                         end
+                        
                         if gun.Parent == char and gun:FindFirstChild("Shoot") then
                             local originCFrame = hrp.CFrame
                             if hrp:FindFirstChild("GunRaycastAttachment") then 
@@ -721,16 +751,12 @@ local function fireAtMurdererDirectly()
                             end
                             gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                         end
-                        
-                        -- Restauración Asíncrona Inmediata para evitar bugs visuales
-                        if targetHrp and originalSize then
-                            targetHrp.Size = originalSize
-                        end
 
                         if SheriffConfig.AutoUnequip then
-                            task.wait(0.04)
+                            task.wait(0.03)
                             if gun.Parent == char then humanoid:UnequipTools() end
                         end
+                        isFiringCooldown = false
                     end)
                 else
                     if gun.Parent == char and gun:FindFirstChild("Shoot") then
@@ -741,20 +767,15 @@ local function fireAtMurdererDirectly()
                         gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                     end 
                     
-                    if targetHrp and originalSize then
-                        targetHrp.Size = originalSize
-                    end
-
                     if SheriffConfig.AutoUnequip then 
                         task.spawn(function()
-                            task.wait(0.04) 
+                            task.wait(0.03) 
                             if gun.Parent == char then humanoid:UnequipTools() end
                         end)
                     end 
+                    task.wait(0.04)
+                    isFiringCooldown = false
                 end 
-                
-                task.wait(0.05)
-                isFiringCooldown = false
             end
         end
     end
@@ -764,7 +785,7 @@ end
 -- 🌌 INTERFAZ V3.4 (BOTÓN SHOOT INTERACTIVO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
-VoidGui.Name = "KillerHub_VoidGui"
+VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false
 VoidGui.Parent = game:GetService("CoreGui")
 
@@ -808,14 +829,33 @@ local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
 DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.45, 0)
+DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
 DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
-TweenService:Create(DecalTexture, TweenInfo.new(0.84, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
+local function iniciarAnimacionIcono(decalTexture)
+    if not decalTexture then return end
+    local tiempoGiro = 0.8199     
+    local tiempoQuieto = 0.0315   
+    local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
+    local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
+
+    tweenIda.Completed:Connect(function()
+        task.wait(tiempoQuieto)
+        tweenVuelta:Play()
+    end)
+    tweenVuelta.Completed:Connect(function()
+        task.wait(tiempoQuieto)
+        tweenIda:Play()
+    end)
+    tweenIda:Play()
+end
+
+iniciarAnimacionIcono(DecalTexture)
 
 local Label = Instance.new("TextLabel")
 Label.Name = "Label"
@@ -889,7 +929,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ HOOKS DE REMOTOS (CON SYNC DE DELTA DINÁMICO)
+-- ⚡ HOOKS DE REMOTOS COMPLETAMENTE REDISEÑADOS (ADAPTACIÓN DE VARIABLES)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -899,7 +939,7 @@ if ClientServices then
 
     local lastHookCallTime = os.clock()
 
-    local function checkAndPredict()
+    local function checkAndPredict(returnCFrame)
         local currentTime = os.clock()
         local hookDelta = currentTime - lastHookCallTime
         lastHookCallTime = currentTime
@@ -914,7 +954,9 @@ if ClientServices then
                 local bestPart = getBestTargetPart(targetChar)
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
-                    if predictedPos then return CFrame.new(predictedPos) end
+                    if predictedPos then 
+                        return returnCFrame and CFrame.new(predictedPos) or predictedPos 
+                    end
                 end
             end
         end
@@ -922,14 +964,17 @@ if ClientServices then
     end
 
     WeaponService.GetTargetPosition = function(self, ...)
-        local prediction = checkAndPredict()
+        local prediction = checkAndPredict(false) 
         return prediction or oldGetTargetPosition(self, ...)
     end
 
     WeaponService.GetMouseTargetCFrame = function(self, ...)
-        local prediction = checkAndPredict()
+        local prediction = checkAndPredict(true) 
         return prediction or oldGetMouseTargetCFrame(self, ...)
     end
 end
 
+-- ============================================================================
+-- 💫 RETORNO INFINITO DE LIBRERÍA GITHUB
+-- ============================================================================
 return KillerHub
