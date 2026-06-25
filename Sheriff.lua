@@ -466,28 +466,24 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- CONSTANTE FÍSICA: Velocidad de proyectil estandarizada del servidor MM2
-    local projectileSpeed = 275 
-    
-    -- Zona muerta adaptativa a quemarropa
     local predictionWeight = 1
-    local minZone = SheriffConfig.CloseRangeZone or 8
+    local minZone = SheriffConfig.CloseRangeZone
+    local maxZone = minZone + 15
     if distance <= minZone then
-        predictionWeight = 0
-    elseif distance < minZone + 15 then
-        predictionWeight = (distance - minZone) / 15
+        predictionWeight = 0 
+    elseif distance < maxZone and minZone ~= maxZone then
+        predictionWeight = (distance - minZone) / (maxZone - minZone) 
     end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity
-        previousTargetVelocity = rawVelocity
+        previousTargetVelocity = smoothedVelocity
         lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
     end
 
-    -- Abrazadera de seguridad contra desbordamientos físicos del motor
-    if rawVelocity.Magnitude > 35 then 
-        rawVelocity = rawVelocity.Unit * 35 
+    if rawVelocity.Magnitude > 32 then 
+        rawVelocity = rawVelocity.Unit * 32 
     end
 
     local dotProduct = 1
@@ -496,83 +492,80 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- Suavizado Adaptativo Inteligente: Rompe inercias en amagues violentes
-    local responseSpeed = (dotProduct < 0.65) and 24.0 or 16.5
-    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * math.min(activeDT, 0.05)), 0.1, 0.88)
+    local baitingFactor = 1
+    if dotProduct < 0.65 then
+        if SheriffConfig.AntiBaiting then
+            baitingFactor = math.clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
+        else
+            baitingFactor = math.clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
+        end
+    end
+
+    local clampedDT = math.min(activeDT, 0.05) 
+    local isLowFPS = activeDT > 0.033
+    local responseSpeed = isLowFPS and 12.0 or 16.5
+    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
-    -- Obtención de Aceleración mediante derivada discreta
-    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(activeDT, 0.001)
-    previousTargetVelocity = smoothedVelocity
+    local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16.705, 0, 1.2)
+    local fpsBuffer = isLowFPS and 0.040 or 0.030
+    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
+    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15)
+    local hFactor = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
 
-    if rawAcceleration.Magnitude > 70 then 
-        rawAcceleration = rawAcceleration.Unit * 70 
-    end
+    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
+    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
+    if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
+    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.02 or 0.06), rawAcceleration.Z)
 
-    -- Tiempos de tránsito cinemático exactos
-    local t_ping = math.clamp(cachedPingValue, 0.005, 0.4)
-    local t_frame = math.min(activeDT, 0.05)
-    local t_bullet = distance / projectileSpeed
+    local timeFrameTotal = hFactor * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
+    local timeFramePingOnly = cachedPingValue * distanceFactor * predictionWeight * baitingFactor
+    local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight * baitingFactor
 
-    -- Factor adaptativo Anti-Baiting integrado
-    local baitingFactor = 1
-    if dotProduct < 0.70 and SheriffConfig.AntiBaiting then
-        baitingFactor = math.clamp((dotProduct + 1) / 2.2, 0.15, 0.6)
-    end
-
-    local timeTotal = (t_ping + t_frame + t_bullet) * predictionWeight * baitingFactor
-    local timePingOnly = (t_ping + t_bullet) * predictionWeight * baitingFactor
-    local timeLagOnly = (t_frame + t_bullet) * predictionWeight * baitingFactor
-
-    local function calculateKinematicPosition(t)
-        local horizontalVelocity = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z)
-        local horizontalAcceleration = Vector3.new(rawAcceleration.X, 0, rawAcceleration.Z)
-        
-        -- Adaptación de escala matemática para respetar los valores originales de tus sliders
-        local hMultiplier = (SheriffConfig.HorizontalPred or 0.145) * 7.2
-        
-        -- Ecuación de Segundo Orden (MRUA): Posición + Vt + 0.5At²
-        local displacement = (horizontalVelocity * t * hMultiplier) + (0.5 * horizontalAcceleration * (t ^ 2) * hMultiplier)
-        
-        local maxShift = math.clamp(distance * 0.22, 1.2, 5.5)
-        if displacement.Magnitude > maxShift then
-            displacement = displacement.Unit * maxShift
-        end
-        return targetPosition + displacement
-    end
-
-    local finalPrediction, pingPrediction, lagPrediction
+    local finalHorizontal, pingHorizontal, lagHorizontal = Vector3.new(0,0,0), Vector3.new(0,0,0), Vector3.new(0,0,0)
 
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalPrediction = calculateKinematicPosition(timeTotal)
-        pingPrediction = calculateKinematicPosition(timePingOnly)
-        lagPrediction = calculateKinematicPosition(timeLagOnly)
+        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        if distance >= 13 and dotProduct >= 0.75 then 
+            local extraAcc = 0.5 * stableAcceleration
+            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
+            pingHorizontal = pingHorizontal + (extraAcc * (timeFramePingOnly ^ 2))
+            lagHorizontal = lagHorizontal + (extraAcc * (timeFrameLagOnly ^ 2))
+        end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        finalPrediction = calculateKinematicPosition(timeTotal)
-        pingPrediction = calculateKinematicPosition(timePingOnly)
-        lagPrediction = calculateKinematicPosition(timeLagOnly)
+        local accCalc = (dotProduct >= 0.75) and (0.5 * stableAcceleration) or Vector3.new(0,0,0)
+        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dH = dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1
-        finalPrediction = calculateKinematicPosition(timeTotal * dH)
-        pingPrediction = calculateKinematicPosition(timePingOnly * dH)
-        lagPrediction = calculateKinematicPosition(timeLagOnly * dH)
+        local dH = timeFrameTotal * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1)
+        finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
+        pingHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFramePingOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
+        lagHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFrameLagOnly * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
     end
 
-    -- Cálculo exacto de Trayectorias Balísticas en Caída Libre (Ecuación de Proyectiles)
+    local maxHorizontalShift = 3.8
+    if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
+    if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
+    if lagHorizontal.Magnitude > maxHorizontalShift then lagHorizontal = lagHorizontal.Unit * maxHorizontalShift end
+
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
-        local vMultiplier = (SheriffConfig.VerticalPred or 0.035) * 28.5
-        local t_vertical = timeTotal * vMultiplier
+        local verticalTime = ping * SheriffConfig.VerticalPred * predictionWeight
+        local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * workspace.Gravity * (verticalTime ^ 2))
         
-        local pY = (smoothedVelocity.Y * t_vertical) - (0.5 * workspace.Gravity * (t_vertical ^ 2))
+        if smoothedVelocity.Y > 1 then
+            pY = pY + (smoothedVelocity.Y * 0.008 * predictionWeight)
+        end
         verticalOffset = Vector3.new(0, pY, 0)
     end
 
-    finalPrediction = finalPrediction + verticalOffset
-    pingPrediction = pingPrediction + verticalOffset
-    lagPrediction = lagPrediction + verticalOffset
+    local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
+    local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
 
-    -- Sistema avanzado de anclaje de piso para evitar colisiones subterráneas
     local floorY = getFloorHeight(hrp, targetChar)
     if floorY then
         local bodyScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
@@ -582,6 +575,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
     end
 
+    previousTargetVelocity = smoothedVelocity
     return finalPrediction, pingPrediction, lagPrediction
 end
 
