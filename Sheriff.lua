@@ -189,7 +189,7 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)"
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
+SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
@@ -815,39 +815,7 @@ DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
--- -- ============================================================================
--- 💫 SISTEMA DE ANIMACIÓN EN SINE (VAIVÉN / IR Y VOLVER) CON TIEMPO DE ESPERA
--- ============================================================================
-local function iniciarAnimacionIcono(decalTexture)
-    if not decalTexture then return end
-
-    -- AJUSTES DE TIEMPO (Soportan decimales exactos)
-    local tiempoGiro = 0.8217     -- Cuánto tarda en ir (o volver)
-    local tiempoQuieto = 0.0310   -- Cuánto se queda quieto en cada extremo
-
-    local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-    
-    -- Creamos los dos tweens: uno de ida y uno de vuelta
-    local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
-    local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
-
-    -- Al terminar la Ida, espera y arranca la Vuelta
-    tweenIda.Completed:Connect(function()
-        task.wait(tiempoQuieto)
-        tweenVuelta:Play()
-    end)
-
-    -- Al terminar la Vuelta, espera y arranca la Ida de nuevo
-    tweenVuelta.Completed:Connect(function()
-        task.wait(tiempoQuieto)
-        tweenIda:Play()
-    end)
-
-    -- Iniciar el ciclo
-    tweenIda:Play()
-end
-
-iniciarAnimacionIcono(DecalTexture)
+TweenService:Create(DecalTexture, TweenInfo.new(0.84, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
 
 local Label = Instance.new("TextLabel")
 Label.Name = "Label"
