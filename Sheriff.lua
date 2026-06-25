@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👻 KILLER HUB | SHERIFF V6.8.4 [🔥 TRACERS VISUAL REAL-TIME & CRITICAL FIXES]
+--  ghost KILLER HUB | SHERIFF V6.9.0 ELITE [🔥 DYNAMIC HITBOX ENHANCER INTEGRATED]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -22,6 +22,7 @@ local SheriffConfig = {
     WallCheck = true,    
     CloseRangeZone = 8, 
     AntiBaiting = true, 
+    HitrateEnhancer = true, -- Flag nativo para el optimizador de impactos
     
     -- Tracers Sincronizados Reales
     PredictTracer = true,      
@@ -44,7 +45,7 @@ local SheriffConfig = {
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
--- FIX CRÍTICO: saveConfig completamente envuelto en pcall para evitar congelar hilos de disparo
+-- FIX CRÍTICO: saveConfig completamente envuelto en pcall
 local function saveConfig()
     local success, err = pcall(function()
         if writefile then
@@ -65,7 +66,8 @@ local function saveConfig()
                 ShowPingTracer = SheriffConfig.ShowPingTracer,
                 ShowLagTracer = SheriffConfig.ShowLagTracer,
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
-                AntiBaiting = SheriffConfig.AntiBaiting
+                AntiBaiting = SheriffConfig.AntiBaiting,
+                HitrateEnhancer = SheriffConfig.HitrateEnhancer
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
@@ -99,6 +101,7 @@ local function loadConfig()
                 if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
+                if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
                 return true
             end
         end
@@ -119,6 +122,11 @@ SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
     SheriffConfig.SilentAim = estado
+    saveConfig()
+end)
+
+SheriffTab:CreateToggle("HitrateEnhancerToggle", "Garantizar Impactos (Hitrate Enhancer)", function(estado)
+    SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
 
@@ -540,7 +548,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO (FIXED REAL-TIME FREQUENCY)
+-- 🌌 LINEAS DE RENDERIZADO
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -664,7 +672,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO OPTIMIZADO (FIX: COMPLETELY ASYNCHRONOUS TOOL EQUIP)
+-- ⚡ MOTOR DE DISPARO OPTIMIZADO (HITRATE ENHANCER INTEGRADO)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -688,6 +696,16 @@ local function fireAtMurdererDirectly()
                 isFiringCooldown = true 
                 local wasInBackpack = (parent == LocalPlayer.Backpack)
                 
+                -- INTERCEPTOR HITRATE: Expande la caja del oponente de forma adaptativa antes de tirar
+                local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+                local originalSize = targetHrp and targetHrp.Size
+                
+                if SheriffConfig.HitrateEnhancer and targetHrp and originalSize then
+                    local expansionFactor = math.clamp(cachedPingValue * 25, 2.2, 5.8) 
+                    targetHrp.Size = vec3New(expansionFactor, expansionFactor, expansionFactor)
+                    targetHrp.CanCollide = false 
+                end
+
                 if wasInBackpack then 
                     humanoid:EquipTool(gun)
                     task.spawn(function()
@@ -703,6 +721,12 @@ local function fireAtMurdererDirectly()
                             end
                             gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                         end
+                        
+                        -- Restauración Asíncrona Inmediata para evitar bugs visuales
+                        if targetHrp and originalSize then
+                            targetHrp.Size = originalSize
+                        end
+
                         if SheriffConfig.AutoUnequip then
                             task.wait(0.04)
                             if gun.Parent == char then humanoid:UnequipTools() end
@@ -716,6 +740,11 @@ local function fireAtMurdererDirectly()
                         end
                         gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
                     end 
+                    
+                    if targetHrp and originalSize then
+                        targetHrp.Size = originalSize
+                    end
+
                     if SheriffConfig.AutoUnequip then 
                         task.spawn(function()
                             task.wait(0.04) 
@@ -860,7 +889,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ REMOTOS MODIFICADOS EN REPLICATEDSTORAGE (FIX 4: DELTA FPS SYNC)
+-- ⚡ HOOKS DE REMOTOS (CON SYNC DE DELTA DINÁMICO)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
