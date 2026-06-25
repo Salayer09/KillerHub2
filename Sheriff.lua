@@ -189,7 +189,7 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)"
     saveConfig()
 end)
 
-SheriffTab:CreateSection("Condiciones de Interfaz / Tácticas")
+SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
@@ -209,7 +209,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Void", 50, 200, funct
     local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_VoidGui") and game:GetService("CoreGui").KillerHub_VoidGui:FindFirstChild("ShootButton")
     if btn then 
         btn.Size = UDim2.new(0, valor, 0, valor) 
-        if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.24)) end
+        if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.28)) end
     end
 end)
 
@@ -780,7 +780,7 @@ ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.24))
+Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.28))
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -808,14 +808,46 @@ local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
 DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
+DecalTexture.Position = UDim2.new(0.5, 0, 0.45, 0)
 DecalTexture.BackgroundTransparency = 1
 DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
-TweenService:Create(DecalTexture, TweenInfo.new(0.85, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = 360}):Play()
+-- -- ============================================================================
+-- 💫 SISTEMA DE ANIMACIÓN EN SINE (VAIVÉN / IR Y VOLVER) CON TIEMPO DE ESPERA
+-- ============================================================================
+local function iniciarAnimacionIcono(decalTexture)
+    if not decalTexture then return end
+
+    -- AJUSTES DE TIEMPO (Soportan decimales exactos)
+    local tiempoGiro = 0.8217     -- Cuánto tarda en ir (o volver)
+    local tiempoQuieto = 0.0310   -- Cuánto se queda quieto en cada extremo
+
+    local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    
+    -- Creamos los dos tweens: uno de ida y uno de vuelta
+    local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
+    local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
+
+    -- Al terminar la Ida, espera y arranca la Vuelta
+    tweenIda.Completed:Connect(function()
+        task.wait(tiempoQuieto)
+        tweenVuelta:Play()
+    end)
+
+    -- Al terminar la Vuelta, espera y arranca la Ida de nuevo
+    tweenVuelta.Completed:Connect(function()
+        task.wait(tiempoQuieto)
+        tweenIda:Play()
+    end)
+
+    -- Iniciar el ciclo
+    tweenIda:Play()
+end
+
+iniciarAnimacionIcono(DecalTexture)
 
 local Label = Instance.new("TextLabel")
 Label.Name = "Label"
