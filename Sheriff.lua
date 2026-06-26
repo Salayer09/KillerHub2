@@ -1,17 +1,17 @@
 -- ============================================================================
---  👻 KILLER HUB | SHERIFF V7.3.0 PREMIUM [👑 EDICIÓN OPTIMIZADA HÍBRIDA]
+--  ghost KILLER HUB | SHERIFF V7.3.0 PREMIUM [👑 MOTOR DE VISIBILIDAD ABSOLUTO]
 -- ============================================================================
 
 -- 1. LIMPIEZA TOTAL DE MEMORIA (Previene congelamientos y duplicación de hilos)
 if _G.KillerHubLines then
-    for _, line in _G.KillerHubLines do
+    for _, line in pairs(_G.KillerHubLines) do
         pcall(function() line:Remove() end)
     end
 end
 _G.KillerHubLines = {}
 
 if _G.KillerHubConnections then
-    for _, conn in _G.KillerHubConnections do
+    for _, conn in pairs(_G.KillerHubConnections) do
         pcall(function() conn:Disconnect() end)
     end
 end
@@ -30,8 +30,9 @@ if not success or not KillerHubLib then
     return
 end
 local KillerHub = KillerHubLib
+local Killer = KillerHubLib
 
--- 3. INTERFAZ Y CONFIGURACIÓN
+-- 3. CONFIGURACIÓN E INTERFAZ GRÁFICA
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 local SheriffConfig = {
@@ -56,7 +57,7 @@ local SheriffConfig = {
     ButtonX = 0.7, 
     ButtonY = 0.6,
     LeadTimePred = 0.05,
-    AutoUnequip = true -- Restaurado para soportar las mecánicas de la v6
+    AntiTargetSwap = true
 }
 
 local HttpService = game:GetService("HttpService")
@@ -83,7 +84,7 @@ local function saveConfig()
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
                 AntiBaiting = SheriffConfig.AntiBaiting,
                 HitrateEnhancer = SheriffConfig.HitrateEnhancer,
-                AutoUnequip = SheriffConfig.AutoUnequip
+                AntiTargetSwap = SheriffConfig.AntiTargetSwap
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
@@ -116,7 +117,7 @@ local function loadConfig()
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
                 if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
-                if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
+                if data.AntiTargetSwap ~= nil then SheriffConfig.AntiTargetSwap = data.AntiTargetSwap end
                 return true
             end
         end
@@ -130,7 +131,7 @@ end
 loadConfig()
 
 -- ============================================================================
--- ⚙️ INTERFAZ GRÁFICA CONTROLADA
+-- ⚙️ ELEMENTOS DE CONTROL DE INTERFAZ
 -- ============================================================================
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -139,18 +140,18 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     saveConfig()
 end)
 
+SheriffTab:CreateToggle("AntiTargetSwapToggle", "Evitar Cambio Brusco de Objetivos", function(estado)
+    SheriffConfig.AntiTargetSwap = estado
+    saveConfig()
+end)
+
 SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
     SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Híbrido Torso/Cabeza)", function(estado)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateToggle("AutoUnequipToggle", "Auto-Desequipar Arma (Fast Unequip)", function(estado)
-    SheriffConfig.AutoUnequip = estado
     saveConfig()
 end)
 
@@ -242,7 +243,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 SERVICIOS Y MOTOR DE CONFIGURACIÓN DE ENTORNO
+-- 🧠 VARIABLES GLOBALES DEL ENTORNO Y SISTEMAS DE PROTECCIÓN
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -266,8 +267,11 @@ local cachedPingValue = 0.06
 
 local playerRoles = {}
 local playerDeadStatus = {}
+
 local currentTarget = nil
-local lastTargetTime = 0
+local lastTargetSwitchTime = 0
+local TARGET_SWAP_DEBOUNCE = 0.3 
+
 local isFiringCooldown = false
 
 local function getSmoothedPing(rawPing)
@@ -275,7 +279,7 @@ local function getSmoothedPing(rawPing)
     if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
     local sum = 0
     local maxRecentPing = 0
-    for _, p in pingHistory do
+    for _, p in pairs(pingHistory) do
         sum = sum + p
         if p > maxRecentPing then maxRecentPing = p end
     end
@@ -289,6 +293,17 @@ task.spawn(function()
         end
     end
 end)
+
+function Killer:SetTarget(newTarget)
+    local now = os.clock()
+    if SheriffConfig.AntiTargetSwap and currentTarget and currentTarget ~= newTarget then
+        if now - lastTargetSwitchTime < TARGET_SWAP_DEBOUNCE then
+            return 
+        end
+    end
+    currentTarget = newTarget
+    lastTargetSwitchTime = now
+end
 
 local function parsePlayerData(tabla)
     if type(tabla) == "table" then
@@ -318,18 +333,29 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
-local wallcastParams = RaycastParams.new()
-wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
-
 local floorCastParams = RaycastParams.new()
 floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
+local function autoEquipWeapon()
+    local character = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    
+    if character and character:FindFirstChild("Humanoid") and backpack then
+        local weapon = backpack:FindFirstChild("Knife") or backpack:FindFirstChild("Gun") or backpack:FindFirstChild("Revolver")
+        if weapon then
+            character.Humanoid:EquipTool(weapon)
+            task.wait(0.02) 
+        end
+    end
+end
+
 local function getGunLocation()
     local char = LocalPlayer.Character
-    if char and char:FindFirstChild("Gun") then
-        return char:FindFirstChild("Gun"), char
-    elseif LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun") then
-        return LocalPlayer.Backpack.Gun, LocalPlayer.Backpack
+    if char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) then
+        return char:FindFirstChild("Gun") or char:FindFirstChild("Revolver"), char
+    elseif LocalPlayer:FindFirstChild("Backpack") then
+        local found = LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Revolver")
+        if found then return found, LocalPlayer.Backpack end
     end
     return nil, nil
 end
@@ -343,7 +369,6 @@ local function getMurderer()
         local hasKnife = char:FindFirstChild("Knife") or (currentTarget:FindFirstChild("Backpack") and currentTarget.Backpack:FindFirstChild("Knife"))
         
         if (playerRoles[name] == "Murderer" or hasKnife) and not isDead then
-            lastTargetTime = os.clock() 
             return currentTarget
         end
     end
@@ -354,8 +379,7 @@ local function getMurderer()
             if pl and pl.Character and pl ~= LocalPlayer then
                 local hum = pl.Character:FindFirstChildOfClass("Humanoid")
                 if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) then
-                    currentTarget = pl
-                    lastTargetTime = os.clock()
+                    Killer:SetTarget(pl)
                     return pl
                 end
             end
@@ -363,7 +387,7 @@ local function getMurderer()
     end
 
     local potentialMurderer = nil
-    for _, player in Players:GetPlayers() do
+    for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
             local name = player.Name
             local char = player.Character
@@ -378,67 +402,56 @@ local function getMurderer()
     end
 
     if potentialMurderer then
-        currentTarget = potentialMurderer
-        lastTargetTime = os.clock()
+        Killer:SetTarget(potentialMurderer)
     else
-        currentTarget = nil
+        Killer:SetTarget(nil)
     end
     return currentTarget
 end
 
 -- ============================================================================
--- 🚀 WALL CHECK INTEGRADO DE V6.7.2 + EXCLUSIÓN DE ACCESORIOS/MASCOTAS MEJORADA
+-- 🚀 WALL CHECK AVANZADO CON ESCANEO SECUENCIAL (TORSO -> CABEZA)
 -- ============================================================================
-local function isTargetVisible(targetPart, murdererChar)
-    if not SheriffConfig.WallCheck then return true end
-    if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
-    local char = LocalPlayer.Character
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return false end
-    local gun = char:FindFirstChild("Gun")
-    local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
+local mapCastParams = RaycastParams.new()
+mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+local function getSmartTargetPart(targetChar)
+    if not targetChar then return nil end
     
-    -- Modificación de v6.7.2 para ignorar de manera absoluta TODOS los personajes (evita colisiones con sombreros/ropa)
-    local ignoreList = {char, murdererChar, Camera}
-    for _, p in ipairs(Players:GetPlayers()) do
+    local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
+    if not SheriffConfig.WallCheck then 
+        return torso 
+    end
+
+    local origin = Camera.CFrame.Position
+    local ignoreList = {LocalPlayer.Character, Camera}
+    
+    for _, p in pairs(Players:GetPlayers()) do
         if p.Character then table.insert(ignoreList, p.Character) end
     end
-    
-    -- Corrección crítica agregada para ignorar también las mascotas globales de MM2
     if workspace:FindFirstChild("Pets") then table.insert(ignoreList, workspace.Pets) end
     if workspace:FindFirstChild("PetFolder") then table.insert(ignoreList, workspace.PetFolder) end
     
-    wallcastParams.FilterDescendantsInstances = ignoreList
-    if workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams) then return false end
-    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
-    if not pathCheck then return true end 
+    mapCastParams.FilterDescendantsInstances = ignoreList
     
-    local instance = pathCheck.Instance
-    if instance.CanCollide == true and instance.Transparency < 0.75 then
-        local mat = instance.Material
-        if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
-            return false
+    if torso then
+        local direction = torso.Position - origin
+        local ray = workspace:Raycast(origin, direction, mapCastParams)
+        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.85) then
+            return torso
         end
     end
-    return true
-end
-
--- Mecánica de prioridad solicitada: Si el Torso está tapado, escanea la cabeza inmediatamente.
-local function getBestTargetPart(murdererChar)
-    if not murdererChar then return nil end
-    local hrp = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Torso") or murdererChar:FindFirstChild("UpperTorso")
-    local head = murdererChar:FindFirstChild("Head")
     
-    -- Opción 1: Torso
-    if hrp and isTargetVisible(hrp, murdererChar) then 
-        return hrp
-    -- Opción 2: Cabeza si el torso está tapado
-    elseif head and isTargetVisible(head, murdererChar) then 
-        return head 
+    local head = targetChar:FindFirstChild("Head")
+    if head then
+        local direction = head.Position - origin
+        local ray = workspace:Raycast(origin, direction, mapCastParams)
+        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.85) then
+            return head
+        end
     end
     
-    -- Si el Wall Check está activo y ambos están tapados, retorna nil para el Aim, pero los Tracers seguirán apuntando al hrp por defecto
-    return SheriffConfig.WallCheck and nil or (hrp or head)
+    return nil 
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -447,6 +460,9 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- ============================================================================
+-- 📈 ALGORITMO INTEGRADO DE PREDICCIÓN MATEMÁTICA V7.3.0
+-- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -557,14 +573,14 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
     local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagPrediction.X, 0, lagPrediction.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
 
     local floorY = getFloorHeight(hrp, targetChar)
     if floorY then
         local bodyScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
         local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
         if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-        if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+        if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end -- ¡Bug Corregido de finalPrediction.Z a pingPrediction.Z!
         if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
     end
 
@@ -573,7 +589,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO VISIBLES SIEMPRE (IGNORAN WALL CHECK)
+-- 🌌 LÍNEAS DE RENDERIZADO Y TRACERS PERSISTENTES
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -622,25 +638,24 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
     if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
 
-    if not hasGun or not murderer or not murderer.Character then
+    if not murderer or not murderer.Character then
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
         firstFrame = true
         return
     end
 
     local targetChar = murderer.Character
-    -- Para que los Tracers sean visibles SIEMPRE (aunque esté detrás de paredes), usamos una pieza base garantizada
-    local basePart = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Head")
-
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    
+    local visualPart = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Head")
 
-    if basePart and localHrp then
-        local distance = (basePart.Position - localHrp.Position).Magnitude
+    if visualPart and localHrp then
+        local distance = (visualPart.Position - localHrp.Position).Magnitude
         local distFactor = math.clamp((distance - 4) / 16, 0, 1)
         local tSmooth = SheriffConfig.TracerSmoothness
         
-        local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, basePart)
+        local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
         if lagPos and SheriffConfig.ShowLagTracer then
@@ -668,7 +683,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
-            local leadPredictedPos = basePart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
+            local leadPredictedPos = visualPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
             if handOnScreen and targetOnScreen then
@@ -700,7 +715,7 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO DIRECTO CON INTEGRACIÓN AUTO-EQUIP REAL DE V6.7.2
+-- ⚡ MOTOR DE DISPARO INSTANTÁNEO CON AUTO-EQUIPADO SINCRONIZADO
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -711,38 +726,30 @@ local function fireAtMurdererDirectly()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or humanoid.Health <= 0 or not hrp then return end 
 
-    local gun, parent = getGunLocation()
     local murderer = getMurderer()
 
-    if gun and murderer and murderer.Character then
+    if murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getBestTargetPart(targetChar) -- Usa el Wallcheck Inteligente (Torso -> Cabeza)
+        local bestPart = getSmartTargetPart(targetChar) 
         
         if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
                 
-                -- FUSIÓN MECÁNICA V6: Si el arma está en la mochila (Backpack), forzar el Equipamiento Instantáneo
-                if parent == LocalPlayer.Backpack then 
-                    humanoid:EquipTool(gun) 
-                    RunService.Heartbeat:Wait() 
-                end 
+                autoEquipWeapon()
 
-                local shootRemote = gun:FindFirstChild("Shoot")
-                if shootRemote then
-                    local originCFrame = hrp.CFrame
-                    if hrp:FindFirstChild("GunRaycastAttachment") then 
-                        originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+                local gun, _ = getGunLocation()
+                if gun then
+                    local shootRemote = gun:FindFirstChild("Shoot")
+                    if shootRemote then
+                        local originCFrame = hrp.CFrame
+                        if hrp:FindFirstChild("GunRaycastAttachment") then 
+                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+                        end
+                        shootRemote:FireServer(originCFrame, CFrame.new(predictedPos))
                     end
-                    shootRemote:FireServer(originCFrame, CFrame.new(predictedPos))
                 end
-                
-                -- Fast Unequip heredado opcional de la versión vieja
-                if SheriffConfig.AutoUnequip then 
-                    task.wait(math.clamp(cachedPingValue * 0.5, 0.015, 0.05)) 
-                    humanoid:UnequipTools() 
-                end 
                 
                 task.wait(0.05) 
                 isFiringCooldown = false
@@ -752,7 +759,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ V3.5 (BOTÓN SHOOT INTERACTIVO)
+-- 🌌 INTERFAZ DINÁMICA (BOTÓN SHOOT PREMIUM)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -809,7 +816,7 @@ DecalTexture.Parent = ShootButton
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.8015     
-    local tiempoQuieto = 0.0315   
+    local tiempoQuieto = 0.0367   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
@@ -907,7 +914,7 @@ end)
 table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 
 -- ============================================================================
--- ⚡ HOOKS DE REMOTOS COMPLETAMENTE REDISEÑADOS (ADAPTACIÓN DE VARIABLES)
+-- ⚡ HOOKS DE REPOSITORIO DE COMPATIBILIDAD DE DISPARO (SILENT AIM)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -929,7 +936,7 @@ if ClientServices then
             local murderer = getMurderer()
             if murderer and murderer.Character then
                 local targetChar = murderer.Character
-                local bestPart = getBestTargetPart(targetChar)
+                local bestPart = getSmartTargetPart(targetChar)
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
                     if predictedPos then 
@@ -952,4 +959,7 @@ if ClientServices then
     end
 end
 
-return KillerHub
+-- ============================================================================
+-- 💫 RETORNO FINAL DE LA LIBRERÍA INTEGRADA DEL HUB
+-- ============================================================================
+return Killer
