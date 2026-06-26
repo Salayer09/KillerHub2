@@ -1,5 +1,5 @@
 -- ============================================================================
---  GHOST KILLER HUB | SHERIFF V9.5.0 ULTIMATE KINETIC [ADAPTIVE PREDICTION]
+--  GHOST KILLER HUB | SHERIFF V9.5.1 ULTIMATE KINETIC [INSTANT-FIRE FIX]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -336,7 +336,7 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🚀 WALL CHECK ESTRICTO INTELIGENTE
+-- 🚀 WALL CHECK ESTRICTO INTELIGENTE (MEJORADO)
 -- ============================================================================
 local wallCastParams = RaycastParams.new()
 wallCastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -360,7 +360,8 @@ local function isTargetVisible(targetPart, murdererChar)
     
     if wallCheckRay then
         local hitInstance = wallCheckRay.Instance
-        if hitInstance.CanCollide == true then
+        -- MEJORA: Solo obstruir si el objeto colisiona verdaderamente y no es transparente/falso
+        if hitInstance.CanCollide == true and hitInstance.Transparency < 0.75 then
             return false
         end
     end
@@ -397,10 +398,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- MEJORA: Sistema Adaptativo de Multiplicador por Rangos (Evita desvíos altos a quemarropa)
     local factorRangoLerp = 1
-    local limiteCerca = 14  -- Desactiva la predicción agresiva cuerpo a cuerpo
-    local limiteLejos = 60  -- Máxima predicción a larga distancia
+    local limiteCerca = 14  
+    local limiteLejos = 60  
     if distance <= limiteCerca then
         factorRangoLerp = 0
     elseif distance < limiteLejos then
@@ -650,7 +650,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO AUTÓNOMO CORREGIDO (EQUIPADO SEGURO DE ARMA CON TIEMPO DE RED)
+-- ⚡ MOTOR DE DISPARO INSTANTÁNEO CORREGIDO (ASÍNCRONO SIN RETRASO DE RED)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -677,41 +677,33 @@ local function fireAtMurdererDirectly()
             isFiringCooldown = true 
             local wasInBackpack = (parent == LocalPlayer.Backpack) or (gun.Parent ~= char)
 
-            if wasInBackpack then 
-                -- Solución del error: Equipamos la herramienta primero
-                humanoid:EquipTool(gun)
-                
-                -- Hilo asíncrono controlado por red para esperar el equipamiento antes de mandar el remoto
-                task.spawn(function()
-                    local attempts = 0
-                    -- Esperar de forma segura un máximo de frames lógicos basándonos en +120ms
-                    while gun.Parent ~= char and attempts < 30 do
-                        task.wait(0.01) 
-                        attempts = attempts + 1
-                    end
-                    
-                    -- Una vez confirmado que el arma está en la mano, disparamos
-                    if gun.Parent == char and gun:FindFirstChild("Shoot") then
-                        task.wait(0.02) -- Margen extra de seguridad anti-reversión del servidor
-                        local originCFrame = hrp.CFrame
-                        if hrp:FindFirstChild("GunRaycastAttachment") then 
-                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
-                        end
-                        gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                    end
-                    isFiringCooldown = false
-                end)
-            else
-                -- Si ya estaba equipada de antes, dispara instantáneamente
-                if gun.Parent == char and gun:FindFirstChild("Shoot") then
+            local function ejecutarDisparo()
+                if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
                     if hrp:FindFirstChild("GunRaycastAttachment") then 
                         originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                     end
                     gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                end 
-                task.wait(0.04)
+                end
                 isFiringCooldown = false
+            end
+
+            if wasInBackpack then 
+                -- Fuerza el equipamiento local de inmediato
+                humanoid:EquipTool(gun)
+                
+                -- Ejecuta de forma asíncrona diferida para disparar en el instante exacto en que pasa al modelo sin trabar el script viejo
+                task.defer(function()
+                    local attempts = 0
+                    while gun.Parent ~= char and attempts < 10 do
+                        RunService.Heartbeat:Wait()
+                        attempts = attempts + 1
+                    end
+                    ejecutarDisparo()
+                end)
+            else
+                -- Si ya estaba en la mano, sale instantáneamente sin delay
+                ejecutarDisparo()
             end 
         end
     end
@@ -772,7 +764,6 @@ DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
--- Configurado con pausas visuales de 0.2 segundos exactos en cada extremo
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.81     
