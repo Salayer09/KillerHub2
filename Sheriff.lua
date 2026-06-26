@@ -60,6 +60,10 @@ local SheriffConfig = {
     AntiTargetSwap = true
 }
 
+-- 📌 CACHÉ DE UI ANTICIPADO: Declaración de Upvalues globales del entorno local
+local cachedScreenGui = nil
+local cachedShootButton = nil
+
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
@@ -219,22 +223,23 @@ SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function
     SheriffConfig.ShowShootButton = estado
 end)
 
+-- 🚀 MEJORA CON CACHÉ APLICADA DIRECTAMENTE EN LOS SLIDERS
 SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
-    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui") and game:GetService("CoreGui").KillerHub_SheriffGui:FindFirstChild("ShootButton")
-    if btn then 
-        btn.Size = UDim2.new(0, valor, 0, valor) 
-        if btn:FindFirstChild("UICorner") then btn.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.28)) end
+    if cachedShootButton then 
+        cachedShootButton.Size = UDim2.new(0, valor, 0, valor) 
+        if cachedShootButton:FindFirstChild("UICorner") then 
+            cachedShootButton.UICorner.CornerRadius = UDim.new(0, math.floor(valor * 0.28)) 
+        end
     end
 end)
 
 SheriffTab:CreateSlider("VoidBtnOpacity", "Opacidad del Botón", 10, 100, function(valor)
     SheriffConfig.ButtonOpacity = valor / 100
-    local btn = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui") and game:GetService("CoreGui").KillerHub_SheriffGui:FindFirstChild("ShootButton")
-    if btn then
-        btn.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
-        if btn:FindFirstChild("DecalTexture") then btn.DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity end
-        if btn:FindFirstChild("Label") then btn.Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity end
+    if cachedShootButton then
+        cachedShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
+        if cachedShootButton:FindFirstChild("DecalTexture") then cachedShootButton.DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity end
+        if cachedShootButton:FindFirstChild("Label") then cachedShootButton.Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity end
     end
 end)
 
@@ -580,7 +585,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local bodyScale = humanoid:FindFirstChild("BodyHeightScale") and math.clamp(humanoid.BodyHeightScale.Value, 0.2, 1.5) or 1
         local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
         if finalPrediction.Y < minAllowedY then finalPrediction = Vector3.new(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-        if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end -- ¡Bug Corregido de finalPrediction.Z a pingPrediction.Z!
+        if pingPrediction.Y < minAllowedY then pingPrediction = Vector3.new(pingPrediction.X, minAllowedY, pingPrediction.Z) end
         if lagPrediction.Y < minAllowedY then lagPrediction = Vector3.new(lagPrediction.X, minAllowedY, lagPrediction.Z) end
     end
 
@@ -589,7 +594,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 LÍNEAS DE RENDERIZADO Y TRACERS PERSISTENTES
+-- 🌌 LÍNEAS DE RENDERIZADO Y TRACERS PERSISTENTES (OPTIMIZADO)
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -635,8 +640,11 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
     local murderer = getMurderer()
-    local screenGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
-    if screenGui then screenGui.Enabled = SheriffConfig.ShowShootButton and hasGun end
+    
+    -- 🚀 CACHÉ ULTRA-RÁPIDO: Se eliminó el FindFirstChild iterativo por frame
+    if cachedScreenGui then 
+        cachedScreenGui.Enabled = SheriffConfig.ShowShootButton and hasGun 
+    end
 
     if not murderer or not murderer.Character then
         PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
@@ -759,7 +767,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 INTERFAZ DINÁMICA (BOTÓN SHOOT PREMIUM)
+-- 🌌 INTERFAZ DINÁMICA (BOTÓN SHOOT PREMIUM) - ASIGNACIÓN DE INSTANCIA
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -776,6 +784,10 @@ ShootButton.BorderSizePixel = 0
 ShootButton.AutoButtonColor = false 
 ShootButton.ClipsDescendants = true 
 ShootButton.Parent = VoidGui
+
+-- Asignación final a la caché una vez que los objetos existen físicamente
+cachedScreenGui = VoidGui
+cachedShootButton = ShootButton
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math.floor(SheriffConfig.ButtonSize * 0.28))
@@ -816,7 +828,7 @@ DecalTexture.Parent = ShootButton
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.8015     
-    local tiempoQuieto = 0.0367   
+    local tiempoQuieto = 0.0267   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
