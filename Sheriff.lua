@@ -827,8 +827,8 @@ DecalTexture.Parent = ShootButton
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local tiempoGiro = 0.8015     
-    local tiempoQuieto = 0.0267   
+    local tiempoGiro = 0.8025     
+    local tiempoQuieto = 0.0289   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
@@ -971,7 +971,7 @@ if ClientServices then
     end
 end
 
--- ============================================================================
+-- ==========================================================================
 -- 💫 RETORNO FINAL DE LA LIBRERÍA INTEGRADA DEL HUB
--- ============================================================================
+-- ==========================================================================
 return Killer
