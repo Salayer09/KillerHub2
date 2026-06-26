@@ -1,5 +1,5 @@
 -- ============================================================================
---  ghost KILLER HUB | SHERIFF V7.3.0 PREMIUM [👑 MOTOR DE VISIBILIDAD ABSOLUTO]
+--  👻 KILLER HUB | SHERIFF V7.3.0 PREMIUM [👑 EDICIÓN OPTIMIZADA HÍBRIDA]
 -- ============================================================================
 
 -- 1. LIMPIEZA TOTAL DE MEMORIA (Previene congelamientos y duplicación de hilos)
@@ -55,7 +55,8 @@ local SheriffConfig = {
     ButtonLocked = false,
     ButtonX = 0.7, 
     ButtonY = 0.6,
-    LeadTimePred = 0.05 
+    LeadTimePred = 0.05,
+    AutoUnequip = true -- Restaurado para soportar las mecánicas de la v6
 }
 
 local HttpService = game:GetService("HttpService")
@@ -81,7 +82,8 @@ local function saveConfig()
                 ShowLagTracer = SheriffConfig.ShowLagTracer,
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
                 AntiBaiting = SheriffConfig.AntiBaiting,
-                HitrateEnhancer = SheriffConfig.HitrateEnhancer
+                HitrateEnhancer = SheriffConfig.HitrateEnhancer,
+                AutoUnequip = SheriffConfig.AutoUnequip
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
@@ -114,6 +116,7 @@ local function loadConfig()
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
                 if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
+                if data.AutoUnequip ~= nil then SheriffConfig.AutoUnequip = data.AutoUnequip end
                 return true
             end
         end
@@ -141,8 +144,13 @@ SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiv
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Híbrido Torso/Cabeza)", function(estado)
     SheriffConfig.WallCheck = estado
+    saveConfig()
+end)
+
+SheriffTab:CreateToggle("AutoUnequipToggle", "Auto-Desequipar Arma (Fast Unequip)", function(estado)
+    SheriffConfig.AutoUnequip = estado
     saveConfig()
 end)
 
@@ -310,6 +318,9 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
+local wallcastParams = RaycastParams.new()
+wallcastParams.FilterType = Enum.RaycastFilterType.Exclude
+
 local floorCastParams = RaycastParams.new()
 floorCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
@@ -376,65 +387,58 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🚀 WALL CHECK V3 (FILTRADO AVANZADO DE JUGADORES + MASCOTAS + MULTI-HITBOX)
+-- 🚀 WALL CHECK INTEGRADO DE V6.7.2 + EXCLUSIÓN DE ACCESORIOS/MASCOTAS MEJORADA
 -- ============================================================================
-local mapCastParams = RaycastParams.new()
-mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-local function isTargetVisible(targetPart)
+local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
+    if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
     local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp or not targetPart then return false end
-    
-    local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    local gun = char:FindFirstChild("Gun")
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
-    -- Ignorar de manera absoluta TODOS los personajes del servidor para evitar colisiones fantasmas con accesorios o cuerpos
-    local ignoreList = {char, Camera}
-    for _, p in Players:GetPlayers() do
-        if p.Character then
-            table.insert(ignoreList, p.Character)
-        end
+    -- Modificación de v6.7.2 para ignorar de manera absoluta TODOS los personajes (evita colisiones con sombreros/ropa)
+    local ignoreList = {char, murdererChar, Camera}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(ignoreList, p.Character) end
     end
     
-    -- Ignorar la carpeta de mascotas globales de MM2 para que no intercepten las balas
+    -- Corrección crítica agregada para ignorar también las mascotas globales de MM2
     if workspace:FindFirstChild("Pets") then table.insert(ignoreList, workspace.Pets) end
     if workspace:FindFirstChild("PetFolder") then table.insert(ignoreList, workspace.PetFolder) end
     
-    mapCastParams.FilterDescendantsInstances = ignoreList
+    wallcastParams.FilterDescendantsInstances = ignoreList
+    if workspace:Raycast(hrp.Position, originPos - hrp.Position, wallcastParams) then return false end
+    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, wallcastParams)
+    if not pathCheck then return true end 
     
-    local direction = targetPart.Position - originPos
-    local ray = workspace:Raycast(originPos, direction, mapCastParams)
-    
-    if ray then
-        -- Solo bloquea si el objeto tiene colisión física y no es transparente (cristales del mapa)
-        if ray.Instance.CanCollide and ray.Instance.Transparency < 0.85 then
+    local instance = pathCheck.Instance
+    if instance.CanCollide == true and instance.Transparency < 0.75 then
+        local mat = instance.Material
+        if mat == Enum.Material.Glass or mat == Enum.Material.SmoothPlastic or mat == Enum.Material.Brick or mat == Enum.Material.Wood or mat == Enum.Material.Concrete or mat == Enum.Material.Metal then
             return false
         end
     end
-    
     return true
 end
 
+-- Mecánica de prioridad solicitada: Si el Torso está tapado, escanea la cabeza inmediatamente.
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
-    
     local hrp = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Torso") or murdererChar:FindFirstChild("UpperTorso")
     local head = murdererChar:FindFirstChild("Head")
     
-    if SheriffConfig.WallCheck then
-        -- 1. Primero intentamos fijar el Torso
-        if hrp and isTargetVisible(hrp) then 
-            return hrp
-        -- 2. Si el torso está tapado por un muro bajo, escaneamos la Cabeza inmediatamente
-        elseif head and isTargetVisible(head) then 
-            return head 
-        end
-        return nil -- Totalmente oculto
-    else
-        return hrp or head
+    -- Opción 1: Torso
+    if hrp and isTargetVisible(hrp, murdererChar) then 
+        return hrp
+    -- Opción 2: Cabeza si el torso está tapado
+    elseif head and isTargetVisible(head, murdererChar) then 
+        return head 
     end
+    
+    -- Si el Wall Check está activo y ambos están tapados, retorna nil para el Aim, pero los Tracers seguirán apuntando al hrp por defecto
+    return SheriffConfig.WallCheck and nil or (hrp or head)
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -553,7 +557,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local finalPrediction = targetPosition + Vector3.new(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
     local pingPrediction = targetPosition + Vector3.new(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffset
-    local lagPrediction = targetPosition + Vector3.new(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffset
+    local lagPrediction = targetPosition + Vector3.new(lagPrediction.X, 0, lagPrediction.Z) + verticalOffset
 
     local floorY = getFloorHeight(hrp, targetChar)
     if floorY then
@@ -569,7 +573,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO
+-- 🌌 LINEAS DE RENDERIZADO VISIBLES SIEMPRE (IGNORAN WALL CHECK)
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -625,23 +629,18 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar)
-
-    -- Si no es visible bajo el wallcheck, ocultamos tracers de impacto para evitar confusiones
-    if not bestPart then
-        PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        return
-    end
+    -- Para que los Tracers sean visibles SIEMPRE (aunque esté detrás de paredes), usamos una pieza base garantizada
+    local basePart = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Head")
 
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
-    if bestPart and localHrp then
-        local distance = (bestPart.Position - localHrp.Position).Magnitude
+    if basePart and localHrp then
+        local distance = (basePart.Position - localHrp.Position).Magnitude
         local distFactor = math.clamp((distance - 4) / 16, 0, 1)
         local tSmooth = SheriffConfig.TracerSmoothness
         
-        local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
+        local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, basePart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
         if lagPos and SheriffConfig.ShowLagTracer then
@@ -669,7 +668,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if SheriffConfig.ShowLeadTracer and hand then
             local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
-            local leadPredictedPos = bestPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
+            local leadPredictedPos = basePart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
             if handOnScreen and targetOnScreen then
@@ -701,7 +700,7 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO INSTANTÁNEO (SIN ESPERAS ASÍNCRONAS - EQUIPADO DIRECTO)
+-- ⚡ MOTOR DE DISPARO DIRECTO CON INTEGRACIÓN AUTO-EQUIP REAL DE V6.7.2
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -712,22 +711,23 @@ local function fireAtMurdererDirectly()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or humanoid.Health <= 0 or not hrp then return end 
 
-    local gun, _ = getGunLocation()
+    local gun, parent = getGunLocation()
     local murderer = getMurderer()
 
     if gun and murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getBestTargetPart(targetChar) -- Llama al nuevo filtrador multi-hitbox
+        local bestPart = getBestTargetPart(targetChar) -- Usa el Wallcheck Inteligente (Torso -> Cabeza)
         
         if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
                 
-                -- Ejecución secuencial inmediata sin tiempos de espera.
-                if gun.Parent ~= char then 
-                    humanoid:EquipTool(gun)
-                end
+                -- FUSIÓN MECÁNICA V6: Si el arma está en la mochila (Backpack), forzar el Equipamiento Instantáneo
+                if parent == LocalPlayer.Backpack then 
+                    humanoid:EquipTool(gun) 
+                    RunService.Heartbeat:Wait() 
+                end 
 
                 local shootRemote = gun:FindFirstChild("Shoot")
                 if shootRemote then
@@ -737,6 +737,12 @@ local function fireAtMurdererDirectly()
                     end
                     shootRemote:FireServer(originCFrame, CFrame.new(predictedPos))
                 end
+                
+                -- Fast Unequip heredado opcional de la versión vieja
+                if SheriffConfig.AutoUnequip then 
+                    task.wait(math.clamp(cachedPingValue * 0.5, 0.015, 0.05)) 
+                    humanoid:UnequipTools() 
+                end 
                 
                 task.wait(0.05) 
                 isFiringCooldown = false
@@ -793,7 +799,7 @@ local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
 DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
+DecalTexture.Position = UDim2.new(0.5, 0, 0.44, 0)
 DecalTexture.BackgroundTransparency = 1
 DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
@@ -802,8 +808,8 @@ DecalTexture.Parent = ShootButton
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local tiempoGiro = 0.81     
-    local tiempoQuieto = 0.0350   
+    local tiempoGiro = 0.8015     
+    local tiempoQuieto = 0.0315   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
@@ -946,7 +952,4 @@ if ClientServices then
     end
 end
 
--- ============================================================================
--- 💫 RETORNO INFINITO DE LIBRERÍA GITHUB
--- ============================================================================
 return KillerHub
