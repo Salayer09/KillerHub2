@@ -1,5 +1,5 @@
 -- ============================================================================
---  ghost KILLER HUB | SHERIFF V7.2.0 PREMIUM [👑 EDICIÓN MAESTRA & ULTRA-OPTIMIZADO]
+--  ghost KILLER HUB | SHERIFF V7.3.0 PREMIUM [👑 MOTOR DE VISIBILIDAD ABSOLUTO]
 -- ============================================================================
 
 -- 1. LIMPIEZA TOTAL DE MEMORIA (Previene congelamientos y duplicación de hilos)
@@ -31,7 +31,7 @@ if not success or not KillerHubLib then
 end
 local KillerHub = KillerHubLib
 
--- 3. INTERFAZ Y CONFIGURACIÓN (Auto-Unequip Eliminado)
+-- 3. INTERFAZ Y CONFIGURACIÓN
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 local SheriffConfig = {
@@ -141,7 +141,7 @@ SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiv
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check v2)", function(estado)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
     saveConfig()
 end)
@@ -376,7 +376,7 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🚀 WALL CHECK V2 (SISTEMA DE FILTRADO DINÁMICO IMPENETRABLE)
+-- 🚀 WALL CHECK V3 (FILTRADO AVANZADO DE JUGADORES + MASCOTAS + MULTI-HITBOX)
 -- ============================================================================
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -390,11 +390,17 @@ local function isTargetVisible(targetPart)
     local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
-    -- El secreto: Ignorar de raíz todos los personajes vivos del servidor y la cámara.
-    -- Así, cualquier colisión detectada será de manera indiscutible una estructura del mapa.
+    -- Ignorar de manera absoluta TODOS los personajes del servidor para evitar colisiones fantasmas con accesorios o cuerpos
     local ignoreList = {char, Camera}
-    local targetChar = targetPart.Parent
-    if targetChar then table.insert(ignoreList, targetChar) end
+    for _, p in Players:GetPlayers() do
+        if p.Character then
+            table.insert(ignoreList, p.Character)
+        end
+    end
+    
+    -- Ignorar la carpeta de mascotas globales de MM2 para que no intercepten las balas
+    if workspace:FindFirstChild("Pets") then table.insert(ignoreList, workspace.Pets) end
+    if workspace:FindFirstChild("PetFolder") then table.insert(ignoreList, workspace.PetFolder) end
     
     mapCastParams.FilterDescendantsInstances = ignoreList
     
@@ -402,8 +408,8 @@ local function isTargetVisible(targetPart)
     local ray = workspace:Raycast(originPos, direction, mapCastParams)
     
     if ray then
-        -- Si interfiere un objeto sólido y no es un cristal completamente invisible
-        if ray.Instance.CanCollide and ray.Instance.Transparency < 0.9 then
+        -- Solo bloquea si el objeto tiene colisión física y no es transparente (cristales del mapa)
+        if ray.Instance.CanCollide and ray.Instance.Transparency < 0.85 then
             return false
         end
     end
@@ -413,11 +419,22 @@ end
 
 local function getBestTargetPart(murdererChar)
     if not murdererChar then return nil end
-    local hrp = murdererChar:FindFirstChild("HumanoidRootPart")
+    
+    local hrp = murdererChar:FindFirstChild("HumanoidRootPart") or murdererChar:FindFirstChild("Torso") or murdererChar:FindFirstChild("UpperTorso")
     local head = murdererChar:FindFirstChild("Head")
-    if hrp and isTargetVisible(hrp) then return hrp
-    elseif head and isTargetVisible(head) then return head end
-    return hrp or head
+    
+    if SheriffConfig.WallCheck then
+        -- 1. Primero intentamos fijar el Torso
+        if hrp and isTargetVisible(hrp) then 
+            return hrp
+        -- 2. Si el torso está tapado por un muro bajo, escaneamos la Cabeza inmediatamente
+        elseif head and isTargetVisible(head) then 
+            return head 
+        end
+        return nil -- Totalmente oculto
+    else
+        return hrp or head
+    end
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -608,7 +625,14 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar) or targetChar:FindFirstChild("HumanoidRootPart") 
+    local bestPart = getBestTargetPart(targetChar)
+
+    -- Si no es visible bajo el wallcheck, ocultamos tracers de impacto para evitar confusiones
+    if not bestPart then
+        PredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
+        return
+    end
+
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
 
@@ -677,7 +701,7 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO INSTANTÁNEO (SIN ESPERAS ASÍNCRONAS - AUTO EQUIP FIX)
+-- ⚡ MOTOR DE DISPARO INSTANTÁNEO (SIN ESPERAS ASÍNCRONAS - EQUIPADO DIRECTO)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -693,16 +717,14 @@ local function fireAtMurdererDirectly()
 
     if gun and murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getBestTargetPart(targetChar) 
+        local bestPart = getBestTargetPart(targetChar) -- Llama al nuevo filtrador multi-hitbox
         
-        if bestPart and isTargetVisible(bestPart) then 
+        if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
                 
-                -- SOLUCIÓN MAESTRA: Si el arma está guardada en la mochila, la equipamos instantáneamente en Luau.
-                -- Forzar la llamada remota de disparo de inmediato sin ceder el hilo (sin wait loops),
-                -- garantiza que el paquete de equipamiento y disparo lleguen juntos en perfecta sincronía.
+                -- Ejecución secuencial inmediata sin tiempos de espera.
                 if gun.Parent ~= char then 
                     humanoid:EquipTool(gun)
                 end
@@ -716,7 +738,7 @@ local function fireAtMurdererDirectly()
                     shootRemote:FireServer(originCFrame, CFrame.new(predictedPos))
                 end
                 
-                task.wait(0.05) -- Cooldown de respuesta interna rápido
+                task.wait(0.05) 
                 isFiringCooldown = false
             end
         end
@@ -781,7 +803,7 @@ DecalTexture.Parent = ShootButton
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.81     
-    local tiempoQuieto = 0.03   
+    local tiempoQuieto = 0.0350   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
