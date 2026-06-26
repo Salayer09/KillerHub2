@@ -1,5 +1,5 @@
 -- ============================================================================
---  ghost KILLER HUB | SHERIFF V8.0.0 ULTRA-PREMIUM [👑 CORE REDESIGNED]
+--  ghost KILLER HUB | SHERIFF V8.1.0 ULTRA-PREMIUM [👑 TOTAL FIX & WALLCHECK]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -244,16 +244,14 @@ local emaDeltaTime = 0.016
 
 local pingHistory = {}
 local maxPingHistorySize = 12
-local cachedPingValue = 0.03 -- Ultra low delay fallback
+local cachedPingValue = 0.03
 
--- MEJORA 1: Ping Exacto de Bajo Nivel sin lag de API
 local function getSmoothedPing()
     local rawPing = 0.03
     local success, server = pcall(function() return NetworkClient.RemoteConnect end)
     if success and server then
         rawPing = server.Ping / 1000
     else
-        -- Fallback seguro optimizado
         local statsNet = game:GetService("Stats"):FindFirstChild("Network")
         if statsNet and statsNet:FindFirstChild("ServerToClientPing") then
             rawPing = statsNet.ServerToClientPing:GetValue() / 1000
@@ -272,7 +270,7 @@ local function getSmoothedPing()
 end
 
 task.spawn(function()
-    while task.wait(0.15) do -- Actualización el doble de rápido para tracking perfecto
+    while task.wait(0.15) do 
         cachedPingValue = getSmoothedPing()
     end
 end)
@@ -282,8 +280,6 @@ local playerDeadStatus = {}
 local currentTarget = nil
 local lastTargetTime = 0
 local isFiringCooldown = false
-local cachedWallInstances = {}
-local lastCacheUpdate = 0
 
 local function parsePlayerData(tabla)
     if type(tabla) == "table" then
@@ -306,8 +302,6 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     RoundStart.OnClientEvent:Connect(function(arg1, arg2)
         table.clear(playerRoles)
         table.clear(playerDeadStatus)
-        table.clear(cachedWallInstances)
-        lastCacheUpdate = 0
         parsePlayerData(arg2)
         parsePlayerData(arg1)
     end)
@@ -378,70 +372,15 @@ local function getMurderer()
     return currentTarget
 end
 
--- -- ============================================================================
--- 🚀 DETECCIÓN DE PAREDES OPTIMIZADA Y CORREGIDA (TOTAL FIX)
+-- ============================================================================
+-- 🚀 MOTOR DE WALL CHECK FIXED (FILTRADO INVERSO TOTAL)
 -- ============================================================================
 local mapCastParams = RaycastParams.new()
-mapCastParams.FilterType = Enum.RaycastFilterType.Include
-
-local function actualizarFiltroParedes()
-    local now = os.clock()
-    if now - lastCacheUpdate < 1.2 and #cachedWallInstances > 0 then
-        return cachedWallInstances
-    end
-    lastCacheUpdate = now
-    
-    local validWalls = {}
-    local posiblesNombres = {"Map", "MapFolder", "CurrentMap", "Stage", "Mundo", "Map_Folder"}
-    local rootMap = nil
-    
-    -- Buscar la carpeta raíz del mapa real
-    for _, nombre in ipairs(posiblesNombres) do
-        local encontrado = workspace:FindFirstChild(nombre)
-        if encontrado then rootMap = encontrado; break end
-    end
-    
-    -- Plan B: Buscar cualquier modelo/carpeta grande que no sea un jugador
-    if not rootMap then
-        for _, obj in ipairs(workspace:GetChildren()) do
-            if (obj:IsA("Folder") or obj:IsA("Model")) 
-            and obj.Name ~= "Players" 
-            and not Players:GetPlayerFromCharacter(obj) 
-            and obj ~= Camera 
-            and obj.Name ~= "Terrain" then
-                rootMap = obj
-                break
-            end
-        end
-    end
-    
-    -- Si encontramos el mapa, indexamos TODO lo que bloquee balas de forma nativa
-    if rootMap then
-        local descendants = rootMap:GetDescendants()
-        for i = 1, #descendants do
-            local desc = descendants[i]
-            -- FIX: Quitamos la restricción estricta de transparencia para que detecte paredes de cristal/transparentes
-            if desc:IsA("BasePart") and desc.CanCollide and desc.Name ~= "HumanoidRootPart" then
-                table.insert(validWalls, desc)
-            end
-        end
-    end
-    
-    -- Si por alguna razón el mapa no se detecta, usamos el contenido general de forma segura
-    if #validWalls == 0 then
-        mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
-        cachedWallInstances = { LocalPlayer.Character, Camera }
-    else
-        mapCastParams.FilterType = Enum.RaycastFilterType.Include
-        cachedWallInstances = validWalls
-    end
-    
-    return cachedWallInstances
-end
+mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
-    if not targetPart or not murdererChar or not murdererChar:FindFirstChild("HumanoidRootPart") or not LocalPlayer.Character then return false end
+    if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
     
     local char = LocalPlayer.Character
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -450,27 +389,21 @@ local function isTargetVisible(targetPart, murdererChar)
     local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
-    -- Actualizar las instancias válidas en los parámetros
-    mapCastParams.FilterDescendantsInstances = actualizarFiltroParedes()
+    local ignoreList = {char, murdererChar, Camera}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Character then table.insert(ignoreList, p.Character) end
+    end
+    mapCastParams.FilterDescendantsInstances = ignoreList
     
-    -- Si el mapa usa el modo Exclude (Fallback), añadimos dinámicamente al Murderer para no colisionar con él mismo
-    if mapCastParams.FilterType == Enum.RaycastFilterType.Exclude then
-        mapCastParams.FilterDescendantsInstances = { char, murdererChar, Camera }
+    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, mapCastParams)
+    if selfWallCheck and selfWallCheck.Instance.CanCollide and selfWallCheck.Instance.Transparency < 0.9 then 
+        return false 
     end
     
-    -- Ejecutar el Raycast desde el origen del disparo hacia la parte del objetivo
-    local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, mapCastParams)
-    
-    if mapCastParams.FilterType == Enum.RaycastFilterType.Include then
-        -- En modo inclusión, si golpea algo de la lista de paredes, la vista está obstruida
-        if pathCheck then
-            return false
-        end
-    else
-        -- En modo exclusión (fallback), si golpea algo que no es del filtro, comprobamos si es una pared real
-        if pathCheck and pathCheck.Instance and pathCheck.Instance.CanCollide and not pathCheck.Instance:IsDescendantOf(murdererChar) then
-            return false
-        end
+    local direction = targetPart.Position - originPos
+    local pathCheck = workspace:Raycast(originPos, direction, mapCastParams)
+    if pathCheck and pathCheck.Instance.CanCollide and pathCheck.Instance.Transparency < 0.9 then
+        return false 
     end
     
     return true
@@ -482,7 +415,7 @@ local function getBestTargetPart(murdererChar)
     local head = murdererChar:FindFirstChild("Head")
     if hrp and isTargetVisible(hrp, murdererChar) then return hrp
     elseif head and isTargetVisible(head, murdererChar) then return head end
-    return hrp or head
+    return nil
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -612,7 +545,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO OPTIMIZADAS (CALCULO EN FÍSICA SEPARADO)
+-- 🌌 LINEAS DE RENDERIZADO OPTIMIZADAS
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -641,7 +574,6 @@ local currentScreenLag = Vector2.new(0,0)
 local currentScreenLead = Vector2.new(0,0)
 local firstFrame = true
 
--- MEJORA 4: Separación de cálculo matemático en Heartbeat para total fluidez
 RunService.Heartbeat:Connect(function(dt)
     lastDeltaTime = dt 
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime)
@@ -673,7 +605,6 @@ RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- Solo proyecciones 2D ligeras en el RenderStepped
 RunService.RenderStepped:Connect(function()
     local gun, _ = getGunLocation()
     local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
@@ -901,7 +832,7 @@ UserInputService.InputChanged:Connect(function(input)
 end)
 
 -- ============================================================================
--- ⚡ MEJORA 3: BINDING / HOOKS POR INTERCEPCIÓN METAMETHOD (ANTI-CHEAT PROOF)
+-- ⚡ MEJORA HOOKS POR INTERCEPCIÓN METAMETHOD (ANTI-CHEAT PROOF)
 -- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
@@ -915,7 +846,6 @@ if ClientServices then
                 local targetChar = murderer.Character
                 local bestPart = getBestTargetPart(targetChar)
                 if bestPart then
-                    -- Estructura delta dinámica adaptada al hook
                     local predictedPos = getPredictedPosition(targetChar, bestPart, 0.012)
                     if predictedPos then 
                         return cframeRequerido and CFrame.new(predictedPos) or predictedPos 
@@ -926,7 +856,6 @@ if ClientServices then
         return originalRet
     end
 
-    -- Usamos hooks nativos indetectables si el executor los soporta, si no, fallback seguro
     if hookfunction or replaceclosure then
         local targetHook = hookfunction or replaceclosure
         pcall(function()
@@ -941,7 +870,6 @@ if ClientServices then
             end)
         end)
     else
-        -- Fallback por si ejecutas en un executor móvil básico
         local oldGetTargetPosition = WeaponService.GetTargetPosition
         local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
         
