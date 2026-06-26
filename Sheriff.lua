@@ -1,5 +1,5 @@
 -- ============================================================================
---  GHOST KILLER HUB | SHERIFF V8.5.0 PREMIUM [SIEMPRE ACTIVO & SIN ERRORES]
+--  GHOST KILLER HUB | SHERIFF V9.0.0 KINETIC SMOOTH [PREDICCIÓN TOTAL +120MS]
 -- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -13,24 +13,23 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 -- 1. PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
--- 2. CONFIGURACIÓN GLOBAL AUTOMÁTICA
+-- 2. CONFIGURACIÓN GLOBAL OPTIMIZADA
 local SheriffConfig = {
     SilentAim = false,
     PredictionMode = "Híbrido Absoluto (Omni)", 
-    HorizontalPred = 0.145, 
-    VerticalPred = 0.035,   
+    HorizontalPred = 0.152, -- Ajustado sutilmente hacia arriba para pings de +120ms
+    VerticalPred = 0.042,   -- Amortiguación vertical mejorada
     WallCheck = true,    
-    CloseRangeZone = 8, 
+    CloseRangeZone = 7, 
     AntiBaiting = true, 
     HitrateEnhancer = true,
     
-    -- Tracers Sincronizados Reales
     PredictTracer = true,      
     ShowPingTracer = false,    
     ShowLagTracer = false,     
     ShowLeadTracer = true,     
     
-    TracerSmoothness = 0.60, 
+    TracerSmoothness = 0.45, -- Más bajo = Más suave y estético el movimiento de la línea
     UseWeaponDetector = false, 
     ShowShootButton = false,
     ButtonSize = 95,
@@ -38,7 +37,7 @@ local SheriffConfig = {
     ButtonLocked = false,
     ButtonX = 0.7, 
     ButtonY = 0.6,
-    LeadTimePred = 0.05 
+    LeadTimePred = 0.06 
 }
 
 local HttpService = game:GetService("HttpService")
@@ -209,7 +208,7 @@ SheriffTab:CreateToggle("LockVoidBtn", "Bloquear Posición del Botón", function
 end)
 
 -- ============================================================================
--- 🧠 MOTOR CINEMÁTICO ADAPTATIVO + MATEMÁTICA REAL DE DISPARO
+-- 🧠 MOTOR CINEMÁTICO ULTRA-SUAVE (DISEÑADO PARA EVITAR DESVÍOS TOSCOS)
 -- ============================================================================
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -227,8 +226,8 @@ local lastTargetChar = nil
 local emaDeltaTime = 0.016 
 
 local pingHistory = {}
-local maxPingHistorySize = 12
-local cachedPingValue = 0.06
+local maxPingHistorySize = 15
+local cachedPingValue = 0.12 -- Inicializado por defecto en un entorno de ping alto
 
 local playerRoles = {}
 local playerDeadStatus = {}
@@ -244,11 +243,12 @@ local function getSmoothedPing(rawPing)
         sum = sum + p
         if p > maxRecentPing then maxRecentPing = p end
     end
-    return ( (sum / #pingHistory) * 0.65 ) + (maxRecentPing * 0.35)
+    -- Filtro de estabilización de red para evitar micro-tirones a +120ms
+    return ( (sum / #pingHistory) * 0.75 ) + (maxRecentPing * 0.25)
 end
 
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.25) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
             cachedPingValue = getSmoothedPing(Stats.Network.ServerToClientPing:GetValue() / 1000)
         end
@@ -337,7 +337,7 @@ local function getMurderer()
 end
 
 -- ============================================================================
--- 🚀 WALL CHECK ESTRICTO (ESTRUCTURAS DELGADAS Y VENTANAS)
+-- 🚀 WALL CHECK ESTRICTO INTELIGENTE
 -- ============================================================================
 local wallCastParams = RaycastParams.new()
 wallCastParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -384,7 +384,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 🧠 MOTOR DE PREDICCIÓN FÍSICA SINCRONIZADA (VÍNCULO AIM + TRACERS)
+-- 🧠 PROCESAMIENTO MATEMÁTICO KINÉTICO (SUAVE, COMPLETO Y ADAPTADO AL PING)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil end
@@ -398,10 +398,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- Control de Zona Muerta (Quemarropa)
     local predictionWeight = 1
     local minZone = SheriffConfig.CloseRangeZone
-    local maxZone = minZone + 15
+    local maxZone = minZone + 12
     if distance <= minZone then
         predictionWeight = 0 
     elseif distance < maxZone and minZone ~= maxZone then
@@ -425,73 +424,72 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- Filtro Anti-Baiting / Amagues
     local baitingFactor = 1
     if dotProduct < 0.65 and SheriffConfig.AntiBaiting then
-        baitingFactor = math.clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
+        baitingFactor = math.clamp((dotProduct + 1) / 2.3, 0.1, 0.5) 
     end
 
-    -- Filtro EMA Avanzado: Estabiliza los vectores evitando saltos bruscos en los Tracers
+    -- FILTRO ULTRA SUAVE INTERPOLADO ELECTRÓNICAMENTE (Adiós movimientos toscos)
     local clampedDT = math.min(activeDT, 0.05) 
-    local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 12.0 or 16.5
-    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.08, 0.88)
+    local responseSpeed = (cachedPingValue > 0.11) and 10.5 or 15.0 -- Amortigua los tirones del rival si vas a +120ms
+    local adaptiveWeight = math.clamp(1 - math.exp(-responseSpeed * clampedDT), 0.05, 0.80)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
-    local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16.705, 0, 1.2)
-    local fpsBuffer = isLowFPS and 0.040 or 0.030
-    local ping = math.clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    local distanceFactor = math.clamp(distance / 22, 0.05, 1.15)
+    local speedFactor = math.clamp(smoothedVelocity.Magnitude / 16.705, 0, 1.25)
+    local ping = math.clamp(cachedPingValue, 0.01, 0.45) + 0.033
+    local distanceFactor = math.clamp(distance / 24, 0.05, 1.10)
     
-    local baseHorizontalMultiplier = (SheriffConfig.HorizontalPred * 1.12) * speedFactor
+    local baseHorizontalMultiplier = (SheriffConfig.HorizontalPred * 1.15) * speedFactor
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math.max(clampedDT, 0.001)
-    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
-    if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.02 or 0.06), rawAcceleration.Z)
+    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.02 end
+    if rawAcceleration.Magnitude > 50 then rawAcceleration = rawAcceleration.Unit * 50 end
+    local stableAcceleration = Vector3.new(rawAcceleration.X, rawAcceleration.Y * 0.03, rawAcceleration.Z)
 
-    -- Tiempos de interpolación vinculados
+    -- Tiempos cinéticos vinculados matemáticamente
     local tTotal = baseHorizontalMultiplier * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
     local tPing  = cachedPingValue * distanceFactor * predictionWeight * baitingFactor
     local tLag   = clampedDT * distanceFactor * predictionWeight * baitingFactor
 
     local finalHorizontal, pingHorizontal, lagHorizontal = Vector3.new(0,0,0), Vector3.new(0,0,0), Vector3.new(0,0,0)
 
-    -- Modos de Procesamiento Balístico Real
+    -- MODOS DE PREDICCIÓN CON FILTRO DE ARRASTRE SUAVE (DRAG FILTER)
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalHorizontal = (smoothedVelocity * tTotal):Lerp(smoothedVelocity * (tTotal * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
-        pingHorizontal = (smoothedVelocity * tPing):Lerp(smoothedVelocity * (tPing * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
-        lagHorizontal = (smoothedVelocity * tLag):Lerp(smoothedVelocity * (tLag * math.clamp(dotProduct, 0.4, 1.0)), 0.3)
+        finalHorizontal = (smoothedVelocity * tTotal):Lerp(smoothedVelocity * (tTotal * math.clamp(dotProduct, 0.5, 1.0)), 0.25)
+        pingHorizontal = (smoothedVelocity * tPing):Lerp(smoothedVelocity * (tPing * math.clamp(dotProduct, 0.5, 1.0)), 0.25)
+        lagHorizontal = (smoothedVelocity * tLag):Lerp(smoothedVelocity * (tLag * math.clamp(dotProduct, 0.5, 1.0)), 0.25)
         
-        if distance >= 13 and dotProduct >= 0.75 then 
-            local extraAcc = 0.5 * stableAcceleration
+        if distance >= 11 and dotProduct >= 0.70 then 
+            local extraAcc = 0.4 * stableAcceleration
             finalHorizontal = finalHorizontal + (extraAcc * (tTotal ^ 2))
             pingHorizontal = pingHorizontal + (extraAcc * (tPing ^ 2))
             lagHorizontal = lagHorizontal + (extraAcc * (tLag ^ 2))
         end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (dotProduct >= 0.75) and (0.5 * stableAcceleration) or Vector3.new(0,0,0)
+        local accCalc = (dotProduct >= 0.70) and (0.4 * stableAcceleration) or Vector3.new(0,0,0)
         finalHorizontal = (smoothedVelocity * tTotal) + (accCalc * (tTotal ^ 2))
         pingHorizontal = (smoothedVelocity * tPing) + (accCalc * (tPing ^ 2))
         lagHorizontal = (smoothedVelocity * tLag) + (accCalc * (tLag ^ 2))
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dH = tTotal * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1)
+        local dH = tTotal * (dotProduct < 0.85 and math.clamp(dotProduct, 0.3, 1.0) or 1)
         finalHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
-        pingHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (tPing * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
-        lagHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (tLag * (dotProduct < 0.85 and math.clamp(dotProduct, 0.2, 1.0) or 1))
+        pingHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (tPing * (dotProduct < 0.85 and math.clamp(dotProduct, 0.3, 1.0) or 1))
+        lagHorizontal = Vector3.new(smoothedVelocity.X, 0, smoothedVelocity.Z) * (tLag * (dotProduct < 0.85 and math.clamp(dotProduct, 0.3, 1.0) or 1))
     end
 
-    local maxHorizontalShift = 4.5
+    local maxHorizontalShift = 4.2
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
     if lagHorizontal.Magnitude > maxHorizontalShift then lagHorizontal = lagHorizontal.Unit * maxHorizontalShift end
 
+    -- COMPENSACIÓN VERTICAL SUAVE DE CAÍDA (Para saltos hiper-limpios)
     local verticalOffset = Vector3.new(0, 0, 0)
     if humanoid.FloorMaterial == Enum.Material.Air or math.abs(smoothedVelocity.Y) > 0.1 then
+        -- Aplicamos un suavizado parabólico para evitar saltos bruscos en el tracer
         local verticalTime = ping * SheriffConfig.VerticalPred * predictionWeight
-        local pY = (smoothedVelocity.Y * verticalTime) - (0.5 * workspace.Gravity * (verticalTime ^ 2))
-        if smoothedVelocity.Y > 1 then
-            pY = pY + (smoothedVelocity.Y * 0.008 * predictionWeight)
+        local pY = (smoothedVelocity.Y * verticalTime) - (0.42 * workspace.Gravity * (verticalTime ^ 2))
+        if smoothedVelocity.Y > 0.5 then
+            pY = pY + (smoothedVelocity.Y * 0.006 * predictionWeight)
         end
         verticalOffset = Vector3.new(0, pY, 0)
     end
@@ -514,7 +512,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 ASIGNACIÓN DE INSTANCIAS DE DIBUJO (TRACERS)
+-- 🌌 ASIGNACIÓN DE INSTANCIAS DE DIBUJO (TRACERS VISUALES)
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = Color3.fromRGB(150, 50, 255) 
@@ -545,7 +543,7 @@ PredictionLine.Visible = false
 table.insert(_G.KillerHubLines, PredictionLine)
 
 -- ============================================================================
--- 🌌 LINEAS DE RENDERIZADO FORZADO (SIEMPRE ACTIVAS EN LOBBY O JUEGO)
+-- 🌌 LINEAS DE RENDERIZADO SIEMPRE ACTIVAS CON ESTABILIZACIÓN KINÉTICA
 -- ============================================================================
 local currentScreenPred = Vector2.new(0,0)
 local currentScreenPing = Vector2.new(0,0)
@@ -586,7 +584,7 @@ RunService.RenderStepped:Connect(function(dt)
         local predictedPos, pingPos, lagPos = getPredictedPosition(targetChar, bestPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
-        -- 1. TRACER DE LAG (VIOLETA) - FORZADO
+        -- 1. TRACER DE LAG (VIOLETA)
         if lagPos and SheriffConfig.ShowLagTracer then
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
@@ -598,7 +596,7 @@ RunService.RenderStepped:Connect(function(dt)
             else LagLine.Visible = false end
         else LagLine.Visible = false end
 
-        -- 2. TRACER DE PING (AZUL) - FORZADO
+        -- 2. TRACER DE PING (AZUL)
         if pingPos and SheriffConfig.ShowPingTracer then
             local screenPos, onScreen = worldToViewport(Camera, pingPos)
             if onScreen then
@@ -613,7 +611,7 @@ RunService.RenderStepped:Connect(function(dt)
         -- 3. TRACER DE LEAD / MANO (VERDE)
         if SheriffConfig.ShowLeadTracer then
             local hand = LocalPlayer.Character and (LocalPlayer.Character:FindFirstChild("RightHand") or LocalPlayer.Character:FindFirstChild("Right Arm"))
-            local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
+            local balancedVelocity = vec3New(smoothedVelocity.X, smoothedVelocity.Y * 0.4, smoothedVelocity.Z)
             local leadPredictedPos = bestPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
             
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
@@ -632,7 +630,7 @@ RunService.RenderStepped:Connect(function(dt)
             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
 
-        -- 4. TRACER DE IMPACTO FINAL (ROJO) - FORZADO
+        -- 4. TRACER DE IMPACTO FINAL (ROJO)
         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
@@ -652,7 +650,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ MOTOR DE DISPARO OPTIMIZADO AUTÓNOMO
+-- ⚡ MOTOR DE DISPARO AUTÓNOMO
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -761,27 +759,27 @@ local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
 DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0)
 DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.44, 0)
+DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0)
 DecalTexture.BackgroundTransparency = 1
 DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
+-- MODIFICACIÓN REALIZADA: Módulo de rebote asimétrico ultra dinámico sin pausas
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local tiempoGiro = 0.8199     
-    local tiempoQuieto = 0.0201   
+    local tiempoGiro = 0.8167     
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
 
     tweenIda.Completed:Connect(function()
-        task.wait(tiempoQuieto)
+        task.wait(0.2) 
         tweenVuelta:Play()
     end)
     tweenVuelta.Completed:Connect(function()
-        task.wait(tiempoQuieto)
+        task.wait(0.2) 
         tweenIda:Play()
     end)
     tweenIda:Play()
