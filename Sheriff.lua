@@ -503,8 +503,8 @@ local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tweenIda = TweenService:Create(decalTexture, TweenInfo.new(0.8167, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, TweenInfo.new(0.8167, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {Rotation = 0})
-    tweenIda.Completed:Connect(function() task.wait(0.02) tweenVuelta:Play() end)
-    tweenVuelta.Completed:Connect(function() task.wait(0.02) tweenIda:Play() end)
+    tweenIda.Completed:Connect(function() task.wait(0.024) tweenVuelta:Play() end)
+    tweenVuelta.Completed:Connect(function() task.wait(0.024) tweenIda:Play() end)
     tweenIda:Play()
 end
 iniciarAnimacionIcono(DecalTexture)
