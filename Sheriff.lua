@@ -686,45 +686,34 @@ local function fireAtMurdererDirectly()
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
-                local wasInBackpack = (parent == LocalPlayer.Backpack) or (gun.Parent ~= char)
-
-                if wasInBackpack then 
+                
+                -- Si el arma está guardada en la mochila, la equipamos instantáneamente
+                if gun.Parent ~= char then 
                     humanoid:EquipTool(gun)
-                    task.spawn(function()
-                        local attempts = 0
-                        while gun.Parent ~= char and attempts < 15 do
-                            task.wait(0.005) 
-                            attempts = attempts + 1
-                        end
-                        
-                        if gun.Parent == char and gun:FindFirstChild("Shoot") then
-                            local originCFrame = hrp.CFrame
-                            if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
-                            gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                        end
+                end
 
-                        if SheriffConfig.AutoUnequip then
-                            task.wait(0.03)
-                            if gun.Parent == char then humanoid:UnequipTools() end
-                        end
-                        isFiringCooldown = false
-                    end)
-                else
-                    if gun.Parent == char and gun:FindFirstChild("Shoot") then
+                -- Enviamos el disparo de inmediato al servidor (BYPASS DE ANIMACIÓN)
+                task.spawn(function()
+                    if gun:FindFirstChild("Shoot") then
                         local originCFrame = hrp.CFrame
-                        if hrp:FindFirstChild("GunRaycastAttachment") then originCFrame = hrp.GunRaycastAttachment.WorldCFrame end
+                        if hrp:FindFirstChild("GunRaycastAttachment") then 
+                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+                        end
+                        -- ¡Pum! Disparo enviado al servidor al mismo tiempo que se equipa
                         gun.Shoot:FireServer(originCFrame, CFrame.new(predictedPos))
-                    end 
+                    end
+
+                    -- Auto-desequipar inteligente si la opción está activa
+                    if SheriffConfig.AutoUnequip then
+                        task.wait(0.05) -- Pequeña espera estética para que se note el tiro
+                        if gun.Parent == char then 
+                            humanoid:UnequipTools() 
+                        end
+                    end
                     
-                    if SheriffConfig.AutoUnequip then 
-                        task.spawn(function()
-                            task.wait(0.03) 
-                            if gun.Parent == char then humanoid:UnequipTools() end
-                        end)
-                    end 
-                    task.wait(0.04)
+                    task.wait(0.05) -- Cooldown interno rápido anti-spam
                     isFiringCooldown = false
-                end 
+                end)
             end
         end
     end
@@ -764,7 +753,7 @@ UiGradient.Rotation = 45; UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"; DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0); DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.45, 0); DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
+DecalTexture.Position = UDim2.new(0.5, 0, 0.44, 0); DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 local function iniciarAnimacionIcono(decalTexture)
