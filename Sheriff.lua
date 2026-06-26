@@ -378,53 +378,70 @@ local function getMurderer()
     return currentTarget
 end
 
--- ============================================================================
--- 🚀 MEJORA 2: DETECCIÓN DE PAREDES DINÁMICA POR PROXIMIDAD (0 LAG)
+-- -- ============================================================================
+-- 🚀 DETECCIÓN DE PAREDES OPTIMIZADA Y CORREGIDA (TOTAL FIX)
 -- ============================================================================
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Include
 
 local function actualizarFiltroParedes()
     local now = os.clock()
-    if now - lastCacheUpdate < 1.5 and #cachedWallInstances > 0 then
+    if now - lastCacheUpdate < 1.2 and #cachedWallInstances > 0 then
         return cachedWallInstances
     end
     lastCacheUpdate = now
     
     local validWalls = {}
-    local posiblesNombres = {"Map", "MapFolder", "CurrentMap", "Stage", "Mundo"}
-    local rootMap = workspace
+    local posiblesNombres = {"Map", "MapFolder", "CurrentMap", "Stage", "Mundo", "Map_Folder"}
+    local rootMap = nil
     
+    -- Buscar la carpeta raíz del mapa real
     for _, nombre in ipairs(posiblesNombres) do
         local encontrado = workspace:FindFirstChild(nombre)
         if encontrado then rootMap = encontrado; break end
     end
     
-    if rootMap == workspace then
+    -- Plan B: Buscar cualquier modelo/carpeta grande que no sea un jugador
+    if not rootMap then
         for _, obj in ipairs(workspace:GetChildren()) do
-            if (obj:IsA("Folder") or obj:IsA("Model")) and obj.Name ~= "Players" and not Players:GetPlayerFromCharacter(obj) and obj ~= Camera then
+            if (obj:IsA("Folder") or obj:IsA("Model")) 
+            and obj.Name ~= "Players" 
+            and not Players:GetPlayerFromCharacter(obj) 
+            and obj ~= Camera 
+            and obj.Name ~= "Terrain" then
                 rootMap = obj
                 break
             end
         end
     end
     
-    -- Filtro Dinámico: Ignorar partes invisibles, transparentes o sin colisión a bajo nivel
-    local descendants = rootMap:GetDescendants()
-    for i = 1, #descendants do
-        local desc = descendants[i]
-        if desc:IsA("BasePart") and desc.CanCollide and desc.Transparency < 0.75 then
-            table.insert(validWalls, desc)
+    -- Si encontramos el mapa, indexamos TODO lo que bloquee balas de forma nativa
+    if rootMap then
+        local descendants = rootMap:GetDescendants()
+        for i = 1, #descendants do
+            local desc = descendants[i]
+            -- FIX: Quitamos la restricción estricta de transparencia para que detecte paredes de cristal/transparentes
+            if desc:IsA("BasePart") and desc.CanCollide and desc.Name ~= "HumanoidRootPart" then
+                table.insert(validWalls, desc)
+            end
         end
     end
     
-    cachedWallInstances = validWalls
-    return validWalls
+    -- Si por alguna razón el mapa no se detecta, usamos el contenido general de forma segura
+    if #validWalls == 0 then
+        mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
+        cachedWallInstances = { LocalPlayer.Character, Camera }
+    else
+        mapCastParams.FilterType = Enum.RaycastFilterType.Include
+        cachedWallInstances = validWalls
+    end
+    
+    return cachedWallInstances
 end
 
 local function isTargetVisible(targetPart, murdererChar)
     if not SheriffConfig.WallCheck then return true end
-    if not targetPart or not murdererChar or not LocalPlayer.Character then return false end
+    if not targetPart or not murdererChar or not murdererChar:FindFirstChild("HumanoidRootPart") or not LocalPlayer.Character then return false end
     
     local char = LocalPlayer.Character
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -433,16 +450,30 @@ local function isTargetVisible(targetPart, murdererChar)
     local gun = char:FindFirstChild("Gun") or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild("Gun"))
     local originPos = (gun and gun:FindFirstChild("Handle")) and gun.Handle.Position or hrp.Position
     
+    -- Actualizar las instancias válidas en los parámetros
     mapCastParams.FilterDescendantsInstances = actualizarFiltroParedes()
-    if #cachedWallInstances == 0 then return true end
     
-    local selfWallCheck = workspace:Raycast(hrp.Position, originPos - hrp.Position, mapCastParams)
-    if selfWallCheck then return false end
+    -- Si el mapa usa el modo Exclude (Fallback), añadimos dinámicamente al Murderer para no colisionar con él mismo
+    if mapCastParams.FilterType == Enum.RaycastFilterType.Exclude then
+        mapCastParams.FilterDescendantsInstances = { char, murdererChar, Camera }
+    end
     
+    -- Ejecutar el Raycast desde el origen del disparo hacia la parte del objetivo
     local pathCheck = workspace:Raycast(originPos, targetPart.Position - originPos, mapCastParams)
-    if not pathCheck then return true end 
     
-    return false
+    if mapCastParams.FilterType == Enum.RaycastFilterType.Include then
+        -- En modo inclusión, si golpea algo de la lista de paredes, la vista está obstruida
+        if pathCheck then
+            return false
+        end
+    else
+        -- En modo exclusión (fallback), si golpea algo que no es del filtro, comprobamos si es una pared real
+        if pathCheck and pathCheck.Instance and pathCheck.Instance.CanCollide and not pathCheck.Instance:IsDescendantOf(murdererChar) then
+            return false
+        end
+    end
+    
+    return true
 end
 
 local function getBestTargetPart(murdererChar)
