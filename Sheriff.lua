@@ -584,19 +584,22 @@ RunService.Heartbeat:Connect(function(dt)
     end
     
     local targetChar = murderer.Character
-    local bestPart = getBestTargetPart(targetChar)
+    -- Usamos el HRP directo para los tracers, así NUNCA se apagan aunque esté detrás de un muro
+    local tracerPart = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Head")
     local localChar = LocalPlayer.Character
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
     
-    if bestPart and localHrp then
-        local distance = (bestPart.Position - localHrp.Position).Magnitude
+    if tracerPart and localHrp then
+        local distance = (tracerPart.Position - localHrp.Position).Magnitude
         local distFactor = math.clamp((distance - 4) / 16, 0, 1)
-        pPos, piPos, lPos = getPredictedPosition(targetChar, bestPart)
+        
+        -- Calculamos la predicción visual basándonos en su posición real (ignora paredes para el dibujo)
+        pPos, piPos, lPos = getPredictedPosition(targetChar, tracerPart)
         
         local hand = localChar and (localChar:FindFirstChild("RightHand") or localChar:FindFirstChild("Right Arm"))
         if hand then
             local balancedVelocity = Vector3.new(smoothedVelocity.X, smoothedVelocity.Y * 0.5, smoothedVelocity.Z)
-            ldPos = bestPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
+            ldPos = tracerPart.Position + (balancedVelocity * SheriffConfig.LeadTimePred * distFactor)
         else
             ldPos = nil
         end
@@ -766,11 +769,11 @@ DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity; DecalTexture.Z
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local infoGiro = TweenInfo.new(0.8109, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local infoGiro = TweenInfo.new(0.8020, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
-    tweenIda.Completed:Connect(function() task.wait(0.0305); tweenVuelta:Play() end)
-    tweenVuelta.Completed:Connect(function() task.wait(0.0305); tweenIda:Play() end)
+    tweenIda.Completed:Connect(function() task.wait(0.0295); tweenVuelta:Play() end)
+    tweenVuelta.Completed:Connect(function() task.wait(0.0295); tweenIda:Play() end)
     tweenIda:Play()
 end
 iniciarAnimacionIcono(DecalTexture)
