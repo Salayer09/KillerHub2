@@ -1,6 +1,6 @@
--- =======================================================================
+-- ============================================================================
 --  GHOST KILLER HUB | SHERIFF V9.6.0 HYBRID FIXED [FAST EQUIPMENT]
--- =======================================================================
+-- ============================================================================
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
         pcall(function() line:Remove() end)
@@ -453,7 +453,7 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 -- ============================================================================
--- ⚡ RETORNO DE MOTOR DE DISPARO ULTRA RÁPIDO DE LA V6.7.2 (FIXED)[span_6](start_span)[span_6](end_span)
+-- ⚡ RETORNO DE MOTOR DE DISPARO ULTRA RÁPIDO DE LA V6.7.2 (FIXED)[
 -- ============================================================================
 local function fireAtMurdererDirectly()
     local char = LocalPlayer.Character
@@ -471,10 +471,10 @@ local function fireAtMurdererDirectly()
         if bestPart then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
-                -- Sistema reactivo ultra rápido heredado de la v6.7.2[span_7](start_span)[span_7](end_span)
+                -- Sistema reactivo ultra rápido heredado de la v6.7.2
                 if parent == LocalPlayer.Backpack then 
                     humanoid:EquipTool(gun) 
-                    RunService.Heartbeat:Wait() -- Solo espera un frame exacto del motor[span_8](start_span)[span_8](end_span)
+                    RunService.Heartbeat:Wait() -- Solo espera un frame exacto del motor
                 end 
                 if gun:FindFirstChild("Shoot") then
                     local originCFrame = hrp.CFrame
