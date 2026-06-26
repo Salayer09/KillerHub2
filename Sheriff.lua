@@ -761,16 +761,16 @@ UiGradient.Rotation = 45; UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"; DecalTexture.Size = UDim2.new(0.38, 0, 0.38, 0); DecalTexture.AnchorPoint = Vector2.new(0.5, 0.5)
-DecalTexture.Position = UDim2.new(0.5, 0, 0.43, 0); DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
+DecalTexture.Position = UDim2.new(0.5, 0, 0.45, 0); DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local infoGiro = TweenInfo.new(0.8199, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local infoGiro = TweenInfo.new(0.8109, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
-    tweenIda.Completed:Connect(function() task.wait(0.0315); tweenVuelta:Play() end)
-    tweenVuelta.Completed:Connect(function() task.wait(0.0315); tweenIda:Play() end)
+    tweenIda.Completed:Connect(function() task.wait(0.0305); tweenVuelta:Play() end)
+    tweenVuelta.Completed:Connect(function() task.wait(0.0305); tweenIda:Play() end)
     tweenIda:Play()
 end
 iniciarAnimacionIcono(DecalTexture)
