@@ -1,5 +1,5 @@
 -- ============================================================================
---  ghost KILLER HUB | SHERIFF V7.5.5 PREMIUM [👑 MOTOR INTEGRAL CORREGIDO]
+--  ghost KILLER HUB | SHERIFF V7.5.6 PREMIUM [👑 MOTOR INTEGRAL CORREGIDO]
 -- ============================================================================
 
 -- Localizaciones para optimización extrema de memoria/rendimiento (Upvalues)
@@ -74,12 +74,12 @@ local SheriffConfig = {
     AntiTargetSwap = true
 }
 
--- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO (ZONA INTERNA LOCAL)
+-- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO MEJORADO (Muestra errores si fallan)
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
 local function saveConfig()
-    pcall(function()
+    local ok, err = pcall(function()
         if writefile then
             local data = {
                 SilentAim = SheriffConfig.SilentAim,
@@ -94,6 +94,7 @@ local function saveConfig()
                 LeadTimePred = SheriffConfig.LeadTimePred,
                 TracerSmoothness = SheriffConfig.TracerSmoothness,
                 UseWeaponDetector = SheriffConfig.UseWeaponDetector,
+                ShowShootButton = SheriffConfig.ShowShootButton,
                 PredictTracer = SheriffConfig.PredictTracer,
                 ShowMinPredictTracer = SheriffConfig.ShowMinPredictTracer,
                 ShowPingTracer = SheriffConfig.ShowPingTracer,
@@ -107,10 +108,11 @@ local function saveConfig()
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
     end)
+    if not ok then warn("⚠️ Error al guardar configuración: " .. tostring(err)) end
 end
 
 local function loadConfig()
-    pcall(function()
+    local ok, err = pcall(function()
         if isfile and isfile(CONFIG_FILE) then
             local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
             if data then
@@ -127,6 +129,7 @@ local function loadConfig()
                 if data.SilentAim ~= nil then SheriffConfig.SilentAim = data.SilentAim end
                 if data.WallCheck ~= nil then SheriffConfig.WallCheck = data.WallCheck end
                 if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
+                if data.ShowShootButton ~= nil then SheriffConfig.ShowShootButton = data.ShowShootButton end
                 if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
                 if data.ShowMinPredictTracer ~= nil then SheriffConfig.ShowMinPredictTracer = data.ShowMinPredictTracer end
                 if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
@@ -138,12 +141,63 @@ local function loadConfig()
             end
         end
     end)
+    if not ok then warn("⚠️ Error al cargar configuración: " .. tostring(err)) end
 end
 
--- Ejecutamos la lectura antes de renderizar los elementos visuales
 loadConfig()
 
--- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (CON ESPECIFICACIÓN DE INICIO FIX)
+-- 🔍 FUNCIÓN MEJORADA: DETECTOR DINÁMICO DE ARMAS (Evita Hardcoding de nombres)
+local function isRangedWeapon(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    -- Si tiene el remote "Shoot" o se llama como un arma común, es un arma válida
+    if tool:FindFirstChild("Shoot") or tool.Name == "Gun" or tool.Name == "Revolver" then
+        return true
+    end
+    return false
+end
+
+local function isMeleeWeapon(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    if tool:FindFirstChild("Stab") or tool.Name == "Knife" then
+        return true
+    end
+    return false
+end
+
+local cachedScreenGui
+local function checkWeaponVisibility()
+    if not cachedScreenGui then return end
+    if not SheriffConfig.ShowShootButton then
+        cachedScreenGui.Enabled = false
+        return
+    end
+    if SheriffConfig.UseWeaponDetector then
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        local char = LocalPlayer.Character
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        local hasGun = false
+        
+        -- Busca dinámicamente cualquier arma de distancia en el personaje
+        if char then
+            for _, item in pairs(char:GetChildren()) do
+                if isRangedWeapon(item) then hasGun = true break end
+            end
+        end
+        -- O en la mochila
+        if not hasGun and backpack then
+            for _, item in pairs(backpack:GetChildren()) do
+                if isRangedWeapon(item) then hasGun = true break end
+            end
+        end
+        
+        cachedScreenGui.Enabled = hasGun
+    else
+        cachedScreenGui.Enabled = true
+    end
+end
+
+-- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 SheriffTab:CreateSection("Ajustes del Silent Aim")
@@ -178,7 +232,6 @@ SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absolut
     saveConfig()
 end)
 
--- 🚀 SOLUCIÓN AL EFECTO ESPEJISMO: Los Sliders ahora inician reflejando el valor exacto del archivo txt
 SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
     saveConfig() 
@@ -228,7 +281,7 @@ SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = I
         SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
     saveConfig()
-end, 40) -- Inicialización estable en base a fluidez intermedia
+end, 40)
 
 SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
@@ -236,13 +289,17 @@ SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)"
 end, math_floor(SheriffConfig.LeadTimePred * 100))
 
 SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
+
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
+    checkWeaponVisibility()
 end)
 
 SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function(estado)
     SheriffConfig.ShowShootButton = estado
+    saveConfig()
+    checkWeaponVisibility()
 end)
 
 SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
@@ -352,21 +409,28 @@ local function autoEquipWeapon()
     local character = LocalPlayer.Character
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if character and character:FindFirstChild("Humanoid") and backpack then
-        local weapon = backpack:FindFirstChild("Knife") or backpack:FindFirstChild("Gun") or backpack:FindFirstChild("Revolver")
-        if weapon then
-            character.Humanoid:EquipTool(weapon)
-            task.wait(0.02) 
+        -- Auto equipa dinámicamente cualquier arma de rango disponible
+        for _, item in pairs(backpack:GetChildren()) do
+            if isRangedWeapon(item) then
+                character.Humanoid:EquipTool(item)
+                task.wait(0.02)
+                break
+            end
         end
     end
 end
 
 local function getGunLocation()
     local char = LocalPlayer.Character
-    if char and (char:FindFirstChild("Gun") or char:FindFirstChild("Revolver")) then
-        return char:FindFirstChild("Gun") or char:FindFirstChild("Revolver"), char
-    elseif LocalPlayer:FindFirstChild("Backpack") then
-        local found = LocalPlayer.Backpack:FindFirstChild("Gun") or LocalPlayer.Backpack:FindFirstChild("Revolver")
-        if found then return found, LocalPlayer.Backpack end
+    if char then
+        for _, item in pairs(char:GetChildren()) do
+            if isRangedWeapon(item) then return item, char end
+        end
+    end
+    if LocalPlayer:FindFirstChild("Backpack") then
+        for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
+            if isRangedWeapon(item) then return item, LocalPlayer.Backpack end
+        end
     end
     return nil, nil
 end
@@ -377,7 +441,13 @@ local function getMurderer()
         local char = currentTarget.Character
         local hum = char:FindFirstChildOfClass("Humanoid")
         local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[name] == true)
-        local hasKnife = char:FindFirstChild("Knife") or (currentTarget:FindFirstChild("Backpack") and currentTarget.Backpack:FindFirstChild("Knife"))
+        
+        local hasKnife = false
+        for _, item in pairs(char:GetChildren()) do if isMeleeWeapon(item) then hasKnife = true break end end
+        if not hasKnife and currentTarget:FindFirstChild("Backpack") then
+            for _, item in pairs(currentTarget.Backpack:GetChildren()) do if isMeleeWeapon(item) then hasKnife = true break end end
+        end
+
         if (playerRoles[name] == "Murderer" or hasKnife) and not isDead then
              return currentTarget
         end
@@ -401,11 +471,15 @@ local function getMurderer()
         if player ~= LocalPlayer and player.Parent ~= nil then
             local name = player.Name
             local char = player.Character
-            if char and char:FindFirstChild("Knife") then 
-                playerRoles[name] = "Murderer"
-                if not ((char:FindFirstChildOfClass("Humanoid") and char:FindFirstChildOfClass("Humanoid").Health <= 0) or (playerDeadStatus[name] == true)) then
-                    potentialMurderer = player
-                    break
+            if char then
+                local hasKnife = false
+                for _, item in pairs(char:GetChildren()) do if isMeleeWeapon(item) then hasKnife = true break end end
+                if hasKnife then
+                    playerRoles[name] = "Murderer"
+                    if not ((char:FindFirstChildOfClass("Humanoid") and char:FindFirstChildOfClass("Humanoid").Health <= 0) or (playerDeadStatus[name] == true)) then
+                        potentialMurderer = player
+                        break
+                    end
                 end
             end
          end
@@ -461,7 +535,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA PROPORCIONAL ANTI-OVERSHOOTING
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA (Límite inteligente de velocidad)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -475,7 +549,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- Eliminación estricta de micro-pasos (Previene vibraciones)
     local currentRawSpeed = rawVelocity.Magnitude
     if currentRawSpeed < 1.2 then
         rawVelocity = vec3New(0, 0, 0)
@@ -498,7 +571,11 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lastTargetChar = targetChar
     end
 
-    if currentRawSpeed > 36 then rawVelocity = rawVelocity.Unit * 36 end
+    -- 🏃‍♂️ MEJORA: El límite de velocidad ahora se adapta al WalkSpeed del enemigo
+    local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 2.2, 45)
+    if currentRawSpeed > maxExpectedSpeed then 
+        rawVelocity = rawVelocity.Unit * maxExpectedSpeed 
+    end
 
     local dotProduct = 1
     if lastRawVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
@@ -521,7 +598,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.88)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
-    -- ESCALADO PROPORCIONAL LINEAL: Sin suelo estático mínimo. Si camina lento, la predicción es nula.
     local currentVelocityMagnitude = smoothedVelocity.Magnitude
     local speedFactor = math_clamp(currentVelocityMagnitude / 16.5, 0, 1.5)
     
@@ -575,7 +651,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
     if lagHorizontal.Magnitude > maxHorizontalShift then lagHorizontal = lagHorizontal.Unit * maxHorizontalShift end
 
-    -- VERTICAL DINÁMICA: Ajustada por tracción
     local verticalOffsetMax = vec3New(0, 0, 0)
     local verticalOffsetMin = vec3New(0, 0, 0)
     local verticalSpeed = math_abs(smoothedVelocity.Y)
@@ -606,7 +681,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
         if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, minPrediction.Z) end
-        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, lagPrediction.Z) end
+        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, minPrediction.Z) end
     end
 
     previousTargetVelocity = smoothedVelocity
@@ -614,7 +689,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 GESTIÓN Y RENDERIZADO DE TRACERS (DEIBUJO EN PANTALLA)
+-- 🌌 GESTIÓN Y RENDERIZADO DE TRACERS
 -- ============================================================================
 local LagLine = Drawing.new("Line") 
 LagLine.Color = color3RGB(150, 50, 255) 
@@ -659,13 +734,9 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     lastDeltaTime = dt 
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) 
     
-    local gun, _ = getGunLocation()
-    local hasGun = not SheriffConfig.UseWeaponDetector or (gun ~= nil)
+    checkWeaponVisibility()
+
     local murderer = getMurderer()
-    
-    if cachedScreenGui then 
-        cachedScreenGui.Enabled = SheriffConfig.ShowShootButton and hasGun 
-    end
 
     if not murderer or not murderer.Character then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
@@ -682,7 +753,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local distance = (visualPart.Position - localHrp.Position).Magnitude
         local distFactor = math_clamp((distance - 4) / 16, 0, 1)
         local tSmooth = SheriffConfig.TracerSmoothness
-         
+     
         local predictedPos, minPredictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
@@ -810,7 +881,7 @@ ShootButton.AutoButtonColor = false
 ShootButton.ClipsDescendants = true 
 ShootButton.Parent = VoidGui
 
-local cachedScreenGui = VoidGui
+cachedScreenGui = VoidGui
 local cachedShootButton = ShootButton
 
 local Corner = Instance.new("UICorner")
@@ -852,7 +923,8 @@ DecalTexture.Parent = ShootButton
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.8025     
-    local tiempoQuieto = 0.0289   
+    local tiempoQuieto = 0.0289 
+   
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
@@ -867,6 +939,7 @@ local function iniciarAnimacionIcono(decalTexture)
     end)
     table.insert(_G.KillerHubConnections, cIda)
     table.insert(_G.KillerHubConnections, cVuelta)
+     
     tweenIda:Play()
 end
 
@@ -941,12 +1014,14 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+             startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
 end)
 table.insert(_G.KillerHubConnections, cGlobalInputChanged)
+
+checkWeaponVisibility()
 
 -- ============================================================================
 -- ⚡ INTERCEPCIÓN HOOK DE ARMAS (PASIVO SILENT AIM BALÍSTICO)
