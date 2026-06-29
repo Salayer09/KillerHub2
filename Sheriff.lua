@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.6.1 PREMIUM [💎 EDICIÓN ABSOLUTA - 100% BLINDADO]
+--  KILLER HUB | SHERIFF V7.7.0 PREMIUM [💎 EDICIÓN ABSOLUTA - 100% BLINDADO]
 -- ============================================================================
 
 -- 👑 ENTORNO ROBLOX DE ALTO RENDIMIENTO (Upvalues y Servicios Únicos al Inicio)
@@ -370,7 +370,6 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
--- 🌟 PARCHE DE SEGURIDAD MÁXIMA EN CAMBIO DE RONDA (Elimina datos corruptos)
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     local c = RoundStart.OnClientEvent:Connect(function(arg1, arg2)
@@ -416,14 +415,11 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 🌟 FILTRO ULTRA SEGURO DE VERIFICACIÓN DE LOBBY (Evita falsos targets de la foto)
 local function isInLobby(playerChar)
     if not playerChar then return true end
     local hrp = playerChar:FindFirstChild("HumanoidRootPart")
     if not hrp then return true end
     
-    -- El lobby de MM2 se encuentra comúnmente posicionado en coordenadas específicas (Y muy baja o alta) o aislado
-    -- Además, si no hay un juego activo legítimo, forzamos estado de lobby
     local pos = hrp.Position
     if workspace:FindFirstChild("Lobby") then
         local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -434,7 +430,6 @@ local function isInLobby(playerChar)
     return false
 end
 
--- 👑 FUNCIÓN GETMURDERER TOTALMENTE OPTIMIZADA CON PARCHE DEL LOBBY
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -444,7 +439,6 @@ local function getMurderer()
         
         local sigueSiendoMurderer = (playerRoles[name] == "Murderer")
 
-        -- 🌟 Parche: Si el jugador está en el lobby o murió, se destruye la asignación antigua
         if not isDead and sigueSiendoMurderer and not isInLobby(char) then
             setTarget(MurdererDetectado)
             return MurdererDetectado
@@ -454,7 +448,6 @@ local function getMurderer()
         end
     end
 
-    -- Si estamos esperando en el lobby, no escaneamos de forma agresiva
     if LocalPlayer.Character and isInLobby(LocalPlayer.Character) then
         setTarget(nil)
         return nil
@@ -549,7 +542,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA (PREDICCIÓN V2 EXTREMA)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart or isInLobby(targetChar) then return nil, nil, nil, nil end
@@ -672,6 +665,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local vSpeedScale = math_clamp(verticalSpeed / 50, 0, 1.2)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
+        
+        -- ⭐ FISICA ULTRA AVANZADA: Caída balística por gravedad en el aire
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace.Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace.Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -751,9 +746,24 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 
     local murderer = getMurderer()
 
-    -- 🌟 Si estamos en el lobby o no hay asesino válido, apagamos los tracers de golpe
-    if not murderer or not murderer.Character or isInLobby(murderer.Character) then
-        PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
+    -- 🌟 PARCHE DE SEGURIDAD MÁXIMA: Si no hay asesino válido o no tiene Character, apagamos todo sin crashear
+    if not murderer or not murderer.Character then
+        PredictionLine.Visible = false
+        MinPredictionLine.Visible = false
+        PingLine.Visible = false
+        LagLine.Visible = false
+        LeadLine.Visible = false
+        firstFrame = true
+        return
+    end
+
+    -- 🌟 PARCHE DEL LOBBY: Si el asesino está en el lobby, apagamos los tracers de golpe[span_0](start_span)[span_0](end_span)
+    if isInLobby(murderer.Character) then
+        PredictionLine.Visible = false
+        MinPredictionLine.Visible = false
+        PingLine.Visible = false
+        LagLine.Visible = false
+        LeadLine.Visible = false
         firstFrame = true
         return
     end
@@ -1039,10 +1049,9 @@ checkWeaponVisibility()
 
 -- ============================================================================
 -- ⚡ INTERCEPCIÓN HOOK DE ARMAS (PASIVO SILENT AIM BALÍSTICO) - MODALIDAD SEGURA
--- ===========================================================================
+-- ============================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
-    -- Intentamos cargar el servicio de forma segura para evitar crasheos fatales
     local success, WeaponService = pcall(function()
         return require(ClientServices:WaitForChild("WeaponService"))
     end)
@@ -1061,7 +1070,6 @@ if ClientServices then
             local gun, _ = getGunLocation()
             if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
                 local murderer = getMurderer()
-                -- 🌟 PARCHE APLICADO: Validamos que NO esté en el lobby para no bugearse como en la foto
                 if murderer and murderer.Character and not isInLobby(murderer.Character) then
                     local targetChar = murderer.Character
                     local bestPart = getSmartTargetPart(targetChar)
@@ -1076,7 +1084,6 @@ if ClientServices then
             return nil
         end
 
-        -- Sobrescribir funciones de MM2 de forma segura
         WeaponService.GetTargetPosition = function(self, ...)
             local prediction = checkAndPredict(false) 
             return prediction or oldGetTargetPosition(self, ...)
