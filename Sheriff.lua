@@ -1,8 +1,17 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.5.6 PREMIUM [👑 MOTOR INTEGRAL CORREGIDO + MEMORIA CACHÉ]
+--  KILLER HUB | SHERIFF V7.6.0 PREMIUM [💎 EDICIÓN ABSOLUTA - 100% AUDITADO]
 -- ============================================================================
 
--- Localizaciones para optimización extrema de memoria/rendimiento (Upvalues)
+-- 👑 ENTORNO ROBLOX DE ALTO RENDIMIENTO (Upvalues y Servicios Únicos al Inicio)
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService") 
+local Stats = game:GetService("Stats") 
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
 local math_clamp = math.clamp
 local math_min = math.min
 local math_max = math.max
@@ -43,7 +52,6 @@ if not success or not KillerHubLib then
     return
 end
 local KillerHub = KillerHubLib
-local Killer = KillerHubLib
 
 -- 3. CONFIGURACIÓN PREDETERMINADA
 local SheriffConfig = {
@@ -61,7 +69,7 @@ local SheriffConfig = {
     ShowMinPredictTracer = true, 
     ShowPingTracer = false,    
     ShowLagTracer = false,     
-    ShowLeadTracer = true,     
+    ShowLeadTracer = true,    
     TracerSmoothness = 0.60, 
     UseWeaponDetector = false, 
     ShowShootButton = false,
@@ -70,16 +78,15 @@ local SheriffConfig = {
     ButtonLocked = false,
     ButtonX = 0.7, 
     ButtonY = 0.6,
-    LeadTimePred = 0.05,
-    AntiTargetSwap = false -- Desactivado por defecto gracias al nuevo sistema de caché inteligente
+    LeadTimePred = 0.05
 }
 
--- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO MEJORADO (Muestra errores si fallan)
+-- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
 local function saveConfig()
-    local ok, err = pcall(function()
+    pcall(function()
         if writefile then
             local data = {
                 SilentAim = SheriffConfig.SilentAim,
@@ -102,17 +109,15 @@ local function saveConfig()
                 ShowLeadTracer = SheriffConfig.ShowLeadTracer,
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
                 AntiBaiting = SheriffConfig.AntiBaiting,
-                HitrateEnhancer = SheriffConfig.HitrateEnhancer,
-                AntiTargetSwap = SheriffConfig.AntiTargetSwap
+                HitrateEnhancer = SheriffConfig.HitrateEnhancer
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
     end)
-    if not ok then warn("⚠️ Error al guardar configuración: " .. tostring(err)) end
 end
 
 local function loadConfig()
-    local ok, err = pcall(function()
+    pcall(function()
         if isfile and isfile(CONFIG_FILE) then
             local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
             if data then
@@ -137,16 +142,14 @@ local function loadConfig()
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
                 if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
-                if data.AntiTargetSwap ~= nil then SheriffConfig.AntiTargetSwap = data.AntiTargetSwap end
             end
         end
     end)
-    if not ok then warn("⚠️ Error al cargar configuración: " .. tostring(err)) end
 end
 
 loadConfig()
 
--- 🔍 FUNCIÓN MEJORADA: DETECTOR DINÁMICO DE ARMAS (Evita Hardcoding de nombres)
+-- 🔍 DETECTOR DINÁMICO DE ARMAS
 local function isRangedWeapon(tool)
     if not tool or not tool:IsA("Tool") then return false end
     if tool:FindFirstChild("Shoot") or tool.Name == "Gun" or tool.Name == "Revolver" then
@@ -164,6 +167,8 @@ local function isMeleeWeapon(tool)
 end
 
 local cachedScreenGui
+local cachedShootButton
+
 local function checkWeaponVisibility()
     if not cachedScreenGui then return end
     if not SheriffConfig.ShowShootButton then
@@ -171,8 +176,6 @@ local function checkWeaponVisibility()
         return
     end
     if SheriffConfig.UseWeaponDetector then
-        local Players = game:GetService("Players")
-        local LocalPlayer = Players.LocalPlayer
         local char = LocalPlayer.Character
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         local hasGun = false
@@ -201,11 +204,6 @@ SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
     SheriffConfig.SilentAim = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateToggle("AntiTargetSwapToggle", "Evitar Cambio Brusco de Objetivos", function(estado)
-    SheriffConfig.AntiTargetSwap = estado
     saveConfig()
 end)
 
@@ -310,18 +308,8 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
 end, SheriffConfig.ButtonSize)
 
 -- ============================================================================
--- 🧠 ENTREGAS ENTORNO ROBLOX Y RECOLECCIÓN DE PING EN SEGUNDO PLANO
+-- 🧠 HISTORIAL DE DATOS Y ENLACES DE RED
 -- ============================================================================
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService") 
-local Stats = game:GetService("Stats") 
-local Camera = workspace.CurrentCamera
-local UserInputService = game:GetService("UserInputService")
-
--- VARIABLE DE MEMORIA INTELIGENTE (CACHÉ PROPUSTA)
 local MurdererDetectado = nil
 
 local previousTargetVelocity = vec3New(0,0,0) 
@@ -339,8 +327,6 @@ local playerRoles = {}
 local playerDeadStatus = {}
 
 local currentTarget = nil
-local lastTargetSwitchTime = 0
-local TARGET_SWAP_DEBOUNCE = 0.3 
 local isFiringCooldown = false
 
 local function getSmoothedPing(rawPing)
@@ -363,15 +349,8 @@ task.spawn(function()
     end
 end)
 
-function Killer:SetTarget(newTarget)
-    local now = os.clock()
-    if SheriffConfig.AntiTargetSwap and currentTarget and currentTarget ~= newTarget then
-        if now - lastTargetSwitchTime < TARGET_SWAP_DEBOUNCE then
-             return 
-        end
-    end
+local function setTarget(newTarget)
     currentTarget = newTarget
-    lastTargetSwitchTime = now
 end
 
 local function parsePlayerData(tabla)
@@ -396,7 +375,7 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     local c = RoundStart.OnClientEvent:Connect(function(arg1, arg2)
         table.clear(playerRoles)
         table.clear(playerDeadStatus)
-        MurdererDetectado = nil -- ¡Limpieza de la memoria inteligente al iniciar nueva ronda!
+        MurdererDetectado = nil 
         parsePlayerData(arg2)
         parsePlayerData(arg1)
     end)
@@ -435,39 +414,38 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 NUEVA FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE DE ALTO RENDIMIENTO
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
-    -- PASO 1: Si ya memorizamos al Murderer en esta ronda, ir directo a él sin buscar más (Consumo CPU = 0)
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
         local char = MurdererDetectado.Character
         local hum = char:FindFirstChildOfClass("Humanoid")
         local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[name] == true)
         
-        if not isDead then
-            Killer:SetTarget(MurdererDetectado)
+        local sigueSiendoMurderer = (playerRoles[name] == "Murderer")
+
+        if not isDead and sigueSiendoMurderer then
+            setTarget(MurdererDetectado)
             return MurdererDetectado
         else
-            MurdererDetectado = nil -- Si murió, limpiamos la memoria
+            MurdererDetectado = nil 
         end
     end
 
-    -- PASO 2: Si la memoria está vacía, usamos el Plan A (PlayerDataChanged)
     for name, role in pairs(playerRoles) do
         if role == "Murderer" then
             local pl = Players:FindFirstChild(name)
             if pl and pl.Character and pl ~= LocalPlayer then
                 local hum = pl.Character:FindFirstChildOfClass("Humanoid")
                 if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) then
-                    MurdererDetectado = pl -- ¡Fijado y Memorizado!
-                    Killer:SetTarget(pl)
+                    MurdererDetectado = pl 
+                    setTarget(pl)
                     return pl
                 end
             end
         end
     end
 
-    -- PASO 3: El "Plan B" (Mochilas). Solo se ejecuta si los pasos anteriores fallaron.
     local potentialMurderer = nil
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Parent ~= nil then
@@ -492,10 +470,10 @@ local function getMurderer()
     end
 
     if potentialMurderer then
-        MurdererDetectado = potentialMurderer -- ¡Fijado y Memorizado para cerrar escaneos!
-        Killer:SetTarget(potentialMurderer)
+        MurdererDetectado = potentialMurderer 
+        setTarget(potentialMurderer)
     else
-        Killer:SetTarget(nil)
+        setTarget(nil)
     end
     return currentTarget
 end
@@ -522,7 +500,7 @@ local function getSmartTargetPart(targetChar)
         local ray = workspace:Raycast(origin, direction, mapCastParams)
         if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.85) then
             return torso
-        end
+       end
     end
     local head = targetChar:FindFirstChild("Head")
     if head then
@@ -536,13 +514,14 @@ local function getSmartTargetPart(targetChar)
 end
 
 local function getFloorHeight(targetHrp, targetChar)
+    if not targetHrp then return nil end
     floorCastParams.FilterDescendantsInstances = {targetChar, LocalPlayer.Character, Camera}
     local ray = workspace:Raycast(targetHrp.Position, vec3New(0, -25, 0), floorCastParams)
     return ray and ray.Position.Y or nil
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA (Límite inteligente de velocidad)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -635,7 +614,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             local extraAcc = 0.5 * stableAcceleration
             finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
             minHorizontal = minHorizontal + (extraAcc * (timeFrameMin ^ 2))
-        end
+         end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
         local accCalc = (dotProduct >= 0.75 and currentVelocityMagnitude > 4) and (0.5 * stableAcceleration) or vec3New(0,0,0)
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
@@ -670,7 +649,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         if smoothedVelocity.Y > 1 then
             pYMax = pYMax + (smoothedVelocity.Y * 0.008 * predictionWeight)
             pYMin = pYMin + (smoothedVelocity.Y * 0.008 * predictionWeight)
-        end
+         end
         verticalOffsetMax = vec3New(0, pYMax, 0)
         verticalOffsetMin = vec3New(0, pYMin, 0)
     end
@@ -767,7 +746,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
+                 currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
                 LagLine.From = screenOrigin
                 LagLine.To = currentScreenLag
                 LagLine.Visible = true
@@ -779,7 +758,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
                 currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
-                PingLine.From = screenOrigin
+                 PingLine.From = screenOrigin
                 PingLine.To = currentScreenPing
                 PingLine.Visible = true
             else PingLine.Visible = false end
@@ -792,26 +771,26 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
             if handOnScreen and targetOnScreen then
-                local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
+                 local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
                 currentScreenLead = (firstFrame or tSmooth == 1) and target2D or currentScreenLead:Lerp(target2D, tSmooth)
                 LeadLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
                 LeadLine.To = currentScreenLead
                 LeadLine.Visible = true
-            else LeadLine.Visible = false end
+             else LeadLine.Visible = false end
         else LeadLine.Visible = false end
 
         if minPredictedPos and SheriffConfig.ShowMinPredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, minPredictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenMinPred = (firstFrame or tSmooth == 1) and target2D or currentScreenMinPred:Lerp(target2D, tSmooth)
+                 currentScreenMinPred = (firstFrame or tSmooth == 1) and target2D or currentScreenMinPred:Lerp(target2D, tSmooth)
                 MinPredictionLine.From = screenOrigin
                 MinPredictionLine.To = currentScreenMinPred
                 MinPredictionLine.Visible = true
             else MinPredictionLine.Visible = false end
         else MinPredictionLine.Visible = false end
 
-        if predictedPos and SheriffConfig.PredictTracer then
+         if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
@@ -850,22 +829,22 @@ local function fireAtMurdererDirectly()
             if predictedPos then
                 isFiringCooldown = true 
                 autoEquipWeapon()
-                local gun, _ = getGunLocation()
+                 local gun, _ = getGunLocation()
                 if gun then
                     local shootRemote = gun:FindFirstChild("Shoot")
                     if shootRemote then
                         local originCFrame = hrp.CFrame
-                        if hrp:FindFirstChild("GunRaycastAttachment") then 
+                         if hrp:FindFirstChild("GunRaycastAttachment") then 
                             originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                         end
-                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
+                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
                 task.wait(0.05) 
                 isFiringCooldown = false
             end
         end
-    end
+     end
 end
 
 -- ============================================================================
@@ -888,7 +867,7 @@ ShootButton.ClipsDescendants = true
 ShootButton.Parent = VoidGui
 
 cachedScreenGui = VoidGui
-local cachedShootButton = ShootButton
+cachedShootButton = ShootButton
 
 local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
@@ -930,7 +909,7 @@ local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
     local tiempoGiro = 0.8025     
     local tiempoQuieto = 0.0289 
-   
+     
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(decalTexture, infoGiro, {Rotation = 0})
@@ -945,7 +924,7 @@ local function iniciarAnimacionIcono(decalTexture)
     end)
     table.insert(_G.KillerHubConnections, cIda)
     table.insert(_G.KillerHubConnections, cVuelta)
-     
+      
     tweenIda:Play()
 end
 
@@ -986,19 +965,19 @@ local cBegan = ShootButton.InputBegan:Connect(function(input)
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-            startPos = ShootButton.Position
+             startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
                     saveConfig()
                     cChanged:Disconnect()
                 end
             end)
         end
-    end
+     end
 end)
 table.insert(_G.KillerHubConnections, cBegan)
 
@@ -1020,7 +999,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-             startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -1054,13 +1033,13 @@ if ClientServices then
                 local bestPart = getSmartTargetPart(targetChar)
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
-                    if predictedPos then 
+                     if predictedPos then 
                         return returnCFrame and cframeNew(predictedPos) or predictedPos 
                     end
                 end
             end
         end
-        return nil
+         return nil
     end
 
     WeaponService.GetTargetPosition = function(self, ...)
@@ -1077,4 +1056,4 @@ end
 -- ============================================================================
 -- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
 -- ============================================================================
-return Killer
+return KillerHub
