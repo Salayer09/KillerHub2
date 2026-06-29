@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.6.0 PREMIUM [💎 EDICIÓN ABSOLUTA - 100% AUDITADO]
+--  KILLER HUB | SHERIFF V7.6.1 PREMIUM [💎 EDICIÓN ABSOLUTA - 100% BLINDADO]
 -- ============================================================================
 
 -- 👑 ENTORNO ROBLOX DE ALTO RENDIMIENTO (Upvalues y Servicios Únicos al Inicio)
@@ -370,12 +370,14 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
+-- 🌟 PARCHE DE SEGURIDAD MÁXIMA EN CAMBIO DE RONDA (Elimina datos corruptos)
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     local c = RoundStart.OnClientEvent:Connect(function(arg1, arg2)
         table.clear(playerRoles)
         table.clear(playerDeadStatus)
         MurdererDetectado = nil 
+        setTarget(nil)
         parsePlayerData(arg2)
         parsePlayerData(arg1)
     end)
@@ -414,7 +416,25 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
+-- 🌟 FILTRO ULTRA SEGURO DE VERIFICACIÓN DE LOBBY (Evita falsos targets de la foto)
+local function isInLobby(playerChar)
+    if not playerChar then return true end
+    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
+    if not hrp then return true end
+    
+    -- El lobby de MM2 se encuentra comúnmente posicionado en coordenadas específicas (Y muy baja o alta) o aislado
+    -- Además, si no hay un juego activo legítimo, forzamos estado de lobby
+    local pos = hrp.Position
+    if workspace:FindFirstChild("Lobby") then
+        local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if localHrp and (localHrp.Position - pos).Magnitude < 140 and not workspace:FindFirstChild("Normal") then
+            return true
+        end
+    end
+    return false
+end
+
+-- 👑 FUNCIÓN GETMURDERER TOTALMENTE OPTIMIZADA CON PARCHE DEL LOBBY
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -424,12 +444,20 @@ local function getMurderer()
         
         local sigueSiendoMurderer = (playerRoles[name] == "Murderer")
 
-        if not isDead and sigueSiendoMurderer then
+        -- 🌟 Parche: Si el jugador está en el lobby o murió, se destruye la asignación antigua
+        if not isDead and sigueSiendoMurderer and not isInLobby(char) then
             setTarget(MurdererDetectado)
             return MurdererDetectado
         else
             MurdererDetectado = nil 
+            setTarget(nil)
         end
+    end
+
+    -- Si estamos esperando en el lobby, no escaneamos de forma agresiva
+    if LocalPlayer.Character and isInLobby(LocalPlayer.Character) then
+        setTarget(nil)
+        return nil
     end
 
     for name, role in pairs(playerRoles) do
@@ -437,7 +465,7 @@ local function getMurderer()
             local pl = Players:FindFirstChild(name)
             if pl and pl.Character and pl ~= LocalPlayer then
                 local hum = pl.Character:FindFirstChildOfClass("Humanoid")
-                if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) then
+                if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) and not isInLobby(pl.Character) then
                     MurdererDetectado = pl 
                     setTarget(pl)
                     return pl
@@ -451,7 +479,7 @@ local function getMurderer()
         if player ~= LocalPlayer and player.Parent ~= nil then
             local name = player.Name
             local char = player.Character
-            if char then
+            if char and not isInLobby(char) then
                 local hasKnife = false
                 for _, item in pairs(char:GetChildren()) do if isMeleeWeapon(item) then hasKnife = true break end end
                 if not hasKnife and player:FindFirstChild("Backpack") then
@@ -482,7 +510,7 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function getSmartTargetPart(targetChar)
-    if not targetChar then return nil end
+    if not targetChar or isInLobby(targetChar) then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
     if not SheriffConfig.WallCheck then return torso end
 
@@ -524,7 +552,7 @@ end
 -- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
-    if not targetChar or not targetPart then return nil, nil, nil, nil end
+    if not targetChar or not targetPart or isInLobby(targetChar) then return nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -723,7 +751,8 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 
     local murderer = getMurderer()
 
-    if not murderer or not murderer.Character then
+    -- 🌟 Si estamos en el lobby o no hay asesino válido, apagamos los tracers de golpe
+    if not murderer or not murderer.Character or isInLobby(murderer.Character) then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
         firstFrame = true
         return
@@ -815,13 +844,13 @@ table.insert(_G.KillerHubConnections, renderConn)
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
     local char = LocalPlayer.Character
-    if not char then return end
+    if not char or isInLobby(char) then return end
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or humanoid.Health <= 0 or not hrp then return end 
 
     local murderer = getMurderer()
-    if murderer and murderer.Character then
+    if murderer and murderer.Character and not isInLobby(murderer.Character) then
         local targetChar = murderer.Character
         local bestPart = getSmartTargetPart(targetChar) 
         if bestPart then 
@@ -1028,7 +1057,7 @@ if ClientServices then
         local gun, _ = getGunLocation()
         if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
             local murderer = getMurderer()
-            if murderer and murderer.Character then
+            if murderer and murderer.Character and not isInLobby(murderer.Character) then
                 local targetChar = murderer.Character
                 local bestPart = getSmartTargetPart(targetChar)
                 if bestPart then
