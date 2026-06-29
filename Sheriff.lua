@@ -1038,47 +1038,58 @@ table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 checkWeaponVisibility()
 
 -- ============================================================================
--- ⚡ INTERCEPCIÓN HOOK DE ARMAS (PASIVO SILENT AIM BALÍSTICO)
--- ============================================================================
+-- ⚡ INTERCEPCIÓN HOOK DE ARMAS (PASIVO SILENT AIM BALÍSTICO) - MODALIDAD SEGURA
+-- ===========================================================================
 local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
 if ClientServices then
-    local WeaponService = require(ClientServices:WaitForChild("WeaponService"))
-    local oldGetTargetPosition = WeaponService.GetTargetPosition
-    local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
+    -- Intentamos cargar el servicio de forma segura para evitar crasheos fatales
+    local success, WeaponService = pcall(function()
+        return require(ClientServices:WaitForChild("WeaponService"))
+    end)
 
-    local lastHookCallTime = os.clock()
+    if success and WeaponService then
+        local oldGetTargetPosition = WeaponService.GetTargetPosition
+        local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
+        local lastHookCallTime = os.clock()
 
-    local function checkAndPredict(returnCFrame)
-        local currentTime = os.clock()
-        local hookDelta = currentTime - lastHookCallTime
-        lastHookCallTime = currentTime
-        local structuralDelta = math_clamp(hookDelta, 0.008, 0.033)
+        local function checkAndPredict(returnCFrame)
+            local currentTime = os.clock()
+            local hookDelta = currentTime - lastHookCallTime
+            lastHookCallTime = currentTime
+            local structuralDelta = math_clamp(hookDelta, 0.008, 0.033)
 
-        local gun, _ = getGunLocation()
-        if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
-            local murderer = getMurderer()
-            if murderer and murderer.Character and not isInLobby(murderer.Character) then
-                local targetChar = murderer.Character
-                local bestPart = getSmartTargetPart(targetChar)
-                if bestPart then
-                    local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
-                     if predictedPos then 
-                        return returnCFrame and cframeNew(predictedPos) or predictedPos 
+            local gun, _ = getGunLocation()
+            if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
+                local murderer = getMurderer()
+                -- 🌟 PARCHE APLICADO: Validamos que NO esté en el lobby para no bugearse como en la foto
+                if murderer and murderer.Character and not isInLobby(murderer.Character) then
+                    local targetChar = murderer.Character
+                    local bestPart = getSmartTargetPart(targetChar)
+                    if bestPart then
+                        local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
+                        if predictedPos then 
+                            return returnCFrame and cframeNew(predictedPos) or predictedPos 
+                        end
                     end
                 end
             end
+            return nil
         end
-         return nil
-    end
 
-    WeaponService.GetTargetPosition = function(self, ...)
-        local prediction = checkAndPredict(false) 
-        return prediction or oldGetTargetPosition(self, ...)
-    end
+        -- Sobrescribir funciones de MM2 de forma segura
+        WeaponService.GetTargetPosition = function(self, ...)
+            local prediction = checkAndPredict(false) 
+            return prediction or oldGetTargetPosition(self, ...)
+        end
 
-    WeaponService.GetMouseTargetCFrame = function(self, ...)
-        local prediction = checkAndPredict(true) 
-        return prediction or oldGetMouseTargetCFrame(self, ...)
+        WeaponService.GetMouseTargetCFrame = function(self, ...)
+            local prediction = checkAndPredict(true) 
+            return prediction or oldGetMouseTargetCFrame(self, ...)
+        end
+        
+        print("✅ KillerHub: Silent Aim Hook aplicado correctamente.")
+    else
+        warn("⚠️ KillerHub: Hook de armas no disponible. El Silent Aim pasivo está desactivado (Entorno restringido).")
     end
 end
 
