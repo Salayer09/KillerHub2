@@ -1,8 +1,7 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.6.2 PREMIUM [💎 EDICIÓN ABSOLUTA - OPTIMIZADA]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
--- 👑 ENTORNO ROBLOX DE ALTO RENDIMIENTO (Upvalues y Servicios Únicos al Inicio)
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,6 +11,7 @@ local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
+-- ⚡ LOCALIZACIÓN DE GLOBALES PARA MÁXIMO RENDIMIENTO (UPVALUES)
 local math_clamp = math.clamp
 local math_min = math.min
 local math_max = math.max
@@ -23,6 +23,14 @@ local vec3New = Vector3.new
 local udim2New = UDim2.new
 local cframeNew = CFrame.new
 local color3RGB = Color3.fromRGB
+local os_clock = os.clock
+
+local workspace = workspace
+local workspace_Gravity = workspace.Gravity
+
+-- Variables vectoriales estáticas para evitar recolección de basura (Garbage Collection)
+local VECTOR_ZERO = vec3New(0, 0, 0)
+local VECTOR_UP = vec3New(0, 1, 0)
 
 -- 1. LIMPIEZA TOTAL DE MEMORIA
 if _G.KillerHubLines then
@@ -53,7 +61,7 @@ if not success or not KillerHubLib then
 end
 local KillerHub = KillerHubLib
 
--- 3. CONFIGURACIÓN PREDETERMINADA
+-- 3. CONFIGURACIÓN PREDETERMINADA OPTIMIZADA
 local SheriffConfig = {
     SilentAim = false,
     PredictionMode = "Híbrido Absoluto (Omni)", 
@@ -312,9 +320,9 @@ end, SheriffConfig.ButtonSize)
 -- ============================================================================
 local MurdererDetectado = nil
 
-local previousTargetVelocity = vec3New(0,0,0) 
-local smoothedVelocity = vec3New(0,0,0)
-local lastRawVelocity = vec3New(0,0,0) 
+local previousTargetVelocity = VECTOR_ZERO 
+local smoothedVelocity = VECTOR_ZERO
+local lastRawVelocity = VECTOR_ZERO 
 local lastTargetChar = nil
 local lastDeltaTime = 0.016
 local emaDeltaTime = 0.016 
@@ -329,16 +337,13 @@ local playerDeadStatus = {}
 local currentTarget = nil
 local isFiringCooldown = false
 
--- 🚀 [MEJORA]: Variables de caché global para optimizar FPS e Input Lag
-local murdererCache = nil
-local lastPredictedPosGlobal = nil
-
 local function getSmoothedPing(rawPing)
     table.insert(pingHistory, rawPing)
     if #pingHistory > maxPingHistorySize then table.remove(pingHistory, 1) end
     local sum = 0
     local maxRecentPing = 0
-    for _, p in pairs(pingHistory) do
+    for i = 1, #pingHistory do
+        local p = pingHistory[i]
         sum = sum + p
         if p > maxRecentPing then maxRecentPing = p end
     end
@@ -374,16 +379,12 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
--- 🌟 PARCHE DE SEGURIDAD MÁXIMA EN CAMBIO DE RONDA (Elimina datos corruptos)
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     local c = RoundStart.OnClientEvent:Connect(function(arg1, arg2)
         table.clear(playerRoles)
         table.clear(playerDeadStatus)
         MurdererDetectado = nil 
-        setTarget(nil)
-        murdererCache = nil
-        lastPredictedPosGlobal = nil
         parsePlayerData(arg2)
         parsePlayerData(arg1)
     end)
@@ -400,7 +401,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.02)
+                task.wait(0.01) -- Reducido para mayor velocidad de reacción
                 break
             end
         end
@@ -414,31 +415,16 @@ local function getGunLocation()
             if isRangedWeapon(item) then return item, char end
         end
     end
-    if LocalPlayer:FindFirstChild("Backpack") then
-        for _, item in pairs(LocalPlayer.Backpack:GetChildren()) do
-            if isRangedWeapon(item) then return item, LocalPlayer.Backpack end
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, item in pairs(bp:GetChildren()) do
+            if isRangedWeapon(item) then return item, bp end
         end
     end
     return nil, nil
 end
 
--- 🌟 FILTRO ULTRA SEGURO DE VERIFICACIÓN DE LOBBY (Evita falsos targets de la foto)
-local function isInLobby(playerChar)
-    if not playerChar then return true end
-    local hrp = playerChar:FindFirstChild("HumanoidRootPart")
-    if not hrp then return true end
-    
-    local pos = hrp.Position
-    if workspace:FindFirstChild("Lobby") then
-        local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if localHrp and (localHrp.Position - pos).Magnitude < 140 and not workspace:FindFirstChild("Normal") then
-            return true
-        end
-    end
-    return false
-end
-
--- 👑 FUNCIÓN GETMURDERER TOTALMENTE OPTIMIZADA CON PARCHE DEL LOBBY
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -448,18 +434,12 @@ local function getMurderer()
         
         local sigueSiendoMurderer = (playerRoles[name] == "Murderer")
 
-        if not isDead and sigueSiendoMurderer and not isInLobby(char) then
+        if not isDead and sigueSiendoMurderer then
             setTarget(MurdererDetectado)
             return MurdererDetectado
         else
             MurdererDetectado = nil 
-            setTarget(nil)
         end
-    end
-
-    if LocalPlayer.Character and isInLobby(LocalPlayer.Character) then
-        setTarget(nil)
-        return nil
     end
 
     for name, role in pairs(playerRoles) do
@@ -467,7 +447,7 @@ local function getMurderer()
             local pl = Players:FindFirstChild(name)
             if pl and pl.Character and pl ~= LocalPlayer then
                 local hum = pl.Character:FindFirstChildOfClass("Humanoid")
-                if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) and not isInLobby(pl.Character) then
+                if not ((hum and hum.Health <= 0) or (playerDeadStatus[name] == true)) then
                     MurdererDetectado = pl 
                     setTarget(pl)
                     return pl
@@ -477,11 +457,13 @@ local function getMurderer()
     end
 
     local potentialMurderer = nil
-    for _, player in pairs(Players:GetPlayers()) do
+    local allPlayers = Players:GetPlayers()
+    for i = 1, #allPlayers do
+        local player = allPlayers[i]
         if player ~= LocalPlayer and player.Parent ~= nil then
             local name = player.Name
             local char = player.Character
-            if char and not isInLobby(char) then
+            if char then
                 local hasKnife = false
                 for _, item in pairs(char:GetChildren()) do if isMeleeWeapon(item) then hasKnife = true break end end
                 if not hasKnife and player:FindFirstChild("Backpack") then
@@ -508,24 +490,20 @@ local function getMurderer()
     return currentTarget
 end
 
--- 🚀 [MEJORA DE RENDIMIENTO]: Throttling de getMurderer fuera del RenderStepped
-task.spawn(function()
-    while task.wait(0.25) do 
-        murdererCache = getMurderer()
-    end
-end)
-
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function getSmartTargetPart(targetChar)
-    if not targetChar or isInLobby(targetChar) then return nil end
+    if not targetChar then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
     if not SheriffConfig.WallCheck then return torso end
 
     local origin = Camera.CFrame.Position
     local ignoreList = {LocalPlayer.Character, Camera}
-    for _, p in pairs(Players:GetPlayers()) do
+    
+    local allPlayers = Players:GetPlayers()
+    for i = 1, #allPlayers do
+        local p = allPlayers[i]
         if p.Character then table.insert(ignoreList, p.Character) end
     end
     if workspace:FindFirstChild("Pets") then table.insert(ignoreList, workspace.Pets) end
@@ -558,10 +536,10 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA DINÁMICA
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
-    if not targetChar or not targetPart or isInLobby(targetChar) then return nil, nil, nil, nil end
+    if not targetChar or not targetPart then return nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
@@ -574,7 +552,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local currentRawSpeed = rawVelocity.Magnitude
     if currentRawSpeed < 1.2 then
-        rawVelocity = vec3New(0, 0, 0)
+        rawVelocity = VECTOR_ZERO
         currentRawSpeed = 0
     end
 
@@ -605,10 +583,11 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
+    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
-            baitingFactor = math_clamp((dotProduct + 1) / 2.5, 0.0, 0.4) 
+            baitingFactor = math_clamp((dotProduct + 1) / 2.5, 0.0, 0.35) 
         else
             baitingFactor = math_clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
         end
@@ -616,57 +595,69 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 12.0 or 16.5
-    local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.88)
+    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
+    local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
     local currentVelocityMagnitude = smoothedVelocity.Magnitude
     local speedFactor = math_clamp(currentVelocityMagnitude / 16.5, 0, 1.5)
     
-    local fpsBuffer = isLowFPS and 0.040 or 0.030
+    local fpsBuffer = isLowFPS and 0.035 or 0.025
     local ping = math_clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    
-    -- 🚀 [MEJORA HITSCAN]: El revólver es hitscan, quitamos el multiplicador lineal de distancia para evitar "Overshoot" a rangos lejanos.
-    local distanceFactor = 1 
+    local distanceFactor = math_clamp(distance / 22, 0.05, 1.15)
     
     local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
     local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
-    if dotProduct < 0.5 then rawAcceleration = rawAcceleration * 0.05 end
-    if rawAcceleration.Magnitude > 60 then rawAcceleration = rawAcceleration.Unit * 60 end
-    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.02 or 0.06), rawAcceleration.Z)
+    
+    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
+    if dotProduct < 0.3 then 
+        rawAcceleration = VECTOR_ZERO 
+    elseif rawAcceleration.Magnitude > 60 then 
+        rawAcceleration = rawAcceleration.Unit * 60 
+    end
+    
+    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.04), rawAcceleration.Z)
 
     local timeFrameTotal = hFactorMax * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
     local timeFrameMin = hFactorMin * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
     local timeFramePingOnly = cachedPingValue * distanceFactor * predictionWeight * baitingFactor
     local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight * baitingFactor
 
-    local finalHorizontal, minHorizontal, pingHorizontal, lagHorizontal = vec3New(0,0,0), vec3New(0,0,0), vec3New(0,0,0), vec3New(0,0,0)
+    local finalHorizontal = VECTOR_ZERO
+    local minHorizontal = VECTOR_ZERO
+    local pingHorizontal = VECTOR_ZERO
+    local lagHorizontal = VECTOR_ZERO
+
+    local dotClamp = math_clamp(dotProduct, 0.4, 1.0)
 
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * math_clamp(dotProduct, 0.4, 1.0)), 0.3)
-        minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * math_clamp(dotProduct, 0.4, 1.0)), 0.3)
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * math_clamp(dotProduct, 0.4, 1.0)), 0.3)
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * math_clamp(dotProduct, 0.4, 1.0)), 0.3)
+        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.3)
+        minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.3)
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.3)
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.3)
         if distance >= 13 and dotProduct >= 0.75 and currentVelocityMagnitude > 4 then 
             local extraAcc = 0.5 * stableAcceleration
-            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
+            local tfTotalSq = timeFrameTotal ^ 2
+            finalHorizontal = finalHorizontal + (extraAcc * tfTotalSq)
             minHorizontal = minHorizontal + (extraAcc * (timeFrameMin ^ 2))
          end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (dotProduct >= 0.75 and currentVelocityMagnitude > 4) and (0.5 * stableAcceleration) or vec3New(0,0,0)
+        local accCalc = (dotProduct >= 0.75 and currentVelocityMagnitude > 4) and (0.5 * stableAcceleration) or VECTOR_ZERO
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
         minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
         pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dH = timeFrameTotal * (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
-        local dHMin = timeFrameMin * (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
-        finalHorizontal = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * dH
-        minHorizontal = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * dHMin
-        pingHorizontal = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFramePingOnly * (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1))
-        lagHorizontal = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * (timeFrameLagOnly * (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1))
+        local dMod = (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
+        local dH = timeFrameTotal * dMod
+        local dHMin = timeFrameMin * dMod
+        local flatVel = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z)
+        finalHorizontal = flatVel * dH
+        minHorizontal = flatVel * dHMin
+        pingHorizontal = flatVel * (timeFramePingOnly * dMod)
+        lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
     local maxHorizontalShift = 3.8
@@ -675,19 +666,22 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
     if lagHorizontal.Magnitude > maxHorizontalShift then lagHorizontal = lagHorizontal.Unit * maxHorizontalShift end
 
-    local verticalOffsetMax = vec3New(0, 0, 0)
-    local verticalOffsetMin = vec3New(0, 0, 0)
+    local verticalOffsetMax = VECTOR_ZERO
+    local verticalOffsetMin = VECTOR_ZERO
     local verticalSpeed = math_abs(smoothedVelocity.Y)
     
     if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.4 then
         local vSpeedScale = math_clamp(verticalSpeed / 50, 0, 1.2)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
-        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace.Gravity * (finalVFactorMax ^ 2))
-        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace.Gravity * (finalVFactorMin ^ 2))
+        
+        -- Optimización de la llamada constante a Gravity usando el cache superior
+        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
+        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
-            pYMax = pYMax + (smoothedVelocity.Y * 0.008 * predictionWeight)
-            pYMin = pYMin + (smoothedVelocity.Y * 0.008 * predictionWeight)
+            local jumpBonus = smoothedVelocity.Y * 0.008 * predictionWeight
+            pYMax = pYMax + jumpBonus
+            pYMin = pYMin + jumpBonus
          end
         verticalOffsetMax = vec3New(0, pYMax, 0)
         verticalOffsetMin = vec3New(0, pYMin, 0)
@@ -760,12 +754,10 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     
     checkWeaponVisibility()
 
-    -- 🚀 [MEJORA]: Lee de la caché optimizada en lugar de ejecutar escaneos for
-    local murderer = murdererCache
+    local murderer = getMurderer()
 
-    if not murderer or not murderer.Character or isInLobby(murderer.Character) then
+    if not murderer or not murderer.Character then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        lastPredictedPosGlobal = nil
         firstFrame = true
         return
     end
@@ -781,10 +773,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local tSmooth = SheriffConfig.TracerSmoothness
      
         local predictedPos, minPredictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
-        
-        -- 🚀 [MEJORA CACHÉ]: Guardamos la posición predicha del frame para usarla en el botón instantáneamente
-        lastPredictedPosGlobal = predictedPos
-        
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
         if lagPos and SheriffConfig.ShowLagTracer then
@@ -849,7 +837,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         firstFrame = false
     else
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
-        lastPredictedPosGlobal = nil
         firstFrame = true
     end 
 end)
@@ -859,29 +846,38 @@ table.insert(_G.KillerHubConnections, renderConn)
 -- ⚡ EJECUCIÓN MANUAL DISPARO DISPARADOR (BOTÓN)
 -- ============================================================================
 local function fireAtMurdererDirectly()
-    -- 🚀 [MEJORA ABSOLUTA DE AIM]: Disparo instantáneo usando la predicción exacta calculada por el renderizador. Sin delay de hardware.
-    if isFiringCooldown or not lastPredictedPosGlobal then return end 
+    if isFiringCooldown then return end 
     local char = LocalPlayer.Character
-    if not char or isInLobby(char) then return end
+    if not char then return end
     local humanoid = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or humanoid.Health <= 0 or not hrp then return end 
 
-    isFiringCooldown = true 
-    autoEquipWeapon()
-    local gun, _ = getGunLocation()
-    if gun then
-        local shootRemote = gun:FindFirstChild("Shoot")
-        if shootRemote then
-            local originCFrame = hrp.CFrame
-            if hrp:FindFirstChild("GunRaycastAttachment") then 
-                originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+    local murderer = getMurderer()
+    if murderer and murderer.Character then
+        local targetChar = murderer.Character
+        local bestPart = getSmartTargetPart(targetChar) 
+        if bestPart then 
+            local predictedPos = getPredictedPosition(targetChar, bestPart)
+            if predictedPos then
+                isFiringCooldown = true 
+                autoEquipWeapon()
+                local gun, _ = getGunLocation()
+                if gun then
+                    local shootRemote = gun:FindFirstChild("Shoot")
+                    if shootRemote then
+                        local originCFrame = hrp.CFrame
+                        if hrp:FindFirstChild("GunRaycastAttachment") then 
+                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+                        end
+                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
+                    end
+                end
+                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
+                isFiringCooldown = false
             end
-            shootRemote:FireServer(originCFrame, cframeNew(lastPredictedPosGlobal))
         end
-    end
-    task.wait(0.05) 
-    isFiringCooldown = false
+     end
 end
 
 -- ============================================================================
@@ -1046,56 +1042,78 @@ table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 checkWeaponVisibility()
 
 -- ============================================================================
--- ⚡ INTERCEPCIÓN HOOK DE ARMAS (PASIVO SILENT AIM BALÍSTICO) - MODALIDAD SEGURA
--- ===========================================================================
-local ClientServices = ReplicatedStorage:WaitForChild("ClientServices", 5)
+-- ⚡ INTERCEPCIÓN HOOK DE ARMAS (SISTEMA ADAPTATIVO MODDED RECURSIVO)
+-- ============================================================================
+local WeaponService = nil
+
+-- Intentar obtener por ruta estructural clásica
+local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
-    local success, WeaponService = pcall(function()
-        return require(ClientServices:WaitForChild("WeaponService"))
-    end)
+    local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
+    if ws and ws:IsA("ModuleScript") then
+        pcall(function() WeaponService = require(ws) end)
+    end
+end
 
-    if success and WeaponService then
-        local oldGetTargetPosition = WeaponService.GetTargetPosition
-        local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
-        local lastHookCallTime = os.clock()
+-- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
+if not WeaponService then
+    local descendants = ReplicatedStorage:GetDescendants()
+    for i = 1, #descendants do
+        local obj = descendants[i]
+        if obj:IsA("ModuleScript") then
+            local success, mod = pcall(require, obj)
+            if success and type(mod) == "table" and (mod.GetTargetPosition or mod.GetMouseTargetCFrame) then
+                WeaponService = mod
+                break
+            end
+        end
+    end
+end
 
-        local function checkAndPredict(returnCFrame)
-            local currentTime = os.clock()
-            local hookDelta = currentTime - lastHookCallTime
-            lastHookCallTime = currentTime
-            local structuralDelta = math_clamp(hookDelta, 0.008, 0.033)
+-- Inyección y redirección balística pasiva
+if WeaponService then
+    local oldGetTargetPosition = WeaponService.GetTargetPosition
+    local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
+    local lastHookCallTime = os_clock()
 
-            local gun, _ = getGunLocation()
-            if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
-                local murderer = murdererCache
-                if murderer and murderer.Character and not isInLobby(murderer.Character) then
-                    local targetChar = murderer.Character
-                    local bestPart = getSmartTargetPart(targetChar)
-                    if bestPart then
-                        local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
-                        if predictedPos then 
-                            return returnCFrame and cframeNew(predictedPos) or predictedPos 
-                        end
+    local function checkAndPredict(returnCFrame)
+        local currentTime = os_clock()
+        local hookDelta = currentTime - lastHookCallTime
+        lastHookCallTime = currentTime
+        local structuralDelta = math_clamp(hookDelta, 0.008, 0.033)
+
+        local gun, _ = getGunLocation()
+        if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
+            local murderer = getMurderer()
+            if murderer and murderer.Character then
+                local targetChar = murderer.Character
+                local bestPart = getSmartTargetPart(targetChar)
+                if bestPart then
+                    local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
+                     if predictedPos then 
+                        return returnCFrame and cframeNew(predictedPos) or predictedPos 
                     end
                 end
             end
-            return nil
         end
+        return nil
+    end
 
+    if oldGetTargetPosition then
         WeaponService.GetTargetPosition = function(self, ...)
             local prediction = checkAndPredict(false) 
             return prediction or oldGetTargetPosition(self, ...)
         end
+    end
 
+    if oldGetMouseTargetCFrame then
         WeaponService.GetMouseTargetCFrame = function(self, ...)
             local prediction = checkAndPredict(true) 
             return prediction or oldGetMouseTargetCFrame(self, ...)
         end
-        
-        print("✅ KillerHub: Silent Aim Hook aplicado correctamente.")
-    else
-        warn("⚠️ KillerHub: Hook de armas no disponible. El Silent Aim pasivo está desactivado (Entorno restringido).")
     end
+else
+    warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
 -- ============================================================================
