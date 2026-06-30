@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
+--  KILLER HUB | SHERIFF V7.7.1 [⚡ FIXED ERROR SPAM & BUTTON RESPONSE]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -401,7 +401,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01) -- Reducido para mayor velocidad de reacción
+                task.wait(0.01)
                 break
             end
         end
@@ -424,7 +424,6 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -536,7 +535,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (CORREGIDO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -583,7 +582,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -595,7 +593,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
+    local responseSpeed = isLowFPS and 14.0 or 18.5 
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -611,7 +609,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
-    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -675,7 +672,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
-        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -687,6 +683,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         verticalOffsetMin = vec3New(0, pYMin, 0)
     end
 
+    -- ⚡ CORREGIDO: Se cambiaron los índices erróneos que causaban el crash index nil 'X'
     local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffsetMax
     local minPrediction = targetPosition + vec3New(minHorizontal.X, 0, minHorizontal.Z) + verticalOffsetMin
     local pingPrediction = targetPosition + vec3New(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffsetMax
@@ -698,8 +695,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
         if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
-        if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, minPrediction.Z) end
-        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, minPrediction.Z) end
+        if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, pingPrediction.Z) end
+        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, lagPrediction.Z) end
     end
 
     previousTargetVelocity = smoothedVelocity
@@ -873,7 +870,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
+                task.wait(0.04) 
                 isFiringCooldown = false
             end
         end
@@ -1046,7 +1043,6 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
--- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1055,7 +1051,6 @@ if ClientServices then
     end
 end
 
--- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1070,7 +1065,6 @@ if not WeaponService then
     end
 end
 
--- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1116,7 +1110,4 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
--- ============================================================================
--- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
--- ============================================================================
 return KillerHub
