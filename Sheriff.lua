@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ COMPATIBLE V3.1 PAOLO EDIT]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -50,19 +50,16 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 2. ENLACE CON LIBRERÍA V3.1 (Llamada global o externa segura)
-local KillerHub = getgenv().Killer
-if not KillerHub then
-    local success, KillerHubLib = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
-    end)
-    if success and KillerHubLib then
-        KillerHub = KillerHubLib
-    else
-        warn("⚠️ KillerHub Crítico: No se detectó la interfaz V3.1 cargada.")
-        return
-    end
+-- 2. CARGA SEGURA DE LIBRERÍA EXTERNA
+local success, KillerHubLib = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
+end)
+
+if not success or not KillerHubLib then
+    warn("⚠️ KillerHub Crítico: No se pudo cargar la interfaz de GitHub.")
+    return
 end
+local KillerHub = KillerHubLib
 
 -- 3. CONFIGURACIÓN PREDETERMINADA OPTIMIZADA
 local SheriffConfig = {
@@ -208,14 +205,11 @@ local function checkWeaponVisibility()
     end
 end
 
--- ============================================================================
--- 🎨 CONSTRUCCIÓN DE INTERFAZ GRÁFICA (ADAPTADA A REGLAS V3.1)
--- ============================================================================
-local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747383845")
+-- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA
+local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
--- Formato V3.1 Toggle: (FlagName, Texto, Callback)
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
     SheriffConfig.SilentAim = estado
     saveConfig()
@@ -236,79 +230,66 @@ SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)"
     saveConfig()
 end)
 
--- Formato V3.1 Dropdown: (FlagName, Texto, Opciones, Callback)
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
 
--- Formato V3.1 Slider: (FlagName, Texto, Mínimo, Máximo, Paso, Callback)
-SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, 1, function(valor)
+SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
     saveConfig() 
-end)
+end, math_floor(SheriffConfig.HorizontalPredMin * 1000))
 
-SheriffTab:CreateSlider("HorizontalPredMaxSlider", "Predicción Horizontal MÁXIMA", 0, 300, 1, function(valor)
+SheriffTab:CreateSlider("HorizontalPredMaxSlider", "Predicción Horizontal MÁXIMA", 0, 300, function(valor)
     SheriffConfig.HorizontalPredMax = valor / 1000 
     saveConfig() 
-end)
+end, math_floor(SheriffConfig.HorizontalPredMax * 1000))
 
-SheriffTab:CreateSlider("VerticalPredMinSlider", "Predicción Vertical MÍNIMA", 0, 90, 1, function(valor)
+SheriffTab:CreateSlider("VerticalPredMinSlider", "Predicción Vertical MÍNIMA", 0, 90, function(valor)
     SheriffConfig.VerticalPredMin = valor / 1000
     saveConfig() 
-end)
+end, math_floor(SheriffConfig.VerticalPredMin * 1000))
 
-SheriffTab:CreateSlider("VerticalPredMaxSlider", "Predicción Vertical MÁXIMA", 0, 120, 1, function(valor)
+SheriffTab:CreateSlider("VerticalPredMaxSlider", "Predicción Vertical MÁXIMA", 0, 120, function(valor)
     SheriffConfig.VerticalPredMax = valor / 1000
     saveConfig() 
-end)
+end, math_floor(SheriffConfig.VerticalPredMax * 1000))
 
-SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, 1, function(valor)
+SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, function(valor)
     SheriffConfig.CloseRangeZone = valor
     saveConfig()
-end)
+end, SheriffConfig.CloseRangeZone)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
 
--- Adaptado a Toggles individuales nativos compatibles para control preciso de renderizado en la V3.1
-SheriffTab:CreateToggle("TracerImpactoFinal", "Impacto Final (Rojo)", function(estado)
-    SheriffConfig.PredictTracer = estado
+SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", {
+    "Impacto Final (Rojo)", 
+    "Predicción Mínima (Amarillo)",
+    "Ping (Azul)", 
+    "Lag (Violeta)", 
+    "Lead (Verde)"
+}, function(tablaFlags)
+    SheriffConfig.PredictTracer = tablaFlags["Impacto Final (Rojo)"]
+    SheriffConfig.ShowMinPredictTracer = tablaFlags["Predicción Mínima (Amarillo)"]
+    SheriffConfig.ShowPingTracer = tablaFlags["Ping (Azul)"]
+    SheriffConfig.ShowLagTracer = tablaFlags["Lag (Violeta)"]
+    SheriffConfig.ShowLeadTracer = tablaFlags["Lead (Verde)"]
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("TracerPredMinima", "Predicción Mínima (Amarillo)", function(estado)
-    SheriffConfig.ShowMinPredictTracer = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateToggle("TracerPing", "Ping (Azul)", function(estado)
-    SheriffConfig.ShowPingTracer = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateToggle("TracerLag", "Lag (Violeta)", function(estado)
-    SheriffConfig.ShowLagTracer = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateToggle("TracerLead", "Lead (Verde)", function(estado)
-    SheriffConfig.ShowLeadTracer = estado
-    saveConfig()
-end)
-
-SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, 1, function(valor)
+SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, function(valor)
     if valor == 1 then
         SheriffConfig.TracerSmoothness = 1 
     else
         SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
     saveConfig()
-end)
+end, 40)
 
-SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, 1, function(valor)
+SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
     saveConfig()
-end)
+end, math_floor(SheriffConfig.LeadTimePred * 100))
 
 SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 
@@ -324,7 +305,7 @@ SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function
     checkWeaponVisibility()
 end)
 
-SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, 1, function(valor)
+SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
@@ -332,7 +313,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, 1,
             cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
         end
     end
-end)
+end, SheriffConfig.ButtonSize)
 
 -- ============================================================================
 -- 🧠 HISTORIAL DE DATOS Y ENLACES DE RED
@@ -420,7 +401,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01)
+                task.wait(0.01) -- Reducido para mayor velocidad de reacción
                 break
             end
         end
@@ -443,6 +424,7 @@ local function getGunLocation()
     return nil, nil
 end
 
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -554,7 +536,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA 
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -601,6 +583,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
+    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -612,7 +595,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 
+    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -628,6 +611,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
+    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -691,6 +675,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
+        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -888,7 +873,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) 
+                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
                 isFiringCooldown = false
             end
         end
@@ -1061,6 +1046,7 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
+-- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1069,6 +1055,7 @@ if ClientServices then
     end
 end
 
+-- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1083,6 +1070,7 @@ if not WeaponService then
     end
 end
 
+-- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1125,7 +1113,10 @@ if WeaponService then
         end
     end
 else
-    warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas.")
+    warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
+-- ============================================================================
+-- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
+-- ============================================================================
 return KillerHub
