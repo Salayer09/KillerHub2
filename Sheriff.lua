@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.1 [⚡ FIXED ERROR SPAM & BUTTON RESPONSE]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -206,63 +206,66 @@ local function checkWeaponVisibility()
 end
 
 -- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA
-local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
+local SheriffTab = KillerHub:MakeTab({
+    Name = "Sheriff",
+    Icon = "rbxassetid://10747373142"
+})
 
-SheriffTab:CreateSection("Ajustes del Silent Aim")
+SheriffTab:AddSection("Ajustes del Silent Aim")
 
-SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
+SheriffTab:AddToggle("Activar Silent Aim Pasivo", SheriffConfig.SilentAim, function(estado)
     SheriffConfig.SilentAim = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
+SheriffTab:AddToggle("Optimizar Balística Predictiva", SheriffConfig.HitrateEnhancer, function(estado)
     SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
+SheriffTab:AddToggle("Verificar Paredes (Wall Check Inteligente)", SheriffConfig.WallCheck, function(estado)
     SheriffConfig.WallCheck = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", function(estado)
+SheriffTab:AddToggle("Filtro Anti-Amague (Anti-Baiting)", SheriffConfig.AntiBaiting, function(estado)
     SheriffConfig.AntiBaiting = estado
     saveConfig()
 end)
 
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
+SheriffTab:AddDropdown("Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, function(valor)
+SheriffTab:AddSlider("Predicción Horizontal MÍNIMA", 0, 250, math_floor(SheriffConfig.HorizontalPredMin * 1000), function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
     saveConfig() 
-end, math_floor(SheriffConfig.HorizontalPredMin * 1000))
+end)
 
-SheriffTab:CreateSlider("HorizontalPredMaxSlider", "Predicción Horizontal MÁXIMA", 0, 300, function(valor)
+SheriffTab:AddSlider("Predicción Horizontal MÁXIMA", 0, 300, math_floor(SheriffConfig.HorizontalPredMax * 1000), function(valor)
     SheriffConfig.HorizontalPredMax = valor / 1000 
     saveConfig() 
-end, math_floor(SheriffConfig.HorizontalPredMax * 1000))
+end)
 
-SheriffTab:CreateSlider("VerticalPredMinSlider", "Predicción Vertical MÍNIMA", 0, 90, function(valor)
+SheriffTab:AddSlider("Predicción Vertical MÍNIMA", 0, 90, math_floor(SheriffConfig.VerticalPredMin * 1000), function(valor)
     SheriffConfig.VerticalPredMin = valor / 1000
     saveConfig() 
-end, math_floor(SheriffConfig.VerticalPredMin * 1000))
+end)
 
-SheriffTab:CreateSlider("VerticalPredMaxSlider", "Predicción Vertical MÁXIMA", 0, 120, function(valor)
+SheriffTab:AddSlider("Predicción Vertical MÁXIMA", 0, 120, math_floor(SheriffConfig.VerticalPredMax * 1000), function(valor)
     SheriffConfig.VerticalPredMax = valor / 1000
     saveConfig() 
-end, math_floor(SheriffConfig.VerticalPredMax * 1000))
+end)
 
-SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, function(valor)
+SheriffTab:AddSlider("Zona Muerta Quemarropa (Studs)", 0, 20, SheriffConfig.CloseRangeZone, function(valor)
     SheriffConfig.CloseRangeZone = valor
     saveConfig()
-end, SheriffConfig.CloseRangeZone)
+end)
 
-SheriffTab:CreateSection("Líneas de Trayectoria")
+SheriffTab:AddSection("Líneas de Trayectoria")
 
-SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", {
+SheriffTab:AddMultiDropdown("Seleccionar Tracers Activos:", {
     "Impacto Final (Rojo)", 
     "Predicción Mínima (Amarillo)",
     "Ping (Azul)", 
@@ -277,35 +280,35 @@ SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", 
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, function(valor)
+SheriffTab:AddSlider("Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, 40, function(valor)
     if valor == 1 then
         SheriffConfig.TracerSmoothness = 1 
     else
         SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
     saveConfig()
-end, 40)
+end)
 
-SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
+SheriffTab:AddSlider("Anticipación de la Mano (Lead Time)", 0, 100, math_floor(SheriffConfig.LeadTimePred * 100), function(valor)
     SheriffConfig.LeadTimePred = valor / 100
     saveConfig()
-end, math_floor(SheriffConfig.LeadTimePred * 100))
+end)
 
-SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
+SheriffTab:AddSection("Ajustes de Interfaz / Tácticas")
 
-SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
+SheriffTab:AddToggle("Ocultar Botón si no tengo Arma en Inventario", SheriffConfig.UseWeaponDetector, function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
     checkWeaponVisibility()
 end)
 
-SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function(estado)
+SheriffTab:AddToggle("Mostrar Botón en Pantalla", SheriffConfig.ShowShootButton, function(estado)
     SheriffConfig.ShowShootButton = estado
     saveConfig()
     checkWeaponVisibility()
 end)
 
-SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
+SheriffTab:AddSlider("Tamaño del Botón Sheriff", 50, 200, SheriffConfig.ButtonSize, function(valor)
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
@@ -313,7 +316,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
             cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
         end
     end
-end, SheriffConfig.ButtonSize)
+end)
 
 -- ============================================================================
 -- 🧠 HISTORIAL DE DATOS Y ENLACES DE RED
@@ -401,7 +404,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01)
+                task.wait(0.01) -- Reducido para mayor velocidad de reacción
                 break
             end
         end
@@ -424,6 +427,7 @@ local function getGunLocation()
     return nil, nil
 end
 
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -535,7 +539,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (CORREGIDO)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -582,6 +586,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
+    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -593,7 +598,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 
+    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -609,6 +614,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
+    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -672,8 +678,10 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
+        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
+    
         if smoothedVelocity.Y > 1 then
             local jumpBonus = smoothedVelocity.Y * 0.008 * predictionWeight
             pYMax = pYMax + jumpBonus
@@ -683,7 +691,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         verticalOffsetMin = vec3New(0, pYMin, 0)
     end
 
-    -- ⚡ CORREGIDO: Se cambiaron los índices erróneos que causaban el crash index nil 'X'
     local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffsetMax
     local minPrediction = targetPosition + vec3New(minHorizontal.X, 0, minHorizontal.Z) + verticalOffsetMin
     local pingPrediction = targetPosition + vec3New(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffsetMax
@@ -695,8 +702,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
         if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
-        if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, pingPrediction.Z) end
-        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, lagPrediction.Z) end
+        if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, minPrediction.Z) end
+        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, minPrediction.Z) end
     end
 
     previousTargetVelocity = smoothedVelocity
@@ -776,7 +783,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local screenPos, onScreen = worldToViewport(Camera, lagPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                 currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
+                currentScreenLag = (firstFrame or tSmooth == 1) and target2D or currentScreenLag:Lerp(target2D, tSmooth)
                 LagLine.From = screenOrigin
                 LagLine.To = currentScreenLag
                 LagLine.Visible = true
@@ -788,7 +795,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
                 currentScreenPing = (firstFrame or tSmooth == 1) and target2D or currentScreenPing:Lerp(target2D, tSmooth)
-                 PingLine.From = screenOrigin
+                PingLine.From = screenOrigin
                 PingLine.To = currentScreenPing
                 PingLine.Visible = true
             else PingLine.Visible = false end
@@ -801,26 +808,26 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local handScreenPos, handOnScreen = worldToViewport(Camera, hand.Position)
             local targetScreenPos, targetOnScreen = worldToViewport(Camera, leadPredictedPos)
             if handOnScreen and targetOnScreen then
-                 local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
+                local target2D = vec2New(targetScreenPos.X, targetScreenPos.Y)
                 currentScreenLead = (firstFrame or tSmooth == 1) and target2D or currentScreenLead:Lerp(target2D, tSmooth)
                 LeadLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
                 LeadLine.To = currentScreenLead
                 LeadLine.Visible = true
-             else LeadLine.Visible = false end
+            else LeadLine.Visible = false end
         else LeadLine.Visible = false end
 
         if minPredictedPos and SheriffConfig.ShowMinPredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, minPredictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                 currentScreenMinPred = (firstFrame or tSmooth == 1) and target2D or currentScreenMinPred:Lerp(target2D, tSmooth)
+                currentScreenMinPred = (firstFrame or tSmooth == 1) and target2D or currentScreenMinPred:Lerp(target2D, tSmooth)
                 MinPredictionLine.From = screenOrigin
                 MinPredictionLine.To = currentScreenMinPred
                 MinPredictionLine.Visible = true
             else MinPredictionLine.Visible = false end
         else MinPredictionLine.Visible = false end
 
-         if predictedPos and SheriffConfig.PredictTracer then
+        if predictedPos and SheriffConfig.PredictTracer then
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
@@ -870,10 +877,10 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) 
+                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
                 isFiringCooldown = false
             end
-        end
+         end
      end
 end
 
@@ -995,13 +1002,13 @@ local cBegan = ShootButton.InputBegan:Connect(function(input)
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-             startPos = ShootButton.Position
+            startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
                     saveConfig()
                     cChanged:Disconnect()
                 end
@@ -1029,7 +1036,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -1043,6 +1050,7 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
+-- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1051,6 +1059,7 @@ if ClientServices then
     end
 end
 
+-- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1065,6 +1074,7 @@ if not WeaponService then
     end
 end
 
+-- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1084,7 +1094,7 @@ if WeaponService then
                 local bestPart = getSmartTargetPart(targetChar)
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
-                     if predictedPos then 
+                    if predictedPos then 
                         return returnCFrame and cframeNew(predictedPos) or predictedPos 
                     end
                 end
@@ -1110,4 +1120,7 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
+-- ============================================================================
+-- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
+-- ============================================================================
 return KillerHub
