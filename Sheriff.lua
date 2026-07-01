@@ -309,9 +309,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
-        if cachedShootButton:FindFirstChild("UICorner") then 
-            cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
-        end
+        -- Las esquinas se adaptan de forma completamente automática ahora mediante Scale
     end
 end, SheriffConfig.ButtonSize)
 
@@ -379,6 +377,7 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, c)
 end
 
+-- Optimización de la detección del Timer Clásico del Round
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     local c = RoundStart.OnClientEvent:Connect(function(arg1, arg2)
@@ -401,7 +400,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01) -- Reducido para mayor velocidad de reacción
+                task.wait(0.01) 
                 break
             end
         end
@@ -536,7 +535,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (OPTIMIZADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -583,7 +582,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -595,7 +593,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
+    
+    -- MEJORA: Respuesta adaptativa acelerada en base al cambio de dirección para evitar desfases repentinos
+    local responseSpeed = (dotProduct < 0.5) and 24.0 or (isLowFPS and 14.0 or 18.5)
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -611,7 +611,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
-    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -675,11 +674,11 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
-        -- Optimización de la llamada constante a Gravity usando el cache superior
-        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
-        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
+        -- MEJORA: Mitigación de sobreelevación en saltos calculando parábolas suavizadas
+        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.4 * workspace_Gravity * (finalVFactorMax ^ 2))
+        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.4 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
-            local jumpBonus = smoothedVelocity.Y * 0.008 * predictionWeight
+            local jumpBonus = smoothedVelocity.Y * 0.006 * predictionWeight
             pYMax = pYMax + jumpBonus
             pYMin = pYMin + jumpBonus
          end
@@ -873,7 +872,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
+                task.wait(0.04) 
                 isFiringCooldown = false
             end
         end
@@ -881,7 +880,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT CONFIGURACIÓN ADAPTATIVA)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -896,14 +895,15 @@ ShootButton.BackgroundColor3 = color3RGB(15, 6, 26)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true 
+ShootButton.ClipsDescendants = true -- Fuerza el recorte absoluto del destello
 ShootButton.Parent = VoidGui
 
 cachedScreenGui = VoidGui
 cachedShootButton = ShootButton
 
+-- SOLUCIÓN PERFECTA DEL GLOW: Se usa SCALE (0.28) para que el redondeado sea nativo y proporcional al tamaño
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
+Corner.CornerRadius = UDim.new(0.28, 0)
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -915,7 +915,7 @@ GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = Corner.CornerRadius
+GlowCorner.CornerRadius = UDim.new(0.28, 0) -- Scale idéntico para evitar desbordamiento cuadrado
 GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
@@ -1046,7 +1046,6 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
--- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1055,7 +1054,6 @@ if ClientServices then
     end
 end
 
--- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1070,7 +1068,6 @@ if not WeaponService then
     end
 end
 
--- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1119,4 +1116,5 @@ end
 -- ============================================================================
 -- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
 -- ============================================================================
-return KillerHub
+local Killer = KillerHub
+return Killer
