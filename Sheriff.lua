@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
+--  KILLER HUB | SHERIFF V8.0.0 ULTRA-PREMIUM [⚡ API CORREGIDA & GLOW PURPLE ONLY]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -50,7 +50,7 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 2. CARGA SEGURA DE LIBRERÍA EXTERNA (Se mantiene intacto sin cambiar el loadstring)
+-- 2. CARGA SEGURA DE LIBRERÍA EXTERNA
 local success, KillerHubLib = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 end)
@@ -60,6 +60,11 @@ if not success or not KillerHubLib then
     return
 end
 local KillerHub = KillerHubLib
+
+-- ACTIVAR AUTOGUARDADO NATIVO DE LA NUEVA API
+pcall(function()
+    KillerHub:EnableAutosave("KillerHub_SheriffSuite.json")
+end)
 
 -- 3. CONFIGURACIÓN PREDETERMINADA OPTIMIZADA
 local SheriffConfig = {
@@ -89,7 +94,7 @@ local SheriffConfig = {
     LeadTimePred = 0.05
 }
 
--- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO
+-- 4. SISTEMA DE ARCHIVOS EXTERNO (RESPALDO CO-EXISTENTE)
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
@@ -205,41 +210,36 @@ local function checkWeaponVisibility()
     end
 end
 
--- ============================================================================
--- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (ACTUALIZADO A LA NUEVA API V2.6)
--- ============================================================================
+-- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (ACTUALIZADA A NUEVA API)
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
--- Se añade la Flag del componente y su estado booleano por defecto según la nueva API
-SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", SheriffConfig.SilentAim, function(estado)
+SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", false, function(estado)
     SheriffConfig.SilentAim = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", SheriffConfig.HitrateEnhancer, function(estado)
+SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", false, function(estado)
     SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", SheriffConfig.WallCheck, function(estado)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", false, function(estado)
     SheriffConfig.WallCheck = estado
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", SheriffConfig.AntiBaiting, function(estado)
+SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", false, function(estado)
     SheriffConfig.AntiBaiting = estado
     saveConfig()
 end)
 
--- Se reestructura el Dropdown añadiendo la opción por defecto requerida por la API
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, SheriffConfig.PredictionMode, function(seleccionado)
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, "Híbrido Absoluto (Omni)", function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
 
--- Se reestructuran los Sliders agregando sus correspondientes valores (Min, Max, Default) de forma obligatoria
 SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, math_floor(SheriffConfig.HorizontalPredMin * 1000), function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
     saveConfig() 
@@ -267,20 +267,18 @@ end)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
 
--- *Nota técnica: Se conserva tu lógica de MultiDropdown nativa adaptándola a la firma de banderas de tu UI base
-SheriffTab:CreateDropdown("ActiveTracers", "Seleccionar Tracers Activos:", {
+SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", {
     "Impacto Final (Rojo)", 
     "Predicción Mínima (Amarillo)",
     "Ping (Azul)", 
     "Lag (Violeta)", 
     "Lead (Verde)"
-}, "Impacto Final (Rojo)", function(seleccionado)
-    -- Lógica adaptada para mantener compatibilidad en cascada
-    if seleccionado == "Impacto Final (Rojo)" then SheriffConfig.PredictTracer = not SheriffConfig.PredictTracer
-    elseif seleccionado == "Predicción Mínima (Amarillo)" then SheriffConfig.ShowMinPredictTracer = not SheriffConfig.ShowMinPredictTracer
-    elseif seleccionado == "Ping (Azul)" then SheriffConfig.ShowPingTracer = not SheriffConfig.ShowPingTracer
-    elseif seleccionado == "Lag (Violeta)" then SheriffConfig.ShowLagTracer = not SheriffConfig.ShowLagTracer
-    elseif seleccionado == "Lead (Verde)" then SheriffConfig.ShowLeadTracer = not SheriffConfig.ShowLeadTracer end
+}, function(tablaFlags)
+    SheriffConfig.PredictTracer = tablaFlags["Impacto Final (Rojo)"]
+    SheriffConfig.ShowMinPredictTracer = tablaFlags["Predicción Mínima (Amarillo)"]
+    SheriffConfig.ShowPingTracer = tablaFlags["Ping (Azul)"]
+    SheriffConfig.ShowLagTracer = tablaFlags["Lag (Violeta)"]
+    SheriffConfig.ShowLeadTracer = tablaFlags["Lead (Verde)"]
     saveConfig()
 end)
 
@@ -300,13 +298,13 @@ end)
 
 SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 
-SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", SheriffConfig.UseWeaponDetector, function(estado)
+SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", false, function(estado)
     SheriffConfig.UseWeaponDetector = estado
     saveConfig()
     checkWeaponVisibility()
 end)
 
-SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", SheriffConfig.ShowShootButton, function(estado)
+SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", false, function(estado)
     SheriffConfig.ShowShootButton = estado
     saveConfig()
     checkWeaponVisibility()
@@ -408,7 +406,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01) 
+                task.wait(0.01)
                 break
             end
         end
@@ -431,7 +429,7 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -543,7 +541,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA 
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO + HIGH HITRATE)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -601,14 +599,14 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 
+    local responseSpeed = isLowFPS and 15.5 or 20.0 -- Respuesta acelerada para máxima adherencia en Hitrate
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
     local currentVelocityMagnitude = smoothedVelocity.Magnitude
     local speedFactor = math_clamp(currentVelocityMagnitude / 16.5, 0, 1.5)
     
-    local fpsBuffer = isLowFPS and 0.035 or 0.025
+    local fpsBuffer = isLowFPS and 0.030 or 0.020 -- Optimizado para mayor fluidez
     local ping = math_clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
     local distanceFactor = math_clamp(distance / 22, 0.05, 1.15)
     
@@ -644,8 +642,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.3)
         if distance >= 13 and dotProduct >= 0.75 and currentVelocityMagnitude > 4 then 
             local extraAcc = 0.5 * stableAcceleration
-            local tfTotalSq = timeFrameTotal ^ 2
-            finalHorizontal = finalHorizontal + (extraAcc * tfTotalSq)
+            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
             minHorizontal = minHorizontal + (extraAcc * (timeFrameMin ^ 2))
          end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
@@ -847,45 +844,7 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ EJECUCIÓN MANUAL DISPARO DISPARADOR (BOTÓN)
--- ============================================================================
-local function fireAtMurdererDirectly()
-    if isFiringCooldown then return end 
-    local char = LocalPlayer.Character
-    if not char then return end
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not humanoid or humanoid.Health <= 0 or not hrp then return end 
-
-    local murderer = getMurderer()
-    if murderer and murderer.Character then
-        local targetChar = murderer.Character
-        local bestPart = getSmartTargetPart(targetChar) 
-        if bestPart then 
-            local predictedPos = getPredictedPosition(targetChar, bestPart)
-            if predictedPos then
-                isFiringCooldown = true 
-                autoEquipWeapon()
-                local gun, _ = getGunLocation()
-                if gun then
-                    local shootRemote = gun:FindFirstChild("Shoot")
-                    if shootRemote then
-                        local originCFrame = hrp.CFrame
-                        if hrp:FindFirstChild("GunRaycastAttachment") then 
-                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
-                        end
-                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
-                    end
-                end
-                task.wait(0.04) 
-                isFiringCooldown = false
-            end
-        end
-     end
-end
-
--- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN PREMIUM REFINADO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -941,6 +900,57 @@ DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity
 DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
+
+-- EL GLOW DE ERROR AHORA SIMPLEMENTE LLAMA AL GLOW PREDETERMINADO MORADO
+local function triggerGlowError()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
+    task.delay(0.25, function()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    end)
+end
+
+local function fireAtMurdererDirectly()
+    if isFiringCooldown then return end 
+    local char = LocalPlayer.Character
+    if not char then triggerGlowError() return end
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not humanoid or humanoid.Health <= 0 or not hrp then triggerGlowError() return end 
+
+    local murderer = getMurderer()
+    if murderer and murderer.Character then
+        local targetChar = murderer.Character
+        local bestPart = getSmartTargetPart(targetChar) 
+        if bestPart then 
+            local predictedPos = getPredictedPosition(targetChar, bestPart)
+            if predictedPos then
+                isFiringCooldown = true 
+                autoEquipWeapon()
+                local gun, _ = getGunLocation()
+                if gun then
+                    local shootRemote = gun:FindFirstChild("Shoot")
+                    if shootRemote then
+                        local originCFrame = hrp.CFrame
+                        if hrp:FindFirstChild("GunRaycastAttachment") then 
+                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
+                        end
+                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
+                    end
+                else
+                    triggerGlowError()
+                end
+                task.wait(0.04)
+                isFiringCooldown = false
+            else
+                triggerGlowError()
+            end
+        else
+            triggerGlowError()
+        end
+    else
+        triggerGlowError()
+     end
+end
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
@@ -1002,13 +1012,13 @@ local cBegan = ShootButton.InputBegan:Connect(function(input)
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-             startPos = ShootButton.Position
+            startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
                     saveConfig()
                     cChanged:Disconnect()
                 end
@@ -1036,7 +1046,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -1117,7 +1127,4 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
--- ============================================================================
--- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
--- ============================================================================
 return KillerHub
