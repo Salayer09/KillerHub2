@@ -937,3 +937,4 @@ if WeaponService then
 end
 
 -- [CIERRE ADAPTADO]: Cumple con la regla 4, no contiene ningún return al final.
+return Killerhub
