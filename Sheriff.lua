@@ -918,5 +918,6 @@ end
 -- ============================================================================
 -- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
 -- ============================================================================
-local Killer = KillerHub
-return Killer
+local KillerHub = KillerHubLib
+return KillerHub
+
