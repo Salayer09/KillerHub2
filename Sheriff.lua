@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ OMNISCENTE ADAPTATIVO EDIT]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -23,7 +23,7 @@ local vec3New = Vector3.new
 local udim2New = UDim2.new
 local cframeNew = CFrame.new
 local color3RGB = Color3.fromRGB
-local os_clock = os_clock
+local os_clock = os.clock
 
 local workspace = workspace
 local workspace_Gravity = workspace.Gravity
@@ -64,7 +64,7 @@ local KillerHub = KillerHubLib
 -- 3. CONFIGURACIÓN PREDETERMINADA OPTIMIZADA
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "Omniscente Adaptativo", 
+    PredictionMode = "Híbrido Absoluto (Omni)", 
     HorizontalPredMin = 0.050, 
     HorizontalPredMax = 0.145, 
     VerticalPredMin = 0.010,   
@@ -230,8 +230,7 @@ SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)"
     saveConfig()
 end)
 
--- ⚡ SE AÑADE 'Omniscente Adaptativo' Y SE REMUEVE 'Predictivo Adaptativo'
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Omniscente Adaptativo", "Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)"}, function(seleccionado)
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
@@ -533,7 +532,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MODO OMNISCENTE INTEGRADO)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (AJUSTADO FILTRADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -592,12 +591,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
     
-    -- ⚡ Optimización balística dinámica por HitrateEnhancer
     local responseSpeed = (dotProduct < 0.5) and 24.0 or (isLowFPS and 14.0 or 18.5)
-    if not SheriffConfig.HitrateEnhancer then
-        responseSpeed = 28.0 -- Modo reactivo crudo sin promediado
-    end
-
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -608,22 +602,19 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local ping = math_clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
     local distanceFactor = math_clamp(distance / 22, 0.05, 1.15)
     
-    -- Variables base heredadas de los sliders manuales
-    local currentHMin = SheriffConfig.HorizontalPredMin
-    local currentHMax = SheriffConfig.HorizontalPredMax
-    local currentVMin = SheriffConfig.VerticalPredMin
-    local currentVMax = SheriffConfig.VerticalPredMax
-
-    -- ⚡ CONFIGURACIÓN INTEGRADA DEL COMPORTAMIENTO "OMNISCENTE ADAPTATIVO"
-    if SheriffConfig.PredictionMode == "Omniscente Adaptativo" then
-        currentHMin = 0.062 * speedFactor
-        currentHMax = 0.138 * speedFactor
-        currentVMin = 0.015
-        currentVMax = 0.042
+    -- Configuración dinámica del modo Omnisciente Adaptativo si está activo
+    local hFactorMax, hFactorMin, vFactorMax, vFactorMin
+    if SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
+        hFactorMin = 0.062 * speedFactor
+        hFactorMax = 0.138 * speedFactor
+        vFactorMin = 0.015
+        vFactorMax = 0.042
+    else
+        hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
+        hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
+        vFactorMin = SheriffConfig.VerticalPredMin
+        vFactorMax = SheriffConfig.VerticalPredMax
     end
-
-    local hFactorMax = math_min((currentHMax * 1.12) * speedFactor, currentHMax * 1.5)
-    local hFactorMin = math_min((currentHMin * 1.12) * speedFactor, currentHMin)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
@@ -647,8 +638,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local dotClamp = math_clamp(dotProduct, 0.4, 1.0)
 
-    -- ⚡ SISTEMA DE PREDICCIÓN SELECCIONADO (CON FILTRADO DE COMPONENTES OBSOLETOS)
-    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" or SheriffConfig.PredictionMode == "Omniscente Adaptativo" then
+    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
         finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.3)
         minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.3)
         pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.3)
@@ -665,6 +655,15 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
         pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
+    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
+        local dMod = (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
+        local dH = timeFrameTotal * dMod
+        local dHMin = timeFrameMin * dMod
+        local flatVel = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z)
+        finalHorizontal = flatVel * dH
+        minHorizontal = flatVel * dHMin
+        pingHorizontal = flatVel * (timeFramePingOnly * dMod)
+        lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
     local maxHorizontalShift = 3.8
@@ -679,8 +678,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     
     if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.4 then
         local vSpeedScale = math_clamp(verticalSpeed / 50, 0, 1.2)
-        local finalVFactorMax = math_min(ping * currentVMax * predictionWeight * vSpeedScale, ping * currentVMax * predictionWeight)
-        local finalVFactorMin = math_min(ping * currentVMin * predictionWeight * vSpeedScale, ping * currentVMin * predictionWeight)
+        local finalVFactorMax = math_min(ping * vFactorMax * predictionWeight * vSpeedScale, ping * vFactorMax * predictionWeight)
+        local finalVFactorMin = math_min(ping * vFactorMin * predictionWeight * vSpeedScale, ping * vFactorMin * predictionWeight)
         
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.4 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.4 * workspace_Gravity * (finalVFactorMin ^ 2))
@@ -1122,5 +1121,5 @@ end
 -- ============================================================================
 -- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
 -- ============================================================================
-local KillerHub = KillerHubLib
-return KillerHub
+local Killer = KillerHub
+return Killer
