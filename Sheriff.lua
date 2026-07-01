@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.8.0 ULTRA-PREMIUM [⚡ OMNISCENTE ADAPTATIVO EDIT]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ OMNISCENTE ADAPTATIVO EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -23,7 +23,7 @@ local vec3New = Vector3.new
 local udim2New = UDim2.new
 local cframeNew = CFrame.new
 local color3RGB = Color3.fromRGB
-local os_clock = os.clock
+local os_clock = os_clock
 
 local workspace = workspace
 local workspace_Gravity = workspace.Gravity
@@ -230,8 +230,8 @@ SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)"
     saveConfig()
 end)
 
--- ⚡ ACTUALIZADO: Añadido "Omniscente Adaptativo" a la lista visual
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Omniscente Adaptativo", "Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
+-- ⚡ SE AÑADE 'Omniscente Adaptativo' Y SE REMUEVE 'Predictivo Adaptativo'
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Omniscente Adaptativo", "Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
@@ -310,9 +310,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
-        if cachedShootButton:FindFirstChild("UICorner") then 
-            cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
-        end
     end
 end, SheriffConfig.ButtonSize)
 
@@ -402,7 +399,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01)
+                task.wait(0.01) 
                 break
             end
         end
@@ -595,14 +592,12 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
     
-    -- ⚡ Ajuste dinámico por HitrateEnhancer
-    local responseSpeed = 18.5
-    if SheriffConfig.HitrateEnhancer then
-        responseSpeed = isLowFPS and 14.0 or 20.0
-    else
-        responseSpeed = 28.0 -- Crudo y reactivo sin promediar
+    -- ⚡ Optimización balística dinámica por HitrateEnhancer
+    local responseSpeed = (dotProduct < 0.5) and 24.0 or (isLowFPS and 14.0 or 18.5)
+    if not SheriffConfig.HitrateEnhancer then
+        responseSpeed = 28.0 -- Modo reactivo crudo sin promediado
     end
-    
+
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -613,15 +608,14 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local ping = math_clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
     local distanceFactor = math_clamp(distance / 22, 0.05, 1.15)
     
-    -- Configuración base de factores de escala según el modo activo
+    -- Variables base heredadas de los sliders manuales
     local currentHMin = SheriffConfig.HorizontalPredMin
     local currentHMax = SheriffConfig.HorizontalPredMax
     local currentVMin = SheriffConfig.VerticalPredMin
     local currentVMax = SheriffConfig.VerticalPredMax
 
-    -- ⚡ LÓGICA AUTOMÁTICA DEL MODO OMNISCENTE ADAPTATIVO
+    -- ⚡ CONFIGURACIÓN INTEGRADA DEL COMPORTAMIENTO "OMNISCENTE ADAPTATIVO"
     if SheriffConfig.PredictionMode == "Omniscente Adaptativo" then
-        -- Sobrescribe los sliders manuales con valores balanceados por código
         currentHMin = 0.062 * speedFactor
         currentHMax = 0.138 * speedFactor
         currentVMin = 0.015
@@ -653,6 +647,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local dotClamp = math_clamp(dotProduct, 0.4, 1.0)
 
+    -- ⚡ SISTEMA DE PREDICCIÓN SELECCIONADO (CON FILTRADO DE COMPONENTES OBSOLETOS)
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" or SheriffConfig.PredictionMode == "Omniscente Adaptativo" then
         finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.3)
         minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.3)
@@ -670,15 +665,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
         pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
-    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dMod = (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
-        local dH = timeFrameTotal * dMod
-        local dHMin = timeFrameMin * dMod
-        local flatVel = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z)
-        finalHorizontal = flatVel * dH
-        minHorizontal = flatVel * dHMin
-        pingHorizontal = flatVel * (timeFramePingOnly * dMod)
-        lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
     local maxHorizontalShift = 3.8
@@ -696,10 +682,10 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * currentVMax * predictionWeight * vSpeedScale, ping * currentVMax * predictionWeight)
         local finalVFactorMin = math_min(ping * currentVMin * predictionWeight * vSpeedScale, ping * currentVMin * predictionWeight)
         
-        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
-        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
+        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.4 * workspace_Gravity * (finalVFactorMax ^ 2))
+        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.4 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
-            local jumpBonus = smoothedVelocity.Y * 0.008 * predictionWeight
+            local jumpBonus = smoothedVelocity.Y * 0.006 * predictionWeight
             pYMax = pYMax + jumpBonus
             pYMin = pYMin + jumpBonus
          end
@@ -901,7 +887,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT CONFIGURACIÓN ADAPTATIVA)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -923,7 +909,7 @@ cachedScreenGui = VoidGui
 cachedShootButton = ShootButton
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
+Corner.CornerRadius = UDim.new(0.28, 0)
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -935,7 +921,7 @@ GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = Corner.CornerRadius
+GlowCorner.CornerRadius = UDim.new(0.28, 0) 
 GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
@@ -1062,7 +1048,7 @@ table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 checkWeaponVisibility()
 
 -- ============================================================================
--- ⚡ INTERCEPCIÓN HOOK DE ARMAS (SISTEMA ADAPTATIVO SINCRONIZADO)
+-- ⚡ INTERCEPCIÓN HOOK DE ARMAS (SISTEMA ADAPTATIVO MODDED RECURSIVO)
 -- ============================================================================
 local WeaponService = nil
 
@@ -1134,7 +1120,7 @@ else
 end
 
 -- ============================================================================
--- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA (CORREGIDA PARA CADENA INFINITA)
+-- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
 -- ============================================================================
 local KillerHub = KillerHubLib
 return KillerHub
