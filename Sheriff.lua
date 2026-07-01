@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V8.0.0 (ADAPTADO A NUEVA API)
+--  KILLER HUB | SHERIFF SUITE V8.0.0 (EDICIÓN PRODUCCIÓN - SIN RETURN)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -48,8 +48,8 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 1. CARGAR TU LIBRERÍA (Estructura basada en tu nueva API)
-local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
+-- CARGAR LIBRERÍA BASE (Se asume ya instanciada o cargada globalmente)
+local KillerHub = getgenv().KillerHub or loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 -- CONFIGURACIÓN INTERNA RESIDENTE
 local SheriffConfig = {
@@ -76,11 +76,11 @@ local SheriffConfig = {
     LeadTimePred = 0.05
 }
 
--- 2. CREAR PESTAÑA PRINCIPAL (Uso correcto de CreateTab según tu ejemplo)
+-- CREAR PESTAÑA PRINCIPAL (Uso correcto de CreateTab según tu ejemplo)
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 -- ============================================================================
--- ⚔️ ADAPTACIÓN estricta de componentes bajo las especificaciones de tu API
+-- ⚔️ ELEMENTOS DE PESTAÑA ADAPTADOS A TU API
 -- ============================================================================
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -171,7 +171,7 @@ end, SheriffConfig.ButtonSize)
 
 
 -- ============================================================================
--- ⚙️ LÓGICA INTERNA DE MM2, HITBOXES PEQUEÑAS Y SISTEMA PREDICTIVO COMPLETO
+-- ⚙️ MOTOR BALÍSTICO INTELIGENTE CONTRA MOVIMIENTOS EXTREMOS Y MINI-AVATARES
 -- ============================================================================
 
 local MurdererDetectado = nil
@@ -509,7 +509,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
     local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
 
-    -- CÁLCULO DE ACELERACIÓN INSTANTÁNEA EN EL AIRE
+    -- CÁLCULO DE ACELERACIÓN INSTANTÁNEA EN EL AIRE (AIR-STRAFING)
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
     if humanoid.FloorMaterial == Enum.Material.Air then
@@ -604,7 +604,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     return finalPrediction, minPrediction, pingPrediction, lagPrediction
 end
 
--- CONFIGURACIÓN DE TRACERS VISUALES EN MOTOR RE-RENDEREADO
+-- CONFIGURACIÓN DE TRACERS VISUALES
 local LagLine = Drawing.new("Line"); LagLine.Color = color3RGB(150, 50, 255); LagLine.Thickness = 1.1; table.insert(_G.KillerHubLines, LagLine)
 local PingLine = Drawing.new("Line"); PingLine.Color = color3RGB(0, 100, 255); PingLine.Thickness = 1.1; table.insert(_G.KillerHubLines, PingLine)
 local LeadLine = Drawing.new("Line"); LeadLine.Color = color3RGB(0, 255, 100); LeadLine.Thickness = 1.1; table.insert(_G.KillerHubLines, LeadLine)
@@ -736,7 +736,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- CONSTRUCCIÓN DE INTERFAZ MANUAL RE-INTEGRADA (BOTÓN FLOTANTE)
+-- INTERFAZ DEL BOTÓN FLOTANTE
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false
@@ -870,7 +870,7 @@ table.insert(_G.KillerHubConnections, cDragUpdate)
 checkWeaponVisibility()
 
 -- ============================================================================
--- ⚡ ENLAZADOR / INTERCEPTOR ADAPTATIVO POR METATABLA NATIVA (SILENT AIM)
+-- ⚡ INTERCEPTOR ADAPTATIVO (SILENT AIM)
 -- ============================================================================
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
@@ -936,6 +936,4 @@ if WeaponService then
     end
 end
 
--- RETORNO DIRECTO REQUERIDO POR TU API (Importante para cadenas infinitas en GitHub)
-local Killer = KillerHub
-return Killer
+-- [CIERRE ADAPTADO]: Cumple con la regla 4, no contiene ningún return al final.
