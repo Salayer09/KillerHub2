@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V8.6.0 (FULL RAGE & AUTO-TRIGGER OVERHAUL)
+--  KILLER HUB | SHERIFF SUITE V8.5.0 (ULTRA-PREDICTION OVERHAUL 2026) - RAGE MODE
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -478,11 +478,15 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 local ignoreListCache = {}
 
+-- ============================================================================
+--  [ACTUALIZADO] ACTUALIZACIÓN 1: WALL CHECK DESDE TU CUERPO (100% BLATANT)
+-- ============================================================================
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
     if not SheriffConfig.WallCheck then return torso end
 
+    -- El origen ahora es tu HumanoidRootPart, no la cámara
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local origin = localHrp and localHrp.Position or Camera.CFrame.Position
     
@@ -533,6 +537,9 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- ============================================================================
+--  [ACTUALIZADO] ACTUALIZACIÓN 2: MOTOR BALÍSTICO RAGE - HITRATE ENHANCER AL MÁXIMO
+-- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -567,6 +574,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local fpsBuffer = activeDT > 0.033 and 0.035 or 0.025
     local totalLatency = safePing + fpsBuffer
 
+    -- MEJORA RAGE: Si HitrateEnhancer está activo, ignoramos la zona muerta a quemarropa
     local predictionWeight = 1
     if not SheriffConfig.HitrateEnhancer then
         local minZone = SheriffConfig.CloseRangeZone
@@ -614,6 +622,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
     local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
 
+    -- MEJORA DE MARKETING A REAL: Multiplicador descarado si el optimizador está encendido
     if SheriffConfig.HitrateEnhancer then
         hFactorMax = hFactorMax * 1.25
         totalLatency = totalLatency * 1.1
@@ -670,6 +679,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
+    -- FIX RAGE: Ampliamos el límite máximo de desfase permitido (de 4.0 a 8.0) para atrapar a gente con speedhack
     local maxHorizontalShift = math_clamp(distance * 0.25, 1.5, 8.0)
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
@@ -685,6 +695,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(totalLatency * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(totalLatency * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMin * predictionWeight)
         
+        -- FIX CRÍTICO: Cambiado 0.4 por 0.5 (Física de gravedad exacta de Roblox)
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -753,8 +764,6 @@ local currentScreenLead = vec2New(0,0)
 local firstFrame = true
 
 local worldToViewport = Camera.WorldToViewportPoint
-
-local fireAtMurdererDirectly -- Declaración anticipada
 
 local renderConn = RunService.RenderStepped:Connect(function(dt)
     lastDeltaTime = dt 
@@ -844,13 +853,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
         
-        -- ====================================================================
-        --  [CORREGIDO] MÁXIMO CAOS: AUTO-DISPARO AUTOMÁTICO (TRIGGERBOT RAGE)
-        -- ====================================================================
-        if SheriffConfig.SilentAim then
-            task.spawn(fireAtMurdererDirectly)
-        end
-        
         firstFrame = false
     else
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
@@ -860,9 +862,9 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
---  DISPARO CON ROTACIÓN CFRAME BLATANT PERFECTA
+--  [ACTUALIZADO] ACTUALIZACIÓN 3: DISPARO CON ROTACIÓN CFRAME BLATANT PERFECTA
 -- ============================================================================
-function fireAtMurdererDirectly()
+local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
     local char = LocalPlayer.Character
     if not char then return end
@@ -887,6 +889,7 @@ function fireAtMurdererDirectly()
                         if hrp:FindFirstChild("GunRaycastAttachment") then 
                             originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                         end
+                        -- El CFrame ahora se calcula rotado HACIA la predicción, 100% Blatant
                         shootRemote:FireServer(originCFrame, cframeNew(originCFrame.Position, predictedPos))
                     end
                 end
@@ -1102,16 +1105,7 @@ if WeaponService then
                 if bestPart then
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
                      if predictedPos then 
-                        -- ====================================================
-                        --  [CORREGIDO] DETALLE CRÍTICO: ROTACIÓN DE CFRAME EN HOOK
-                        -- ====================================================
-                        if returnCFrame then
-                            local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            local originPos = localHrp and localHrp.Position or Camera.CFrame.Position
-                            return cframeNew(originPos, predictedPos)
-                        else
-                            return predictedPos 
-                        end
+                        return returnCFrame and cframeNew(predictedPos) or predictedPos 
                     end
                 end
             end
