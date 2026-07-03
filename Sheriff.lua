@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V8.5.1 (ULTRA-PREDICTION OVERHAUL 2026)
+--  KILLER HUB | SHERIFF SUITE V8.5.0 (REAL PERFORMANCE OVERHAUL 2026)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -23,7 +23,7 @@ local vec3New = Vector3.new
 local udim2New = UDim2.new
 local cframeNew = CFrame.new
 local color3RGB = Color3.fromRGB
-local os_clock = os_clock
+local os_clock = os.clock
 
 local workspace = workspace
 local workspace_Gravity = workspace.Gravity
@@ -61,7 +61,7 @@ local KillerHub = KillerHubLib
 
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "Física Inercial Real", 
+    PredictionMode = "Híbrido Absoluto (Omni)", 
     HorizontalPredMin = 0.050, 
     HorizontalPredMax = 0.145, 
     VerticalPredMin = 0.010,   
@@ -69,6 +69,7 @@ local SheriffConfig = {
     WallCheck = true,    
     CloseRangeZone = 8, 
     AntiBaiting = true, 
+    HitrateEnhancer = true,
     PredictTracer = true,      
     ShowMinPredictTracer = true, 
     ShowPingTracer = false,    
@@ -111,7 +112,8 @@ local function saveConfig()
                 ShowLagTracer = SheriffConfig.ShowLagTracer,
                 ShowLeadTracer = SheriffConfig.ShowLeadTracer,
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
-                AntiBaiting = SheriffConfig.AntiBaiting
+                AntiBaiting = SheriffConfig.AntiBaiting,
+                HitrateEnhancer = SheriffConfig.HitrateEnhancer
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
@@ -143,6 +145,7 @@ local function loadConfig()
                 if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
+                if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
             end
         end
     end)
@@ -205,6 +208,11 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     saveConfig()
 end)
 
+SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
+    SheriffConfig.HitrateEnhancer = estado
+    saveConfig()
+end)
+
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
     saveConfig()
@@ -215,7 +223,7 @@ SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)"
     saveConfig()
 end)
 
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Física Inercial Real", "Estricta Lineal"}, function(seleccionado)
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
@@ -408,9 +416,9 @@ local function getMurderer()
         local char = MurdererDetectado.Character
         local hum = char:FindFirstChildOfClass("Humanoid")
         local isDead = (hum and hum.Health <= 0) or (playerDeadStatus[name] == true)
-        local sigueSiendoMurderer = (playerRoles[name] == "Murderer")
+        local sigueBeingMurderer = (playerRoles[name] == "Murderer")
 
-        if not isDead and sigueSiendoMurderer then
+        if not isDead and sigueBeingMurderer then
             setTarget(MurdererDetectado)
             return MurdererDetectado
         else
@@ -468,7 +476,7 @@ end
 
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
-local ignoreListCache = {} 
+local ignoreListCache = {}
 
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
@@ -533,7 +541,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
---  MOTOR BALÍSTICO OPTIMIZADO (ANTI-OVERPREDICTION A QUEMARROPA)
+--  MOTOR BALÍSTICO OPTIMIZADO (SIN MARKETING, MATEMÁTICA PURA RESILIENTE)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -547,35 +555,34 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- COMPENSACIÓN ABSOLUTA DE HITBOX POR ESCALA DE AVATAR
+    -- COMPENSACIÓN DE ESCALA DE AVATAR
     local heightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or 1.0
     if heightScale < 0.85 then
         targetPosition = targetPosition - vec3New(0, (1.0 - heightScale) * 0.45, 0)
     end
 
-    if rawVelocity.Magnitude < 1.0 then
+    local currentRawSpeed = rawVelocity.Magnitude
+    if currentRawSpeed < 1.0 then
         rawVelocity = VECTOR_ZERO
+        currentRawSpeed = 0
     end
 
-    -- TIEMPO DE LATENCIA NETO REAL (SIN MULTIPLICADORES FALSOS DE MARKETING)
-    local safePing = math_clamp(cachedPingValue, 0.01, 0.42)
-    local totalTime = safePing + math_min(activeDT, 0.033)
+    local safePing = math_clamp(cachedPingValue, 0.01, 0.40)
+    local totalLatency = safePing + (activeDT > 0.033 and 0.033 or 0.016)
 
-    -- ESCALAR DE ATENUACIÓN A CORTA DISTANCIA (EVITA SOBREPREDICCIÓN EN LA CARA)
-    local closeRangeScalar = math_clamp((distance - 3) / 9, 0.15, 1.0)
-
-    -- Filtro de velocidades extremas
-    local maxSpeed = math_max(humanoid.WalkSpeed * 1.5, 32)
-    if rawVelocity.Magnitude > maxSpeed then 
-        rawVelocity = rawVelocity.Unit * maxSpeed 
-    end
+    local predictionWeight = 1
+    local minZone = SheriffConfig.CloseRangeZone
+    if distance <= minZone then predictionWeight = 0 end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity
-        previousTargetVelocity = rawVelocity
+        previousTargetVelocity = smoothedVelocity
         lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
     end
+
+    local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 1.5, 32)
+    if currentRawSpeed > maxExpectedSpeed then rawVelocity = rawVelocity.Unit * maxExpectedSpeed end
 
     local dotProduct = 1
     if lastRawVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then
@@ -583,62 +590,57 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- FILTRO DE INTERRUPCIÓN DE INERCIA (ANTI-BAITING REAL EN ESQUINAS)
-    if dotProduct < 0.35 and SheriffConfig.AntiBaiting then
-        smoothedVelocity = smoothedVelocity * math_clamp(dotProduct + 0.4, 0.1, 0.6)
+    -- FILTRO ANTI-BAITING REAL
+    if dotProduct < 0.25 and SheriffConfig.AntiBaiting then
+        smoothedVelocity = smoothedVelocity * math_clamp(dotProduct + 0.3, 0.1, 0.6)
     end
 
-    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, math_clamp(18 * activeDT, 0.1, 0.85))
+    local clampedDT = math_min(activeDT, 0.05) 
+    local adaptiveWeight = math_clamp(1 - math_exp(-25.0 * clampedDT), 0.1, 0.85)
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
-    -- ESTRATEGIA DE ACELERACIÓN EN EL AIRE
-    local finalHorizontal = VECTOR_ZERO
-    if SheriffConfig.PredictionMode == "Física Inercial Real" then
-        local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(activeDT, 0.001)
-        if humanoid.FloorMaterial == Enum.Material.Air then
-            if rawAcceleration.Magnitude > 65 then rawAcceleration = rawAcceleration.Unit * 65 end
-            finalHorizontal = (smoothedVelocity * totalTime) + (0.5 * rawAcceleration * (totalTime ^ 2))
-        else
-            finalHorizontal = smoothedVelocity * totalTime
-        end
-    else
-        finalHorizontal = smoothedVelocity * totalTime
-    end
+    local speedFactor = math_clamp(smoothedVelocity.Magnitude / 16, 0, 1)
 
-    -- Aplicamos el mitigador de quemarropa al vector calculado
-    finalHorizontal = finalHorizontal * closeRangeScalar
+    -- AJUSTE DINÁMICO COMBINANDO MIN Y MAX SLIDERS
+    local finalHorizontalPred = math_clamp(SheriffConfig.HorizontalPredMin + (SheriffConfig.HorizontalPredMax - SheriffConfig.HorizontalPredMin) * speedFactor, SheriffConfig.HorizontalPredMin, SheriffConfig.HorizontalPredMax)
+    local finalVerticalPred = math_clamp(SheriffConfig.VerticalPredMin + (SheriffConfig.VerticalPredMax - SheriffConfig.VerticalPredMin) * speedFactor, SheriffConfig.VerticalPredMin, SheriffConfig.VerticalPredMax)
 
-    -- CANDADO DINÁMICO DE DESPLAZAMIENTO (EVITA QUE LA MIRA SE SEPARE DEL RIVAL EN MOVIMIENTOS BRUSCOS COSECHANDO LA DISTANCIA)
-    local maxShift = math_clamp(distance * 0.14, 0.25, 3.8)
-    if finalHorizontal.Magnitude > maxShift then 
-        finalHorizontal = finalHorizontal.Unit * maxShift 
-    end
+    -- PREDICCIÓN SIN EXPANSIÓN MARKETING MARGINAL
+    local timeFrameTotal = finalHorizontalPred * totalLatency * predictionWeight
+    local timeFrameMin = SheriffConfig.HorizontalPredMin * totalLatency * predictionWeight
 
-    -- PREDICCIÓN DE CAÍDA VERTICAL REALÍSTICA
-    local verticalOffset = VECTOR_ZERO
-    if humanoid.FloorMaterial == Enum.Material.Air and math_abs(smoothedVelocity.Y) > 0.5 then
-        local verticalShift = smoothedVelocity.Y * totalTime * closeRangeScalar
-        verticalOffset = vec3New(0, math_clamp(verticalShift, -1.8, 1.8), 0)
-    end
+    local finalHorizontal = smoothedVelocity * timeFrameTotal
+    local minHorizontal = smoothedVelocity * timeFrameMin
 
-    local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
+    -- LIMITADOR ANTILAG CRÍTICO DE SHIFT
+    local maxShift = math_clamp(distance * 0.12, 1.2, 3.8)
+    if finalHorizontal.Magnitude > maxShift then finalHorizontal = finalHorizontal.Unit * maxShift end
+    if minHorizontal.Magnitude > maxShift then minHorizontal = minHorizontal.Unit * maxShift end
+
+    local verticalOffsetMax = VECTOR_ZERO
+    local verticalOffsetMin = VECTOR_ZERO
+    local verticalSpeed = math_abs(smoothedVelocity.Y)
     
-    -- Sub-mapeos limpios para las líneas decorativas basados en la física real calculada
-    local minPrediction = targetPosition + (vec3New(finalHorizontal.X, 0, finalHorizontal.Z) * 0.5) + verticalOffset
-    local pingPrediction = targetPosition + vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * safePing * closeRangeScalar
-    local lagPrediction = targetPosition + vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * activeDT * closeRangeScalar
+    if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.5 then
+        local vSpeedScale = math_clamp(verticalSpeed / 16, 0, 1)
+        local pyMax = smoothedVelocity.Y * finalVerticalPred * totalLatency * vSpeedScale
+        local pyMin = smoothedVelocity.Y * SheriffConfig.VerticalPredMin * totalLatency * vSpeedScale
+        verticalOffsetMax = vec3New(0, pyMax, 0)
+        verticalOffsetMin = vec3New(0, pyMin, 0)
+    end
 
-    -- ANCLAJE ANTISUELO ESTABLE
+    local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffsetMax
+    local minPrediction = targetPosition + vec3New(minHorizontal.X, 0, minHorizontal.Z) + verticalOffsetMin
+
     local floorY = getFloorHeight(hrp, targetChar)
     if floorY then
-        local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.12
+        local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.1
         if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
-        if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, minPrediction.Z) end
-        if lagPrediction.Y < minAllowedY then lagPrediction = vec3New(lagPrediction.X, minAllowedY, minPrediction.Z) end
     end
 
     previousTargetVelocity = smoothedVelocity
-    return finalPrediction, minPrediction, pingPrediction, lagPrediction
+    return finalPrediction, minPrediction, finalPrediction, finalPrediction
 end
 
 local LagLine = Drawing.new("Line") 
@@ -776,6 +778,9 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 end)
 table.insert(_G.KillerHubConnections, renderConn)
 
+-- ============================================================================
+--  CORRECCIÓN DEL MANEJO DE TUPLAS (FIRES REALES INCORPORANDO AMBOS SLIDERS)
+-- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
     local char = LocalPlayer.Character
@@ -789,6 +794,7 @@ local function fireAtMurdererDirectly()
         local targetChar = murderer.Character
         local bestPart = getSmartTargetPart(targetChar) 
         if bestPart then 
+            -- CORRECCIÓN: Se procesa el punto balanceado optimizado del motor
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true 
@@ -804,7 +810,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.025) -- Disparo optimizado y responsivo disminuyendo la espera de cooldown
+                task.wait(0.04) 
                 isFiringCooldown = false
             end
         end
@@ -970,7 +976,7 @@ table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 checkWeaponVisibility()
 
 -- ============================================================================
---  INTERCEPCIÓN HOOK ADAPTATIVO RECURSIVO (STABLE REMOTE INTERCEPT)
+--  HOOK NATIVO DE INTERCEPCIÓN REAL AUTOMÁTICO
 -- ============================================================================
 local WeaponService = nil
 
@@ -1014,6 +1020,7 @@ if WeaponService then
                 local targetChar = murderer.Character
                 local bestPart = getSmartTargetPart(targetChar)
                 if bestPart then
+                    -- CORRECCIÓN: Captura la tupla de predicción de forma exacta y segura
                     local predictedPos = getPredictedPosition(targetChar, bestPart, structuralDelta)
                      if predictedPos then 
                         return returnCFrame and cframeNew(predictedPos) or predictedPos 
