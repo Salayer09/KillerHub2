@@ -309,9 +309,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
-        if cachedShootButton:FindFirstChild("UICorner") then 
-            cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
-        end
     end
 end, SheriffConfig.ButtonSize)
 
@@ -401,7 +398,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01) -- Reducido para mayor velocidad de reacción
+                task.wait(0.01) 
                 break
             end
         end
@@ -424,7 +421,7 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -536,7 +533,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
+-- 📈 MOTOR DE BALÍSTICA CINEMÁTICA ULTRA-PRECISA (OPTIMIZADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -551,7 +548,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local distance = (targetPosition - localHrp.Position).Magnitude
 
     local currentRawSpeed = rawVelocity.Magnitude
-    if currentRawSpeed < 1.2 then
+    if currentRawSpeed < 1.0 then
         rawVelocity = VECTOR_ZERO
         currentRawSpeed = 0
     end
@@ -572,7 +569,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lastTargetChar = targetChar
     end
 
-    local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 2.2, 45)
+    local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 2.5, 50)
     if currentRawSpeed > maxExpectedSpeed then 
         rawVelocity = rawVelocity.Unit * maxExpectedSpeed 
     end
@@ -583,42 +580,40 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
-    if dotProduct < 0.65 then
+    if dotProduct < 0.70 then
         if SheriffConfig.AntiBaiting then
-            baitingFactor = math_clamp((dotProduct + 1) / 2.5, 0.0, 0.35) 
+            baitingFactor = math_clamp((dotProduct + 1) / 2.3, 0.05, 0.40) 
         else
-            baitingFactor = math_clamp((dotProduct + 1) / 1.65, 0.15, 1.0)
+            baitingFactor = math_clamp((dotProduct + 1) / 1.5, 0.20, 1.0)
         end
     end
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
-    local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
+    local responseSpeed = isLowFPS and 16.0 or 22.0 
+    local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.10, 0.95)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
     local currentVelocityMagnitude = smoothedVelocity.Magnitude
-    local speedFactor = math_clamp(currentVelocityMagnitude / 16.5, 0, 1.5)
+    local speedFactor = math_clamp(currentVelocityMagnitude / 16.0, 0, 1.6)
     
-    local fpsBuffer = isLowFPS and 0.035 or 0.025
-    local ping = math_clamp(cachedPingValue, 0.01, 0.5) + fpsBuffer 
-    local distanceFactor = math_clamp(distance / 22, 0.05, 1.15)
+    local fpsBuffer = isLowFPS and 0.028 or 0.016
+    local ping = math_clamp(cachedPingValue, 0.005, 0.4) + fpsBuffer 
+    local distanceFactor = math_clamp(distance / 20, 0.05, 1.25)
     
-    local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
-    local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
+    local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.15) * speedFactor, SheriffConfig.HorizontalPredMax * 1.6)
+    local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.15) * speedFactor, SheriffConfig.HorizontalPredMin)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
-    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
-    if dotProduct < 0.3 then 
+    if dotProduct < 0.4 then 
         rawAcceleration = VECTOR_ZERO 
-    elseif rawAcceleration.Magnitude > 60 then 
-        rawAcceleration = rawAcceleration.Unit * 60 
+    elseif rawAcceleration.Magnitude > 65 then 
+        rawAcceleration = rawAcceleration.Unit * 65 
     end
     
-    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.04), rawAcceleration.Z)
+    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.03), rawAcceleration.Z)
 
     local timeFrameTotal = hFactorMax * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
     local timeFrameMin = hFactorMin * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
@@ -630,21 +625,22 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local pingHorizontal = VECTOR_ZERO
     local lagHorizontal = VECTOR_ZERO
 
-    local dotClamp = math_clamp(dotProduct, 0.4, 1.0)
+    local dotClamp = math_clamp(dotProduct, 0.5, 1.0)
 
     if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.3)
-        minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.3)
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.3)
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.3)
-        if distance >= 13 and dotProduct >= 0.75 and currentVelocityMagnitude > 4 then 
-            local extraAcc = 0.5 * stableAcceleration
-            local tfTotalSq = timeFrameTotal ^ 2
-            finalHorizontal = finalHorizontal + (extraAcc * tfTotalSq)
-            minHorizontal = minHorizontal + (extraAcc * (timeFrameMin ^ 2))
-         end
+        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.25)
+        minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.25)
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.25)
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.25)
+        
+        -- ⚡ FÓRMULA CINEMÁTICA INTEGRADA MEJORADA (Posición + Vt + 0.5*A*t^2)
+        if distance >= 10 and dotProduct >= 0.70 and currentVelocityMagnitude > 3 then 
+            local kinematicAcc = 0.5 * stableAcceleration
+            finalHorizontal = finalHorizontal + (kinematicAcc * (timeFrameTotal ^ 2))
+            minHorizontal = minHorizontal + (kinematicAcc * (timeFrameMin ^ 2))
+        end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (dotProduct >= 0.75 and currentVelocityMagnitude > 4) and (0.5 * stableAcceleration) or VECTOR_ZERO
+        local accCalc = (dotProduct >= 0.70 and currentVelocityMagnitude > 3) and (0.5 * stableAcceleration) or VECTOR_ZERO
         finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
         minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
         pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
@@ -660,7 +656,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
-    local maxHorizontalShift = 3.8
+    local maxHorizontalShift = 4.2
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
     if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
@@ -670,16 +666,15 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local verticalOffsetMin = VECTOR_ZERO
     local verticalSpeed = math_abs(smoothedVelocity.Y)
     
-    if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.4 then
-        local vSpeedScale = math_clamp(verticalSpeed / 50, 0, 1.2)
+    if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.3 then
+        local vSpeedScale = math_clamp(verticalSpeed / 45, 0, 1.3)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
-        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
-        if smoothedVelocity.Y > 1 then
-            local jumpBonus = smoothedVelocity.Y * 0.008 * predictionWeight
+        if smoothedVelocity.Y > 0.5 then
+            local jumpBonus = smoothedVelocity.Y * 0.01 * predictionWeight
             pYMax = pYMax + jumpBonus
             pYMin = pYMin + jumpBonus
          end
@@ -873,7 +868,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
+                task.wait(0.04) 
                 isFiringCooldown = false
             end
         end
@@ -881,7 +876,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT - CORREGIDO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -896,14 +891,15 @@ ShootButton.BackgroundColor3 = color3RGB(15, 6, 26)
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = true 
+ShootButton.ClipsDescendants = false -- Desactivado para evitar recortes rígidos cuadrados de Roblox
 ShootButton.Parent = VoidGui
 
 cachedScreenGui = VoidGui
 cachedShootButton = ShootButton
 
+-- ⚡ MEJORA: Usar escala porcentual (0.28, 0) mantiene las esquinas sincronizadas automáticamente
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
+Corner.CornerRadius = UDim.new(0.28, 0)
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -911,18 +907,19 @@ GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = udim2New(1, 0, 1, 0)
 GlowOverlay.Position = udim2New(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
+GlowOverlay.BackgroundColor3 = color3RGB(140, 50, 255) -- Color base sólido para iluminación estricta
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = Corner.CornerRadius
+GlowCorner.CornerRadius = UDim.new(0.28, 0) -- Forzado idéntico al botón principal
 GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
 UiGradient.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)),    
-    ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)),  
-    ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))
+    ColorSequenceKeypoint.new(0, color3RGB(40, 15, 75)),    
+    ColorSequenceKeypoint.new(0.5, color3RGB(165, 70, 255)),  
+    ColorSequenceKeypoint.new(1, color3RGB(40, 15, 75))
 })
 UiGradient.Rotation = 45 
 UiGradient.Parent = GlowOverlay
@@ -976,35 +973,34 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
-local function processGlowAtCoordinates(inputPosition)
-    local buttonAbsolutePos = ShootButton.AbsolutePosition
-    local buttonSize = ShootButton.AbsoluteSize
-    local localX =  inputPosition.X - buttonAbsolutePos.X
-    local relX = (localX / buttonSize.X) - 0.5
-    UiGradient.Offset = vec2New(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
+-- ⚡ REEDICIÓN FEEDBACK: Animación por pulsación interna concéntrica y elástica sin fugas visuales
+local function processGlowAtCoordinates()
+    UiGradient.Offset = vec2New(0, 0) -- Fijado al centro exacto
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4}):Play()
+    TweenService:Create(ShootButton, TweenInfo.new(0.05, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = udim2New(0, SheriffConfig.ButtonSize * 0.92, 0, SheriffConfig.ButtonSize * 0.92)}):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(ShootButton, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = udim2New(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)}):Play()
 end
 
 local dragging, dragInput, dragStart, startPos
 local cBegan = ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        processGlowAtCoordinates(input.Position)
+        processGlowAtCoordinates()
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-             startPos = ShootButton.Position
+            startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
                     saveConfig()
                     cChanged:Disconnect()
                 end
@@ -1032,7 +1028,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -1046,7 +1042,6 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
--- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1055,7 +1050,6 @@ if ClientServices then
     end
 end
 
--- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1070,7 +1064,6 @@ if not WeaponService then
     end
 end
 
--- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1116,7 +1109,4 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
--- ============================================================================
--- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
--- ============================================================================
 return KillerHub
