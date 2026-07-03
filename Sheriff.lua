@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V8.5.0 (ULTRA-PREDICTION OVERHAUL 2026)
+--  KILLER HUB | SHERIFF SUITE V8.5.1 (ULTRA-PREDICTION OVERHAUL 2026)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -23,7 +23,7 @@ local vec3New = Vector3.new
 local udim2New = UDim2.new
 local cframeNew = CFrame.new
 local color3RGB = Color3.fromRGB
-local os_clock = os.clock
+local os_clock = os_clock
 
 local workspace = workspace
 local workspace_Gravity = workspace.Gravity
@@ -61,7 +61,7 @@ local KillerHub = KillerHubLib
 
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "Híbrido Absoluto (Omni)", 
+    PredictionMode = "Física Inercial Real", 
     HorizontalPredMin = 0.050, 
     HorizontalPredMax = 0.145, 
     VerticalPredMin = 0.010,   
@@ -69,7 +69,6 @@ local SheriffConfig = {
     WallCheck = true,    
     CloseRangeZone = 8, 
     AntiBaiting = true, 
-    HitrateEnhancer = true,
     PredictTracer = true,      
     ShowMinPredictTracer = true, 
     ShowPingTracer = false,    
@@ -112,8 +111,7 @@ local function saveConfig()
                 ShowLagTracer = SheriffConfig.ShowLagTracer,
                 ShowLeadTracer = SheriffConfig.ShowLeadTracer,
                 CloseRangeZone = SheriffConfig.CloseRangeZone,
-                AntiBaiting = SheriffConfig.AntiBaiting,
-                HitrateEnhancer = SheriffConfig.HitrateEnhancer
+                AntiBaiting = SheriffConfig.AntiBaiting
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
@@ -145,7 +143,6 @@ local function loadConfig()
                 if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
                 if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
                 if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
-                if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
             end
         end
     end)
@@ -208,11 +205,6 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
-    SheriffConfig.HitrateEnhancer = estado
-    saveConfig()
-end)
-
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
     saveConfig()
@@ -223,7 +215,7 @@ SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)"
     saveConfig()
 end)
 
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Física Inercial Real", "Estricta Lineal"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
     saveConfig()
 end)
@@ -476,7 +468,7 @@ end
 
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
-local ignoreListCache = {} -- Caché persistente para evitar instanciar tablas cada frame
+local ignoreListCache = {} 
 
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
@@ -485,7 +477,6 @@ local function getSmartTargetPart(targetChar)
 
     local origin = Camera.CFrame.Position
     
-    -- OPTIMIZACIÓN: Reutilizar tabla de ignorados en lugar de crear una nueva
     table.clear(ignoreListCache)
     table.insert(ignoreListCache, LocalPlayer.Character)
     table.insert(ignoreListCache, Camera)
@@ -542,7 +533,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
---  MOTOR BALÍSTICO RE-DISEÑADO CON ADAPTACIÓN DE ESCALA Y CRITICAL HIGH-PING FOLLOWER (>200ms)
+--  MOTOR BALÍSTICO OPTIMIZADO (ANTI-OVERPREDICTION A QUEMARROPA)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -556,50 +547,34 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- COMPENSACIÓN ABSOLUTA DE HITBOX POR ESCALA DE AVATAR (ANTI-DIMINUTOS)
+    -- COMPENSACIÓN ABSOLUTA DE HITBOX POR ESCALA DE AVATAR
     local heightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or 1.0
-    local widthScale = humanoid:FindFirstChild("BodyWidthScale") and humanoid.BodyWidthScale.Value or 1.0
-    
-    if heightScale < 0.85 or widthScale < 0.85 then
-        local visualOffset = vec3New(0, (1.0 - heightScale) * 0.45, 0)
-        targetPosition = targetPosition - visualOffset
+    if heightScale < 0.85 then
+        targetPosition = targetPosition - vec3New(0, (1.0 - heightScale) * 0.45, 0)
     end
 
-    local currentRawSpeed = rawVelocity.Magnitude
-    if currentRawSpeed < 1.2 then
+    if rawVelocity.Magnitude < 1.0 then
         rawVelocity = VECTOR_ZERO
-        currentRawSpeed = 0
     end
 
-    -- ATENUACIÓN LOGARÍTMICA/EXPONENCIAL DE LATENCIA CRÍTICA (>200ms)
-    local safePing = math_clamp(cachedPingValue, 0.01, 0.45)
-    if safePing > 0.15 then
-        -- Suaviza el sobrepaso reduciendo el peso de la latencia exagerada usando una curva logarítmica atenuada
-        safePing = 0.15 + math_max(0, (safePing - 0.15) ^ 0.72)
-    end
-    
-    local fpsBuffer = activeDT > 0.033 and 0.035 or 0.025
-    local totalLatency = safePing + fpsBuffer
+    -- TIEMPO DE LATENCIA NETO REAL (SIN MULTIPLICADORES FALSOS DE MARKETING)
+    local safePing = math_clamp(cachedPingValue, 0.01, 0.42)
+    local totalTime = safePing + math_min(activeDT, 0.033)
 
-    local predictionWeight = 1
-    local minZone = SheriffConfig.CloseRangeZone
-    local maxZone = minZone + 15
-    if distance <= minZone then
-        predictionWeight = 0 
-    elseif distance < maxZone and minZone ~= maxZone then
-        predictionWeight = (distance - minZone) / (maxZone - minZone) 
+    -- ESCALAR DE ATENUACIÓN A CORTA DISTANCIA (EVITA SOBREPREDICCIÓN EN LA CARA)
+    local closeRangeScalar = math_clamp((distance - 3) / 9, 0.15, 1.0)
+
+    -- Filtro de velocidades extremas
+    local maxSpeed = math_max(humanoid.WalkSpeed * 1.5, 32)
+    if rawVelocity.Magnitude > maxSpeed then 
+        rawVelocity = rawVelocity.Unit * maxSpeed 
     end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity
-        previousTargetVelocity = smoothedVelocity
+        previousTargetVelocity = rawVelocity
         lastRawVelocity = rawVelocity
         lastTargetChar = targetChar
-    end
-
-    local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 2.2, 45)
-    if currentRawSpeed > maxExpectedSpeed then 
-        rawVelocity = rawVelocity.Unit * maxExpectedSpeed 
     end
 
     local dotProduct = 1
@@ -608,115 +583,54 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- FILTRO ANTI-AMAGUE CRÍTICO PARA SEGUIMIENTO DE ÁNGULO EN ESQUINAS
+    -- FILTRO DE INTERRUPCIÓN DE INERCIA (ANTI-BAITING REAL EN ESQUINAS)
     if dotProduct < 0.35 and SheriffConfig.AntiBaiting then
-        -- Si cambia drásticamente de dirección, reduce instantáneamente el vector inercial para que el tiro no siga de largo.
-        smoothedVelocity = smoothedVelocity * math_clamp(dotProduct + 0.4, 0.05, 0.5)
+        smoothedVelocity = smoothedVelocity * math_clamp(dotProduct + 0.4, 0.1, 0.6)
     end
 
-    local clampedDT = math_min(activeDT, 0.05) 
-    local isLowFPS = activeDT > 0.033
-    
-    local responseSpeed = (dotProduct < 0.5) and 28.5 or (isLowFPS and 18.0 or 22.5)
-    local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
-    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
+    smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, math_clamp(18 * activeDT, 0.1, 0.85))
 
-    local currentVelocityMagnitude = smoothedVelocity.Magnitude
-    local speedFactor = math_clamp(currentVelocityMagnitude / 16.5, 0, 1.5)
-    
-    local distanceFactor = math_clamp(distance / 24, 0.05, 1.15)
-    local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
-    local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
-
-    -- CÁLCULO DINÁMICO DE ACELERACIÓN INSTANTÁNEA (PREDICE CAMBIOS EN EL AIRE)
-    local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
-    
-    if humanoid.FloorMaterial == Enum.Material.Air then
-        if rawAcceleration.Magnitude > 75 then rawAcceleration = rawAcceleration.Unit * 75 end
-    else
-        if dotProduct < 0.3 then 
-            rawAcceleration = VECTOR_ZERO 
-        elseif rawAcceleration.Magnitude > 60 then 
-            rawAcceleration = rawAcceleration.Unit * 60 
-        end
-    end
-    
-    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.04), rawAcceleration.Z)
-
-    -- ESCALADO GLOBAL UTILIZANDO EL NUEVO TOTAL LATENCY ATENUADO
-    local timeFrameTotal = hFactorMax * (totalLatency * 10) * distanceFactor * predictionWeight
-    local timeFrameMin = hFactorMin * (totalLatency * 10) * distanceFactor * predictionWeight
-    local timeFramePingOnly = safePing * distanceFactor * predictionWeight
-    local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight
-
+    -- ESTRATEGIA DE ACELERACIÓN EN EL AIRE
     local finalHorizontal = VECTOR_ZERO
-    local minHorizontal = VECTOR_ZERO
-    local pingHorizontal = VECTOR_ZERO
-    local lagHorizontal = VECTOR_ZERO
-
-    local dotClamp = math_clamp(dotProduct, 0.4, 1.0)
-
-    if SheriffConfig.PredictionMode == "Híbrido Absoluto (Omni)" then
-        finalHorizontal = (smoothedVelocity * timeFrameTotal):Lerp(smoothedVelocity * (timeFrameTotal * dotClamp), 0.3)
-        minHorizontal = (smoothedVelocity * timeFrameMin):Lerp(smoothedVelocity * (timeFrameMin * dotClamp), 0.3)
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.3)
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.3)
-        if distance >= 13 and currentVelocityMagnitude > 4 and dotProduct > 0.75 then 
-            local extraAcc = 0.55 * stableAcceleration
-            finalHorizontal = finalHorizontal + (extraAcc * (timeFrameTotal ^ 2))
-            minHorizontal = minHorizontal + (extraAcc * (timeFrameMin ^ 2))
-         end
-    elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (currentVelocityMagnitude > 4 and dotProduct > 0.75) and (0.55 * stableAcceleration) or VECTOR_ZERO
-        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
-        minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
-    elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
-        local dMod = (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
-        local flatVel = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z)
-        finalHorizontal = flatVel * (timeFrameTotal * dMod)
-        minHorizontal = flatVel * (timeFrameMin * dMod)
-        pingHorizontal = flatVel * (timeFramePingOnly * dMod)
-        lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
+    if SheriffConfig.PredictionMode == "Física Inercial Real" then
+        local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(activeDT, 0.001)
+        if humanoid.FloorMaterial == Enum.Material.Air then
+            if rawAcceleration.Magnitude > 65 then rawAcceleration = rawAcceleration.Unit * 65 end
+            finalHorizontal = (smoothedVelocity * totalTime) + (0.5 * rawAcceleration * (totalTime ^ 2))
+        else
+            finalHorizontal = smoothedVelocity * totalTime
+        end
+    else
+        finalHorizontal = smoothedVelocity * totalTime
     end
 
-    -- ABRAZADERA DINÁMICA DE ACUERDO A LA DISTANCIA (ESTABILIZA EL DISPARO EN PINGS EXTREMOS)
-    local maxHorizontalShift = math_clamp(distance * 0.16, 1.5, 4.0)
-    if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
-    if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
-    if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
-    if lagHorizontal.Magnitude > maxHorizontalShift then lagHorizontal = lagHorizontal.Unit * maxHorizontalShift end
+    -- Aplicamos el mitigador de quemarropa al vector calculado
+    finalHorizontal = finalHorizontal * closeRangeScalar
 
-    local verticalOffsetMax = VECTOR_ZERO
-    local verticalOffsetMin = VECTOR_ZERO
-    local verticalSpeed = math_abs(smoothedVelocity.Y)
+    -- CANDADO DINÁMICO DE DESPLAZAMIENTO (EVITA QUE LA MIRA SE SEPARE DEL RIVAL EN MOVIMIENTOS BRUSCOS COSECHANDO LA DISTANCIA)
+    local maxShift = math_clamp(distance * 0.14, 0.25, 3.8)
+    if finalHorizontal.Magnitude > maxShift then 
+        finalHorizontal = finalHorizontal.Unit * maxShift 
+    end
+
+    -- PREDICCIÓN DE CAÍDA VERTICAL REALÍSTICA
+    local verticalOffset = VECTOR_ZERO
+    if humanoid.FloorMaterial == Enum.Material.Air and math_abs(smoothedVelocity.Y) > 0.5 then
+        local verticalShift = smoothedVelocity.Y * totalTime * closeRangeScalar
+        verticalOffset = vec3New(0, math_clamp(verticalShift, -1.8, 1.8), 0)
+    end
+
+    local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffset
     
-    if humanoid.FloorMaterial == Enum.Material.Air or verticalSpeed > 0.4 then
-        local vSpeedScale = math_clamp(verticalSpeed / 50, 0, 1.2)
-        local finalVFactorMax = math_min(totalLatency * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMax * predictionWeight)
-        local finalVFactorMin = math_min(totalLatency * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMin * predictionWeight)
-        
-        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.4 * workspace_Gravity * (finalVFactorMax ^ 2))
-        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.4 * workspace_Gravity * (finalVFactorMin ^ 2))
-        if smoothedVelocity.Y > 1 then
-            local jumpBonus = smoothedVelocity.Y * 0.0075 * predictionWeight
-            pYMax = pYMax + jumpBonus
-            pYMin = pYMin + jumpBonus
-         end
-        verticalOffsetMax = vec3New(0, pYMax, 0)
-        verticalOffsetMin = vec3New(0, pYMin, 0)
-    end
+    -- Sub-mapeos limpios para las líneas decorativas basados en la física real calculada
+    local minPrediction = targetPosition + (vec3New(finalHorizontal.X, 0, finalHorizontal.Z) * 0.5) + verticalOffset
+    local pingPrediction = targetPosition + vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * safePing * closeRangeScalar
+    local lagPrediction = targetPosition + vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * activeDT * closeRangeScalar
 
-    local finalPrediction = targetPosition + vec3New(finalHorizontal.X, 0, finalHorizontal.Z) + verticalOffsetMax
-    local minPrediction = targetPosition + vec3New(minHorizontal.X, 0, minHorizontal.Z) + verticalOffsetMin
-    local pingPrediction = targetPosition + vec3New(pingHorizontal.X, 0, pingHorizontal.Z) + verticalOffsetMax
-    local lagPrediction = targetPosition + vec3New(lagHorizontal.X, 0, lagHorizontal.Z) + verticalOffsetMax
-
+    -- ANCLAJE ANTISUELO ESTABLE
     local floorY = getFloorHeight(hrp, targetChar)
     if floorY then
-        local bodyScale = heightScale
-        local minAllowedY = floorY + ((hrp.Size.Y / 2) * bodyScale) + 0.15
+        local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.12
         if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
         if pingPrediction.Y < minAllowedY then pingPrediction = vec3New(pingPrediction.X, minAllowedY, minPrediction.Z) end
@@ -792,7 +706,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
      
         local predictedPos, minPredictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
         
-        -- OPTIMIZACIÓN: Almacenar ViewportSize en variable local para evitar llamadas repetidas a la propiedad
         local currentViewportSize = Camera.ViewportSize
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
@@ -891,7 +804,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) 
+                task.wait(0.025) -- Disparo optimizado y responsivo disminuyendo la espera de cooldown
                 isFiringCooldown = false
             end
         end
