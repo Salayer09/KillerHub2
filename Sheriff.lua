@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION ]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -980,11 +980,11 @@ local function processGlowAtCoordinates(inputPosition)
     
     -- Mapea el gradiente perfectamente alineado al toque/clic sin desbordar los bordes redondeados
     UiGradient.Offset = vec2New(relX * 1.1, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.65}):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
 local dragging, dragInput, dragStart, startPos
