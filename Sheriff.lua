@@ -533,7 +533,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA CINEMÁTICA ULTRA-PRECISA (OPTIMIZADO)
+-- 📈 MOTOR DE BALÍSTICA CINEMÁTICA ULTRA-PRECISA
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -633,7 +633,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         pingHorizontal = (smoothedVelocity * timeFramePingOnly):Lerp(smoothedVelocity * (timeFramePingOnly * dotClamp), 0.25)
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.25)
         
-        -- ⚡ FÓRMULA CINEMÁTICA INTEGRADA MEJORADA (Posición + Vt + 0.5*A*t^2)
         if distance >= 10 and dotProduct >= 0.70 and currentVelocityMagnitude > 3 then 
             local kinematicAcc = 0.5 * stableAcceleration
             finalHorizontal = finalHorizontal + (kinematicAcc * (timeFrameTotal ^ 2))
@@ -876,7 +875,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT - CORREGIDO)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT - MODIFICADO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -887,19 +886,18 @@ local ShootButton = Instance.new("ImageButton")
 ShootButton.Name = "ShootButton"
 ShootButton.Size = udim2New(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
 ShootButton.Position = udim2New(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
-ShootButton.BackgroundColor3 = color3RGB(15, 6, 26)
+ShootButton.BackgroundColor3 = color3RGB(13, 5, 24) -- ⚡ Oscurecido exactamente un ~2% para un acabado premium más profundo
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
-ShootButton.ClipsDescendants = false -- Desactivado para evitar recortes rígidos cuadrados de Roblox
+ShootButton.ClipsDescendants = false 
 ShootButton.Parent = VoidGui
 
 cachedScreenGui = VoidGui
 cachedShootButton = ShootButton
 
--- ⚡ MEJORA: Usar escala porcentual (0.28, 0) mantiene las esquinas sincronizadas automáticamente
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0.28, 0)
+Corner.CornerRadius = UDim.new(0.28, 0) -- ⚡ Escala porcentual idéntica para evitar descuadres en cualquier resolución
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -907,12 +905,12 @@ GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = udim2New(1, 0, 1, 0)
 GlowOverlay.Position = udim2New(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
-GlowOverlay.BackgroundColor3 = color3RGB(140, 50, 255) -- Color base sólido para iluminación estricta
+GlowOverlay.BackgroundColor3 = color3RGB(140, 50, 255) 
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
-GlowCorner.CornerRadius = UDim.new(0.28, 0) -- Forzado idéntico al botón principal
+GlowCorner.CornerRadius = UDim.new(0.28, 0) 
 GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
@@ -973,22 +971,26 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- ⚡ REEDICIÓN FEEDBACK: Animación por pulsación interna concéntrica y elástica sin fugas visuales
-local function processGlowAtCoordinates()
-    UiGradient.Offset = vec2New(0, 0) -- Fijado al centro exacto
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.05, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.4}):Play()
-    TweenService:Create(ShootButton, TweenInfo.new(0.05, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = udim2New(0, SheriffConfig.ButtonSize * 0.92, 0, SheriffConfig.ButtonSize * 0.92)}):Play()
+-- ⚡ REESTRUCTURACIÓN DEL GLOW DE COORDENADAS FIJADO
+local function processGlowAtCoordinates(inputPosition)
+    local buttonAbsolutePos = ShootButton.AbsolutePosition
+    local buttonSize = ShootButton.AbsoluteSize
+    local localX = inputPosition.X - buttonAbsolutePos.X
+    local relX = (localX / (buttonSize.X > 0 and buttonSize.X or 1)) - 0.5
+    
+    -- Mapea el gradiente perfectamente alineado al toque/clic sin desbordar los bordes redondeados
+    UiGradient.Offset = vec2New(relX * 1.1, 0)
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
-    TweenService:Create(ShootButton, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = udim2New(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
 local dragging, dragInput, dragStart, startPos
 local cBegan = ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        processGlowAtCoordinates()
+        processGlowAtCoordinates(input.Position) -- Pasa la coordenada del toque de forma nativa
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
