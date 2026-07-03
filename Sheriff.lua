@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V8.5.0 (ULTRA-PREDICTION OVERHAUL 2026) - RAGE MODE
+--  KILLER HUB | SHERIFF SUITE V8.5.0 (ULTRA-PREDICTION OVERHAUL 2026)
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -476,20 +476,16 @@ end
 
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
-local ignoreListCache = {}
+local ignoreListCache = {} -- Caché persistente para evitar instanciar tablas cada frame
 
--- ============================================================================
---  [ACTUALIZADO] ACTUALIZACIÓN 1: WALL CHECK DESDE TU CUERPO (100% BLATANT)
--- ============================================================================
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
     if not SheriffConfig.WallCheck then return torso end
 
-    -- El origen ahora es tu HumanoidRootPart, no la cámara
-    local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    local origin = localHrp and localHrp.Position or Camera.CFrame.Position
+    local origin = Camera.CFrame.Position
     
+    -- OPTIMIZACIÓN: Reutilizar tabla de ignorados en lugar de crear una nueva
     table.clear(ignoreListCache)
     table.insert(ignoreListCache, LocalPlayer.Character)
     table.insert(ignoreListCache, Camera)
@@ -527,6 +523,14 @@ local function getSmartTargetPart(targetChar)
             return torso
        end
     end
+    local head = targetChar:FindFirstChild("Head")
+    if head then
+        local direction = head.Position - origin
+        local ray = workspace:Raycast(origin, direction, mapCastParams)
+        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.85) then
+            return head
+        end
+    end
     return nil 
 end
 
@@ -538,7 +542,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
---  [ACTUALIZADO] ACTUALIZACIÓN 2: MOTOR BALÍSTICO RAGE - HITRATE ENHANCER AL MÁXIMO
+--  MOTOR BALÍSTICO RE-DISEÑADO CON ADAPTACIÓN DE ESCALA Y CRITICAL HIGH-PING FOLLOWER (>200ms)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -552,6 +556,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
+    -- COMPENSACIÓN ABSOLUTA DE HITBOX POR ESCALA DE AVATAR (ANTI-DIMINUTOS)
     local heightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or 1.0
     local widthScale = humanoid:FindFirstChild("BodyWidthScale") and humanoid.BodyWidthScale.Value or 1.0
     
@@ -566,24 +571,23 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         currentRawSpeed = 0
     end
 
+    -- ATENUACIÓN LOGARÍTMICA/EXPONENCIAL DE LATENCIA CRÍTICA (>200ms)
     local safePing = math_clamp(cachedPingValue, 0.01, 0.45)
     if safePing > 0.15 then
+        -- Suaviza el sobrepaso reduciendo el peso de la latencia exagerada usando una curva logarítmica atenuada
         safePing = 0.15 + math_max(0, (safePing - 0.15) ^ 0.72)
     end
     
     local fpsBuffer = activeDT > 0.033 and 0.035 or 0.025
     local totalLatency = safePing + fpsBuffer
 
-    -- MEJORA RAGE: Si HitrateEnhancer está activo, ignoramos la zona muerta a quemarropa
     local predictionWeight = 1
-    if not SheriffConfig.HitrateEnhancer then
-        local minZone = SheriffConfig.CloseRangeZone
-        local maxZone = minZone + 15
-        if distance <= minZone then
-            predictionWeight = 0 
-        elseif distance < maxZone and minZone ~= maxZone then
-            predictionWeight = (distance - minZone) / (maxZone - minZone) 
-        end
+    local minZone = SheriffConfig.CloseRangeZone
+    local maxZone = minZone + 15
+    if distance <= minZone then
+        predictionWeight = 0 
+    elseif distance < maxZone and minZone ~= maxZone then
+        predictionWeight = (distance - minZone) / (maxZone - minZone) 
     end
 
     if lastTargetChar ~= targetChar then
@@ -604,7 +608,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
+    -- FILTRO ANTI-AMAGUE CRÍTICO PARA SEGUIMIENTO DE ÁNGULO EN ESQUINAS
     if dotProduct < 0.35 and SheriffConfig.AntiBaiting then
+        -- Si cambia drásticamente de dirección, reduce instantáneamente el vector inercial para que el tiro no siga de largo.
         smoothedVelocity = smoothedVelocity * math_clamp(dotProduct + 0.4, 0.05, 0.5)
     end
 
@@ -622,12 +628,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.12) * speedFactor, SheriffConfig.HorizontalPredMax * 1.5)
     local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.12) * speedFactor, SheriffConfig.HorizontalPredMin)
 
-    -- MEJORA DE MARKETING A REAL: Multiplicador descarado si el optimizador está encendido
-    if SheriffConfig.HitrateEnhancer then
-        hFactorMax = hFactorMax * 1.25
-        totalLatency = totalLatency * 1.1
-    end
-
+    -- CÁLCULO DINÁMICO DE ACELERACIÓN INSTANTÁNEA (PREDICE CAMBIOS EN EL AIRE)
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
     if humanoid.FloorMaterial == Enum.Material.Air then
@@ -642,6 +643,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     
     local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.04), rawAcceleration.Z)
 
+    -- ESCALADO GLOBAL UTILIZANDO EL NUEVO TOTAL LATENCY ATENUADO
     local timeFrameTotal = hFactorMax * (totalLatency * 10) * distanceFactor * predictionWeight
     local timeFrameMin = hFactorMin * (totalLatency * 10) * distanceFactor * predictionWeight
     local timeFramePingOnly = safePing * distanceFactor * predictionWeight
@@ -679,8 +681,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
-    -- FIX RAGE: Ampliamos el límite máximo de desfase permitido (de 4.0 a 8.0) para atrapar a gente con speedhack
-    local maxHorizontalShift = math_clamp(distance * 0.25, 1.5, 8.0)
+    -- ABRAZADERA DINÁMICA DE ACUERDO A LA DISTANCIA (ESTABILIZA EL DISPARO EN PINGS EXTREMOS)
+    local maxHorizontalShift = math_clamp(distance * 0.16, 1.5, 4.0)
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
     if pingHorizontal.Magnitude > maxHorizontalShift then pingHorizontal = pingHorizontal.Unit * maxHorizontalShift end
@@ -695,9 +697,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(totalLatency * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(totalLatency * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, totalLatency * SheriffConfig.VerticalPredMin * predictionWeight)
         
-        -- FIX CRÍTICO: Cambiado 0.4 por 0.5 (Física de gravedad exacta de Roblox)
-        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
-        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
+        local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.4 * workspace_Gravity * (finalVFactorMax ^ 2))
+        local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.4 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
             local jumpBonus = smoothedVelocity.Y * 0.0075 * predictionWeight
             pYMax = pYMax + jumpBonus
@@ -791,6 +792,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
      
         local predictedPos, minPredictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
         
+        -- OPTIMIZACIÓN: Almacenar ViewportSize en variable local para evitar llamadas repetidas a la propiedad
         local currentViewportSize = Camera.ViewportSize
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
@@ -861,9 +863,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 end)
 table.insert(_G.KillerHubConnections, renderConn)
 
--- ============================================================================
---  [ACTUALIZADO] ACTUALIZACIÓN 3: DISPARO CON ROTACIÓN CFRAME BLATANT PERFECTA
--- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
     local char = LocalPlayer.Character
@@ -889,8 +888,7 @@ local function fireAtMurdererDirectly()
                         if hrp:FindFirstChild("GunRaycastAttachment") then 
                             originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                         end
-                        -- El CFrame ahora se calcula rotado HACIA la predicción, 100% Blatant
-                        shootRemote:FireServer(originCFrame, cframeNew(originCFrame.Position, predictedPos))
+                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
                 task.wait(0.04) 
