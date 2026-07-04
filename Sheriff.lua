@@ -944,7 +944,7 @@ UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = udim2New(0.38, 0, 0.38, 0)
+DecalTexture.Size = udim2New(0.37, 0, 0.37, 0)
 DecalTexture.AnchorPoint = vec2New(0.5, 0.5)
 DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
 DecalTexture.BackgroundTransparency = 1
@@ -955,8 +955,8 @@ DecalTexture.Parent = ShootButton
 
 local function iniciarAnimacionIcono(decalTexture)
     if not decalTexture then return end
-    local tiempoGiro = 0.8025     
-    local tiempoQuieto = 0.0289 
+    local tiempoGiro = 0.81     
+    local tiempoQuieto = 0.03 
      
     local infoGiro = TweenInfo.new(tiempoGiro, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(decalTexture, infoGiro, {Rotation = 360})
@@ -997,11 +997,11 @@ local function processGlowAtCoordinates(inputPosition)
     local localX =  inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / buttonSize.X) - 0.5
     UiGradient.Offset = vec2New(relX * 1.5, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.40}):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.40, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
 local dragging, dragInput, dragStart, startPos
