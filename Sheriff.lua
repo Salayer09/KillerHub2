@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION ]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -215,7 +215,7 @@ SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(e
     saveConfig()
 end)
 
-SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
+SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva (Hitrate Real)", function(estado)
     SheriffConfig.HitrateEnhancer = estado
     saveConfig()
 end)
@@ -533,7 +533,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA CINEMÁTICA ULTRA-PRECISA
+-- 📈 MOTOR DE BALÍSTICA CINEMÁTICA OPTIMIZADO (HITRATE & DRAG FIXED)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -600,23 +600,39 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     
     local fpsBuffer = isLowFPS and 0.028 or 0.016
     local ping = math_clamp(cachedPingValue, 0.005, 0.4) + fpsBuffer 
-    local distanceFactor = math_clamp(distance / 20, 0.05, 1.25)
+    local distanceFactor = math_clamp(distance / 25, 0.05, 1.15) 
     
-    local hFactorMax = math_min((SheriffConfig.HorizontalPredMax * 1.15) * speedFactor, SheriffConfig.HorizontalPredMax * 1.6)
-    local hFactorMin = math_min((SheriffConfig.HorizontalPredMin * 1.15) * speedFactor, SheriffConfig.HorizontalPredMin)
+    local hFactorMax = math_clamp(SheriffConfig.HorizontalPredMax * speedFactor, SheriffConfig.HorizontalPredMin, SheriffConfig.HorizontalPredMax)
+    local hFactorMin = math_clamp(SheriffConfig.HorizontalPredMin * speedFactor, 0, SheriffConfig.HorizontalPredMin)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
     if dotProduct < 0.4 then 
         rawAcceleration = VECTOR_ZERO 
-    elseif rawAcceleration.Magnitude > 65 then 
-        rawAcceleration = rawAcceleration.Unit * 65 
+    elseif rawAcceleration.Magnitude > 35 then 
+        rawAcceleration = rawAcceleration.Unit * 35 
     end
     
-    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.01 or 0.03), rawAcceleration.Z)
+    local stableAcceleration = vec3New(rawAcceleration.X, rawAcceleration.Y * (isLowFPS and 0.005 or 0.015), rawAcceleration.Z)
 
-    local timeFrameTotal = hFactorMax * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
-    local timeFrameMin = hFactorMin * (ping * 10) * distanceFactor * predictionWeight * baitingFactor
+    local safePingScale = math_clamp(ping * 5, 0.1, 1.5)
+    local timeFrameTotal = hFactorMax * safePingScale * distanceFactor * predictionWeight * baitingFactor
+    local timeFrameMin = hFactorMin * safePingScale * distanceFactor * predictionWeight * baitingFactor
+    
+    -- ⚡ LOGICA INYECTADA EN TIEMPO REAL PARA EL HITRATE ENHANCER (ACTIVO Y REAL)
+    if SheriffConfig.HitrateEnhancer then
+        local currentFPS = 1 / math_max(clampedDT, 0.001)
+        if currentFPS < 55 then
+            timeFrameTotal = timeFrameTotal * 1.08 -- Compensa el retraso en pantallas de baja tasa de refresco
+            timeFrameMin = timeFrameMin * 1.05
+        end
+        if distance > 35 then
+            timeFrameTotal = timeFrameTotal * 0.94 -- Evita que la mira flote fuera de rango a distancias largas
+        elseif distance < 12 then
+            timeFrameTotal = timeFrameTotal * 0.88 -- Estabiliza el hitbox exacto a corta distancia para no pasarse de largo
+        end
+    end
+
     local timeFramePingOnly = cachedPingValue * distanceFactor * predictionWeight * baitingFactor
     local timeFrameLagOnly = clampedDT * distanceFactor * predictionWeight * baitingFactor
 
@@ -634,16 +650,16 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = (smoothedVelocity * timeFrameLagOnly):Lerp(smoothedVelocity * (timeFrameLagOnly * dotClamp), 0.25)
         
         if distance >= 10 and dotProduct >= 0.70 and currentVelocityMagnitude > 3 then 
-            local kinematicAcc = 0.5 * stableAcceleration
-            finalHorizontal = finalHorizontal + (kinematicAcc * (timeFrameTotal ^ 2))
-            minHorizontal = minHorizontal + (kinematicAcc * (timeFrameMin ^ 2))
+            local kinematicAcc = 0.2 * stableAcceleration 
+            finalHorizontal = finalHorizontal + (kinematicAcc * (timeFrameTotal ^ 1.5))
+            minHorizontal = minHorizontal + (kinematicAcc * (timeFrameMin ^ 1.5))
         end
     elseif SheriffConfig.PredictionMode == "Predictiva 2.0 (Aceleración)" then
-        local accCalc = (dotProduct >= 0.70 and currentVelocityMagnitude > 3) and (0.5 * stableAcceleration) or VECTOR_ZERO
-        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 2))
-        minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 2))
-        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 2))
-        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 2))
+        local accCalc = (dotProduct >= 0.70 and currentVelocityMagnitude > 3) and (0.2 * stableAcceleration) or VECTOR_ZERO
+        finalHorizontal = (smoothedVelocity * timeFrameTotal) + (accCalc * (timeFrameTotal ^ 1.5))
+        minHorizontal = (smoothedVelocity * timeFrameMin) + (accCalc * (timeFrameMin ^ 1.5))
+        pingHorizontal = (smoothedVelocity * timeFramePingOnly) + (accCalc * (timeFramePingOnly ^ 1.5))
+        lagHorizontal = (smoothedVelocity * timeFrameLagOnly) + (accCalc * (timeFrameLagOnly ^ 1.5))
     elseif SheriffConfig.PredictionMode == "Predictivo Adaptativo" then
         local dMod = (dotProduct < 0.85 and math_clamp(dotProduct, 0.2, 1.0) or 1)
         local dH = timeFrameTotal * dMod
@@ -875,7 +891,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT - MODIFICADO)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -886,7 +902,7 @@ local ShootButton = Instance.new("ImageButton")
 ShootButton.Name = "ShootButton"
 ShootButton.Size = udim2New(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)
 ShootButton.Position = udim2New(SheriffConfig.ButtonX, 0, SheriffConfig.ButtonY, 0)
-ShootButton.BackgroundColor3 = color3RGB(13, 5, 24) -- ⚡ Oscurecido exactamente un ~2% para un acabado premium más profundo
+ShootButton.BackgroundColor3 = color3RGB(13, 5, 24) 
 ShootButton.BackgroundTransparency = 1 - SheriffConfig.ButtonOpacity
 ShootButton.BorderSizePixel = 0  
 ShootButton.AutoButtonColor = false 
@@ -897,7 +913,7 @@ cachedScreenGui = VoidGui
 cachedShootButton = ShootButton
 
 local Corner = Instance.new("UICorner")
-Corner.CornerRadius = UDim.new(0.28, 0) -- ⚡ Escala porcentual idéntica para evitar descuadres en cualquier resolución
+Corner.CornerRadius = UDim.new(0.28, 0) 
 Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
@@ -924,7 +940,7 @@ UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
-DecalTexture.Size = udim2New(0.38, 0, 0.38, 0)
+DecalTexture.Size = udim2New(0.37, 0, 0.37, 0)
 DecalTexture.AnchorPoint = vec2New(0.5, 0.5)
 DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
 DecalTexture.BackgroundTransparency = 1
@@ -971,27 +987,28 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- ⚡ REESTRUCTURACIÓN DEL GLOW DE COORDENADAS FIJADO
 local function processGlowAtCoordinates(inputPosition)
     local buttonAbsolutePos = ShootButton.AbsolutePosition
     local buttonSize = ShootButton.AbsoluteSize
     local localX = inputPosition.X - buttonAbsolutePos.X
     local relX = (localX / (buttonSize.X > 0 and buttonSize.X or 1)) - 0.5
     
-    -- Mapea el gradiente perfectamente alineado al toque/clic sin desbordar los bordes redondeados
     UiGradient.Offset = vec2New(relX * 1.1, 0)
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.65}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.71}):Play()
 end
 
 local function fadeGlowReflection()
-    TweenService:Create(GlowOverlay, TweenInfo.new(0.65, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.71, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
+-- ⚡ ENTRADAS DE CONTROL ADAPTADAS (ARRASAR Y SOLTAR)
 local dragging, dragInput, dragStart, startPos
+local dragMoved = false 
+
 local cBegan = ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        processGlowAtCoordinates(input.Position) -- Pasa la coordenada del toque de forma nativa
-        task.spawn(fireAtMurdererDirectly)
+        processGlowAtCoordinates(input.Position)
+        dragMoved = false 
         
         if not SheriffConfig.ButtonLocked then
             dragging = true
@@ -1015,6 +1032,10 @@ table.insert(_G.KillerHubConnections, cBegan)
 local cEnded = ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         fadeGlowReflection()
+        -- Solo dispara si al levantar el dedo el botón no se arrastró más allá del rango límite
+        if not dragMoved then
+            task.spawn(fireAtMurdererDirectly)
+        end
     end
 end)
 table.insert(_G.KillerHubConnections, cEnded)
@@ -1029,6 +1050,9 @@ table.insert(_G.KillerHubConnections, cChangedInput)
 local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
+        if delta.Magnitude > 7 then
+            dragMoved = true
+        end
         ShootButton.Position = udim2New(
             startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
