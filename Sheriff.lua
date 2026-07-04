@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V7.7.5 ULTRA-PREMIUM [⚡ INTERFACE & RELEASE SHOOT EDIT]
+--  KILLER HUB | SHERIFF V7.7.0 ULTRA-PREMIUM [⚡ PERFORMANCE & PREDICTION EDIT]
 -- ============================================================================
 
 local Players = game:GetService("Players")
@@ -89,50 +89,73 @@ local SheriffConfig = {
     LeadTimePred = 0.05
 }
 
--- 4. SISTEMA DE ARCHIVOS EXCLUSIVO PARA POSICIÓN (CON DEBOUNCE)
+-- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffPosition.txt"
-local lastDragTime = 0
-local savePending = false
+local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
 
-local function savePositionOnly()
+local function saveConfig()
     pcall(function()
         if writefile then
             local data = {
+                SilentAim = SheriffConfig.SilentAim,
+                WallCheck = SheriffConfig.WallCheck,
                 ButtonX = SheriffConfig.ButtonX,
-                ButtonY = SheriffConfig.ButtonY
+                ButtonY = SheriffConfig.ButtonY,
+                PredictionMode = SheriffConfig.PredictionMode,
+                HorizontalPredMin = SheriffConfig.HorizontalPredMin, 
+                HorizontalPredMax = SheriffConfig.HorizontalPredMax,     
+                VerticalPredMin = SheriffConfig.VerticalPredMin,
+                VerticalPredMax = SheriffConfig.VerticalPredMax,
+                LeadTimePred = SheriffConfig.LeadTimePred,
+                TracerSmoothness = SheriffConfig.TracerSmoothness,
+                UseWeaponDetector = SheriffConfig.UseWeaponDetector,
+                ShowShootButton = SheriffConfig.ShowShootButton,
+                PredictTracer = SheriffConfig.PredictTracer,
+                ShowMinPredictTracer = SheriffConfig.ShowMinPredictTracer,
+                ShowPingTracer = SheriffConfig.ShowPingTracer,
+                ShowLagTracer = SheriffConfig.ShowLagTracer,
+                ShowLeadTracer = SheriffConfig.ShowLeadTracer,
+                CloseRangeZone = SheriffConfig.CloseRangeZone,
+                AntiBaiting = SheriffConfig.AntiBaiting,
+                HitrateEnhancer = SheriffConfig.HitrateEnhancer
             }
             writefile(CONFIG_FILE, HttpService:JSONEncode(data))
         end
     end)
 end
 
-local function queuePositionSave()
-    lastDragTime = os_clock()
-    if savePending then return end
-    savePending = true
-    task.spawn(function()
-        while os_clock() - lastDragTime < 0.5 do
-            task.wait(0.1)
-        end
-        savePositionOnly()
-        savePending = false
-    end)
-end
-
-local function loadPositionOnly()
+local function loadConfig()
     pcall(function()
         if isfile and isfile(CONFIG_FILE) then
             local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
             if data then
                 SheriffConfig.ButtonX = data.ButtonX or SheriffConfig.ButtonX
                 SheriffConfig.ButtonY = data.ButtonY or SheriffConfig.ButtonY
+                SheriffConfig.PredictionMode = data.PredictionMode or SheriffConfig.PredictionMode
+                SheriffConfig.HorizontalPredMin = data.HorizontalPredMin or SheriffConfig.HorizontalPredMin
+                SheriffConfig.HorizontalPredMax = data.HorizontalPredMax or SheriffConfig.HorizontalPredMax
+                SheriffConfig.VerticalPredMin = data.VerticalPredMin or SheriffConfig.VerticalPredMin
+                SheriffConfig.VerticalPredMax = data.VerticalPredMax or SheriffConfig.VerticalPredMax
+                SheriffConfig.LeadTimePred = data.LeadTimePred or SheriffConfig.LeadTimePred
+                SheriffConfig.TracerSmoothness = data.TracerSmoothness or SheriffConfig.TracerSmoothness
+                SheriffConfig.CloseRangeZone = data.CloseRangeZone or SheriffConfig.CloseRangeZone
+                if data.SilentAim ~= nil then SheriffConfig.SilentAim = data.SilentAim end
+                if data.WallCheck ~= nil then SheriffConfig.WallCheck = data.WallCheck end
+                if data.UseWeaponDetector ~= nil then SheriffConfig.UseWeaponDetector = data.UseWeaponDetector end
+                if data.ShowShootButton ~= nil then SheriffConfig.ShowShootButton = data.ShowShootButton end
+                if data.PredictTracer ~= nil then SheriffConfig.PredictTracer = data.PredictTracer end
+                if data.ShowMinPredictTracer ~= nil then SheriffConfig.ShowMinPredictTracer = data.ShowMinPredictTracer end
+                if data.ShowLeadTracer ~= nil then SheriffConfig.ShowLeadTracer = data.ShowLeadTracer end
+                if data.ShowPingTracer ~= nil then SheriffConfig.ShowPingTracer = data.ShowPingTracer end
+                if data.ShowLagTracer ~= nil then SheriffConfig.ShowLagTracer = data.ShowLagTracer end
+                if data.AntiBaiting ~= nil then SheriffConfig.AntiBaiting = data.AntiBaiting end
+                if data.HitrateEnhancer ~= nil then SheriffConfig.HitrateEnhancer = data.HitrateEnhancer end
             end
         end
     end)
 end
 
-loadPositionOnly()
+loadConfig()
 
 -- 🔍 DETECTOR DINÁMICO DE ARMAS
 local function isRangedWeapon(tool)
@@ -182,49 +205,59 @@ local function checkWeaponVisibility()
     end
 end
 
--- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (SIN AUTO-GUARDADO DE PARÁMETROS)
+-- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
     SheriffConfig.SilentAim = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva", function(estado)
     SheriffConfig.HitrateEnhancer = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", function(estado)
     SheriffConfig.AntiBaiting = estado
+    saveConfig()
 end)
 
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
+    saveConfig()
 end)
 
 SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
+    saveConfig() 
 end, math_floor(SheriffConfig.HorizontalPredMin * 1000))
 
 SheriffTab:CreateSlider("HorizontalPredMaxSlider", "Predicción Horizontal MÁXIMA", 0, 300, function(valor)
     SheriffConfig.HorizontalPredMax = valor / 1000 
+    saveConfig() 
 end, math_floor(SheriffConfig.HorizontalPredMax * 1000))
 
 SheriffTab:CreateSlider("VerticalPredMinSlider", "Predicción Vertical MÍNIMA", 0, 90, function(valor)
     SheriffConfig.VerticalPredMin = valor / 1000
+    saveConfig() 
 end, math_floor(SheriffConfig.VerticalPredMin * 1000))
 
 SheriffTab:CreateSlider("VerticalPredMaxSlider", "Predicción Vertical MÁXIMA", 0, 120, function(valor)
     SheriffConfig.VerticalPredMax = valor / 1000
+    saveConfig() 
 end, math_floor(SheriffConfig.VerticalPredMax * 1000))
 
 SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, function(valor)
     SheriffConfig.CloseRangeZone = valor
+    saveConfig()
 end, SheriffConfig.CloseRangeZone)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
@@ -241,6 +274,7 @@ SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", 
     SheriffConfig.ShowPingTracer = tablaFlags["Ping (Azul)"]
     SheriffConfig.ShowLagTracer = tablaFlags["Lag (Violeta)"]
     SheriffConfig.ShowLeadTracer = tablaFlags["Lead (Verde)"]
+    saveConfig()
 end)
 
 SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, function(valor)
@@ -249,21 +283,25 @@ SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = I
     else
         SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
+    saveConfig()
 end, 40)
 
 SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
+    saveConfig()
 end, math_floor(SheriffConfig.LeadTimePred * 100))
 
 SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
+    saveConfig()
     checkWeaponVisibility()
 end)
 
 SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function(estado)
     SheriffConfig.ShowShootButton = estado
+    saveConfig()
     checkWeaponVisibility()
 end)
 
@@ -273,9 +311,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
         if cachedShootButton:FindFirstChild("UICorner") then 
             cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
-        end
-        if cachedShootButton:FindFirstChild("GlowOverlay") and cachedShootButton.GlowOverlay:FindFirstChild("UICorner") then
-            cachedShootButton.GlowOverlay.UICorner.CornerRadius = cachedShootButton.UICorner.CornerRadius
         end
     end
 end, SheriffConfig.ButtonSize)
@@ -366,7 +401,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01)
+                task.wait(0.01) -- Reducido para mayor velocidad de reacción
                 break
             end
         end
@@ -389,7 +424,7 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER
+-- 👑 FUNCIÓN GETMURDERER CON MEMORIA INTELIGENTE CORREGIDA
 local function getMurderer()
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
@@ -501,7 +536,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -548,6 +583,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
+    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -559,7 +595,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 
+    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -575,6 +611,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
+    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -638,6 +675,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
+        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -835,7 +873,7 @@ local function fireAtMurdererDirectly()
                         shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
                     end
                 end
-                task.wait(0.04) 
+                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
                 isFiringCooldown = false
             end
         end
@@ -843,7 +881,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE OPTIMIZADO
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -868,19 +906,26 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
 Corner.Parent = ShootButton
 
--- GlowOverlay re-adaptado como capa interna de pulso de color para evitar el marco cuadrado fuera del botón
 local GlowOverlay = Instance.new("Frame")
 GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = udim2New(1, 0, 1, 0)
 GlowOverlay.Position = udim2New(0, 0, 0, 0)
-GlowOverlay.BackgroundColor3 = color3RGB(131, 46, 222)
-GlowOverlay.BackgroundTransparency = 1 
+GlowOverlay.BackgroundTransparency = 1
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
 GlowCorner.CornerRadius = Corner.CornerRadius
 GlowCorner.Parent = GlowOverlay
+
+local UiGradient = Instance.new("UIGradient")
+UiGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)),    
+    ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)),  
+    ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))
+})
+UiGradient.Rotation = 45 
+UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Name = "DecalTexture"
@@ -931,28 +976,36 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity
 Label.ZIndex = ShootButton.ZIndex + 2
 Label.Parent = ShootButton
 
--- ANIMACIONES REDISEÑADAS EN ESCALA INTERNA (RESPETA EL UICORNER REDONDO)
-local tweenInfoClick = TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local tweenInfoRelease = TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local function processGlowAtCoordinates(inputPosition)
+    local buttonAbsolutePos = ShootButton.AbsolutePosition
+    local buttonSize = ShootButton.AbsoluteSize
+    local localX =  inputPosition.X - buttonAbsolutePos.X
+    local relX = (localX / buttonSize.X) - 0.5
+    UiGradient.Offset = vec2New(relX * 1.5, 0)
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.35}):Play()
+end
+
+local function fadeGlowReflection()
+    TweenService:Create(GlowOverlay, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+end
 
 local dragging, dragInput, dragStart, startPos
 local cBegan = ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        -- Efecto táctil interno de escala y resplandor circular limpio
-        TweenService:Create(ShootButton, tweenInfoClick, {Size = udim2New(0, SheriffConfig.ButtonSize * 0.92, 0, SheriffConfig.ButtonSize * 0.92)}):Play()
-        TweenService:Create(GlowOverlay, tweenInfoClick, {BackgroundTransparency = 0.65}):Play()
+        processGlowAtCoordinates(input.Position)
+        task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-            startPos = ShootButton.Position
+             startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                    queuePositionSave() -- Guardado optimizado con debounce
+                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    saveConfig()
                     cChanged:Disconnect()
                 end
             end)
@@ -963,12 +1016,7 @@ table.insert(_G.KillerHubConnections, cBegan)
 
 local cEnded = ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        -- Restauración de tamaño orgánico
-        TweenService:Create(ShootButton, tweenInfoRelease, {Size = udim2New(0, SheriffConfig.ButtonSize, 0, SheriffConfig.ButtonSize)}):Play()
-        TweenService:Create(GlowOverlay, tweenInfoRelease, {BackgroundTransparency = 1}):Play()
-        
-        -- DISPARO MOVIDO AQUÍ -> ACTIVA AL SOLTAR (RELEASE)
-        task.spawn(fireAtMurdererDirectly)
+        fadeGlowReflection()
     end
 end)
 table.insert(_G.KillerHubConnections, cEnded)
@@ -984,7 +1032,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -994,10 +1042,11 @@ table.insert(_G.KillerHubConnections, cGlobalInputChanged)
 checkWeaponVisibility()
 
 -- ============================================================================
--- ⚡ INTERCEPCIÓN HOOK DE ARMAS
+-- ⚡ INTERCEPCIÓN HOOK DE ARMAS (SISTEMA ADAPTATIVO MODDED RECURSIVO)
 -- ============================================================================
 local WeaponService = nil
 
+-- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1006,6 +1055,7 @@ if ClientServices then
     end
 end
 
+-- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1020,6 +1070,7 @@ if not WeaponService then
     end
 end
 
+-- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1065,4 +1116,7 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
+-- ============================================================================
+-- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
+-- ============================================================================
 return KillerHub
