@@ -89,40 +89,9 @@ local SheriffConfig = {
     LeadTimePred = 0.05
 }
 
--- 4. SISTEMA DE ARCHIVOS Y AUTO-GUARDADO
+-- 4. SISTEMA DE ARCHIVOS (SOLO LECTURA)
 local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "KillerHub_SheriffSuite.txt"
-
-local function saveConfig()
-    pcall(function()
-        if writefile then
-            local data = {
-                SilentAim = SheriffConfig.SilentAim,
-                WallCheck = SheriffConfig.WallCheck,
-                ButtonX = SheriffConfig.ButtonX,
-                ButtonY = SheriffConfig.ButtonY,
-                PredictionMode = SheriffConfig.PredictionMode,
-                HorizontalPredMin = SheriffConfig.HorizontalPredMin, 
-                HorizontalPredMax = SheriffConfig.HorizontalPredMax,     
-                VerticalPredMin = SheriffConfig.VerticalPredMin,
-                VerticalPredMax = SheriffConfig.VerticalPredMax,
-                LeadTimePred = SheriffConfig.LeadTimePred,
-                TracerSmoothness = SheriffConfig.TracerSmoothness,
-                UseWeaponDetector = SheriffConfig.UseWeaponDetector,
-                ShowShootButton = SheriffConfig.ShowShootButton,
-                PredictTracer = SheriffConfig.PredictTracer,
-                ShowMinPredictTracer = SheriffConfig.ShowMinPredictTracer,
-                ShowPingTracer = SheriffConfig.ShowPingTracer,
-                ShowLagTracer = SheriffConfig.ShowLagTracer,
-                ShowLeadTracer = SheriffConfig.ShowLeadTracer,
-                CloseRangeZone = SheriffConfig.CloseRangeZone,
-                AntiBaiting = SheriffConfig.AntiBaiting,
-                HitrateEnhancer = SheriffConfig.HitrateEnhancer
-            }
-            writefile(CONFIG_FILE, HttpService:JSONEncode(data))
-        end
-    end)
-end
 
 local function loadConfig()
     pcall(function()
@@ -205,59 +174,49 @@ local function checkWeaponVisibility()
     end
 end
 
--- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA
+-- 5. CONSTRUCCIÓN DE INTERFAZ GRÁFICA (SIN AUTO-GUARDADO)
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado)
     SheriffConfig.SilentAim = estado
-    saveConfig()
 end)
 
 SheriffTab:CreateToggle("HitrateEnhancerToggle", "Optimizar Balística Predictiva (Hitrate Real)", function(estado)
     SheriffConfig.HitrateEnhancer = estado
-    saveConfig()
 end)
 
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check Inteligente)", function(estado)
     SheriffConfig.WallCheck = estado
-    saveConfig()
 end)
 
 SheriffTab:CreateToggle("AntiBaitingToggle", "Filtro Anti-Amague (Anti-Baiting)", function(estado)
     SheriffConfig.AntiBaiting = estado
-    saveConfig()
 end)
 
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Híbrido Absoluto (Omni)", "Predictiva 2.0 (Aceleración)", "Predictivo Adaptativo"}, function(seleccionado)
     SheriffConfig.PredictionMode = seleccionado
-    saveConfig()
 end)
 
 SheriffTab:CreateSlider("HorizontalPredMinSlider", "Predicción Horizontal MÍNIMA", 0, 250, function(valor)
     SheriffConfig.HorizontalPredMin = valor / 1000 
-    saveConfig() 
 end, math_floor(SheriffConfig.HorizontalPredMin * 1000))
 
 SheriffTab:CreateSlider("HorizontalPredMaxSlider", "Predicción Horizontal MÁXIMA", 0, 300, function(valor)
     SheriffConfig.HorizontalPredMax = valor / 1000 
-    saveConfig() 
 end, math_floor(SheriffConfig.HorizontalPredMax * 1000))
 
 SheriffTab:CreateSlider("VerticalPredMinSlider", "Predicción Vertical MÍNIMA", 0, 90, function(valor)
     SheriffConfig.VerticalPredMin = valor / 1000
-    saveConfig() 
 end, math_floor(SheriffConfig.VerticalPredMin * 1000))
 
 SheriffTab:CreateSlider("VerticalPredMaxSlider", "Predicción Vertical MÁXIMA", 0, 120, function(valor)
     SheriffConfig.VerticalPredMax = valor / 1000
-    saveConfig() 
 end, math_floor(SheriffConfig.VerticalPredMax * 1000))
 
 SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa (Studs)", 0, 20, function(valor)
     SheriffConfig.CloseRangeZone = valor
-    saveConfig()
 end, SheriffConfig.CloseRangeZone)
 
 SheriffTab:CreateSection("Líneas de Trayectoria")
@@ -274,7 +233,6 @@ SheriffTab:CreateMultiDropdown("ActiveTracers", "Seleccionar Tracers Activos:", 
     SheriffConfig.ShowPingTracer = tablaFlags["Ping (Azul)"]
     SheriffConfig.ShowLagTracer = tablaFlags["Lag (Violeta)"]
     SheriffConfig.ShowLeadTracer = tablaFlags["Lead (Verde)"]
-    saveConfig()
 end)
 
 SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = Instantáneo)", 1, 100, function(valor)
@@ -283,25 +241,21 @@ SheriffTab:CreateSlider("TracerSmoothSlider", "Estabilizador Anti-Temblor (1 = I
     else
         SheriffConfig.TracerSmoothness = 0.95 - ((valor - 2) / 98) * 0.80
     end
-    saveConfig()
 end, 40)
 
 SheriffTab:CreateSlider("LeadTimeSlider", "Anticipación de la Mano (Lead Time)", 0, 100, function(valor)
     SheriffConfig.LeadTimePred = valor / 100
-    saveConfig()
 end, math_floor(SheriffConfig.LeadTimePred * 100))
 
 SheriffTab:CreateSection("Ajustes de Interfaz / Tácticas")
 
 SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón si no tengo Arma en Inventario", function(estado)
     SheriffConfig.UseWeaponDetector = estado
-    saveConfig()
     checkWeaponVisibility()
 end)
 
 SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function(estado)
     SheriffConfig.ShowShootButton = estado
-    saveConfig()
     checkWeaponVisibility()
 end)
 
@@ -623,13 +577,13 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     if SheriffConfig.HitrateEnhancer then
         local currentFPS = 1 / math_max(clampedDT, 0.001)
         if currentFPS < 55 then
-            timeFrameTotal = timeFrameTotal * 1.08 -- Compensa el retraso en pantallas de baja tasa de refresco
+            timeFrameTotal = timeFrameTotal * 1.08 
             timeFrameMin = timeFrameMin * 1.05
         end
         if distance > 35 then
-            timeFrameTotal = timeFrameTotal * 0.94 -- Evita que la mira flote fuera de rango a distancias largas
+            timeFrameTotal = timeFrameTotal * 0.94 
         elseif distance < 12 then
-            timeFrameTotal = timeFrameTotal * 0.88 -- Estabiliza el hitbox exacto a corta distancia para no pasarse de largo
+            timeFrameTotal = timeFrameTotal * 0.88 
         end
     end
 
@@ -1001,7 +955,7 @@ local function fadeGlowReflection()
     TweenService:Create(GlowOverlay, TweenInfo.new(0.71, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
 end
 
--- ⚡ ENTRADAS DE CONTROL ADAPTADAS (ARRASAR Y SOLTAR)
+-- ⚡ ENTRADAS DE CONTROL ADAPTADAS (SIN AUTO-GUARDADO AL MOVER)
 local dragging, dragInput, dragStart, startPos
 local dragMoved = false 
 
@@ -1020,7 +974,6 @@ local cBegan = ShootButton.InputBegan:Connect(function(input)
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                    saveConfig()
                     cChanged:Disconnect()
                 end
             end)
@@ -1032,7 +985,6 @@ table.insert(_G.KillerHubConnections, cBegan)
 local cEnded = ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         fadeGlowReflection()
-        -- Solo dispara si al levantar el dedo el botón no se arrastró más allá del rango límite
         if not dragMoved then
             task.spawn(fireAtMurdererDirectly)
         end
