@@ -32,6 +32,9 @@ local workspace_Gravity = workspace.Gravity
 local VECTOR_ZERO = vec3New(0, 0, 0)
 local VECTOR_UP = vec3New(0, 1, 0)
 
+-- Variable global interna optimizada para guardar la última predicción calculada
+local ultimaPrediccionGuardada = nil
+
 -- 1. LIMPIEZA TOTAL DE MEMORIA
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do
@@ -176,6 +179,7 @@ end
 
 local cachedScreenGui
 local cachedShootButton
+local cachedGlowClipFrame
 
 local function checkWeaponVisibility()
     if not cachedScreenGui then return end
@@ -313,6 +317,11 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
             cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
         end
     end
+    if cachedGlowClipFrame then
+        if cachedGlowClipFrame:FindFirstChild("UICorner") then
+            cachedGlowClipFrame.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28))
+        end
+    end
 end, SheriffConfig.ButtonSize)
 
 -- ============================================================================
@@ -401,7 +410,7 @@ local function autoEquipWeapon()
         for _, item in pairs(backpack:GetChildren()) do
             if isRangedWeapon(item) then
                 character.Humanoid:EquipTool(item)
-                task.wait(0.01) -- Reducido para mayor velocidad de reacción
+                task.wait(0.01)
                 break
             end
         end
@@ -536,7 +545,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA (MEJORADO)
+-- 📈 MOTOR DE BALÍSTICA ADAPTATIVA ULTRA-PRECISA
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
@@ -583,7 +592,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- ⚡ MEJORA: FILTRO DE VELOCIDAD INVERSA (PREVIENE OVERSHOOTING SI EL OBJETIVO DA VUELTA EN U)
     local baitingFactor = 1
     if dotProduct < 0.65 then
         if SheriffConfig.AntiBaiting then
@@ -595,7 +603,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local clampedDT = math_min(activeDT, 0.05) 
     local isLowFPS = activeDT > 0.033
-    local responseSpeed = isLowFPS and 14.0 or 18.5 -- Respuesta del lerp acelerada para mayor precisión táctica
+    local responseSpeed = isLowFPS and 14.0 or 18.5
     local adaptiveWeight = math_clamp(1 - math_exp(-responseSpeed * clampedDT), 0.08, 0.90)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, adaptiveWeight)
 
@@ -611,7 +619,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local rawAcceleration = (smoothedVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
     
-    -- ⚡ VELOCITY SNAPPING: Si frena en seco o cambia radicalmente, matamos la aceleración residual
     if dotProduct < 0.3 then 
         rawAcceleration = VECTOR_ZERO 
     elseif rawAcceleration.Magnitude > 60 then 
@@ -675,7 +682,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local finalVFactorMax = math_min(ping * SheriffConfig.VerticalPredMax * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMax * predictionWeight)
         local finalVFactorMin = math_min(ping * SheriffConfig.VerticalPredMin * predictionWeight * vSpeedScale, ping * SheriffConfig.VerticalPredMin * predictionWeight)
         
-        -- Optimización de la llamada constante a Gravity usando el cache superior
         local pYMax = (smoothedVelocity.Y * finalVFactorMax) - (0.5 * workspace_Gravity * (finalVFactorMax ^ 2))
         local pYMin = (smoothedVelocity.Y * finalVFactorMin) - (0.5 * workspace_Gravity * (finalVFactorMin ^ 2))
         if smoothedVelocity.Y > 1 then
@@ -759,6 +765,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     if not murderer or not murderer.Character then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
         firstFrame = true
+        ultimaPrediccionGuardada = nil
         return
     end
 
@@ -773,6 +780,10 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local tSmooth = SheriffConfig.TracerSmoothness
      
         local predictedPos, minPredictedPos, pingPos, lagPos = getPredictedPosition(targetChar, visualPart)
+        
+        -- Guardamos la predicción final de manera global para que el botón la consuma directamente
+        ultimaPrediccionGuardada = predictedPos
+        
         local screenOrigin = vec2New(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
 
         if lagPos and SheriffConfig.ShowLagTracer then
@@ -838,12 +849,13 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     else
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; PingLine.Visible = false; LagLine.Visible = false; LeadLine.Visible = false;
         firstFrame = true
+        ultimaPrediccionGuardada = nil
     end 
 end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ EJECUCIÓN MANUAL DISPARO DISPARADOR (BOTÓN)
+-- ⚡ EJECUCIÓN MANUAL DISPARO DISPARADOR (BOTÓN OPTIMIZADO)
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -853,35 +865,29 @@ local function fireAtMurdererDirectly()
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not humanoid or humanoid.Health <= 0 or not hrp then return end 
 
-    local murderer = getMurderer()
-    if murderer and murderer.Character then
-        local targetChar = murderer.Character
-        local bestPart = getSmartTargetPart(targetChar) 
-        if bestPart then 
-            local predictedPos = getPredictedPosition(targetChar, bestPart)
-            if predictedPos then
-                isFiringCooldown = true 
-                autoEquipWeapon()
-                local gun, _ = getGunLocation()
-                if gun then
-                    local shootRemote = gun:FindFirstChild("Shoot")
-                    if shootRemote then
-                        local originCFrame = hrp.CFrame
-                        if hrp:FindFirstChild("GunRaycastAttachment") then 
-                            originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
-                        end
-                        shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
-                    end
+    -- Consumimos directamente la última predicción guardada por el render loop (0 impacto de CPU extra)
+    local predictedPos = ultimaPrediccionGuardada
+    if predictedPos then
+        isFiringCooldown = true 
+        autoEquipWeapon()
+        local gun, _ = getGunLocation()
+        if gun then
+            local shootRemote = gun:FindFirstChild("Shoot")
+            if shootRemote then
+                local originCFrame = hrp.CFrame
+                if hrp:FindFirstChild("GunRaycastAttachment") then 
+                    originCFrame = hrp.GunRaycastAttachment.WorldCFrame 
                 end
-                task.wait(0.04) -- Latencia interna optimizada para evitar duplicación de triggers
-                isFiringCooldown = false
+                shootRemote:FireServer(originCFrame, cframeNew(predictedPos))
             end
         end
-     end
+        task.wait(0.04) 
+        isFiringCooldown = false
+    end
 end
 
 -- ============================================================================
--- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT)
+-- 🌌 CREACIÓN DEL INTERRUPTOR FLOTANTE (BOTÓN SHOOT CORREGIDO)
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -906,13 +912,29 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
 Corner.Parent = ShootButton
 
+-- Contenedor intermedio estricto para encapsular el Glow dentro de las esquinas redondeadas
+local GlowClipFrame = Instance.new("Frame")
+GlowClipFrame.Name = "GlowClipFrame"
+GlowClipFrame.Size = udim2New(1, 0, 1, 0)
+GlowClipFrame.Position = udim2New(0, 0, 0, 0)
+GlowClipFrame.BackgroundTransparency = 1
+GlowClipFrame.ClipsDescendants = true
+GlowClipFrame.ZIndex = ShootButton.ZIndex + 1
+GlowClipFrame.Parent = ShootButton
+
+cachedGlowClipFrame = GlowClipFrame
+
+local GlowClipCorner = Instance.new("UICorner")
+GlowClipCorner.CornerRadius = Corner.CornerRadius
+GlowClipCorner.Parent = GlowClipFrame
+
 local GlowOverlay = Instance.new("Frame")
 GlowOverlay.Name = "GlowOverlay"
 GlowOverlay.Size = udim2New(1, 0, 1, 0)
 GlowOverlay.Position = udim2New(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
-GlowOverlay.ZIndex = ShootButton.ZIndex + 1
-GlowOverlay.Parent = ShootButton
+GlowOverlay.ZIndex = GlowClipFrame.ZIndex
+GlowOverlay.Parent = GlowClipFrame
 
 local GlowCorner = Instance.new("UICorner")
 GlowCorner.CornerRadius = Corner.CornerRadius
@@ -993,18 +1015,17 @@ local dragging, dragInput, dragStart, startPos
 local cBegan = ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         processGlowAtCoordinates(input.Position)
-        task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
             dragging = true
             dragStart = input.Position
-             startPos = ShootButton.Position
+            startPos = ShootButton.Position
             local cChanged
             cChanged = input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
                     SheriffConfig.ButtonX = ShootButton.Position.X.Scale
-                     SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                    SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
                     saveConfig()
                     cChanged:Disconnect()
                 end
@@ -1014,9 +1035,11 @@ local cBegan = ShootButton.InputBegan:Connect(function(input)
 end)
 table.insert(_G.KillerHubConnections, cBegan)
 
+-- Se ejecuta el disparo exactamente al soltar el botón (InputEnded)
 local cEnded = ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         fadeGlowReflection()
+        task.spawn(fireAtMurdererDirectly)
     end
 end)
 table.insert(_G.KillerHubConnections, cEnded)
@@ -1032,7 +1055,7 @@ local cGlobalInputChanged = UserInputService.InputChanged:Connect(function(input
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ShootButton.Position = udim2New(
-              startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
+            startPos.X.Scale + (delta.X / Camera.ViewportSize.X), 0, 
             startPos.Y.Scale + (delta.Y / Camera.ViewportSize.Y), 0
         )
     end
@@ -1046,7 +1069,6 @@ checkWeaponVisibility()
 -- ============================================================================
 local WeaponService = nil
 
--- Intentar obtener por ruta estructural clásica
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
     local ws = ClientServices:FindFirstChild("WeaponService") or ClientServices:FindFirstChild("GunService")
@@ -1055,7 +1077,6 @@ if ClientServices then
     end
 end
 
--- ⚡ ESCÁNER INTELIGENTE RECURSIVO (Si falla la ruta por defecto, busca en todo ReplicatedStorage)
 if not WeaponService then
     local descendants = ReplicatedStorage:GetDescendants()
     for i = 1, #descendants do
@@ -1070,7 +1091,6 @@ if not WeaponService then
     end
 end
 
--- Inyección y redirección balística pasiva
 if WeaponService then
     local oldGetTargetPosition = WeaponService.GetTargetPosition
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
@@ -1116,7 +1136,4 @@ else
     warn("⚠️ KillerHub Crítico: No se pudo enlazar el Hook de Armas. Juego incompatible o firma protegida.")
 end
 
--- ============================================================================
--- 👑 COMPATIBILIDAD EXTERNA DE LIBRERÍA
--- ============================================================================
 return KillerHub
