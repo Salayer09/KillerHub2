@@ -1,6 +1,6 @@
--- ===========================================================================
+-- ============================================================================
 --  KILLER HUB | SHERIFF SUITE V8.5.0 (BACKTRACK & OMNI-PRED OVERHAUL 2026)
--- ===========================================================================
+-- ============================================================================
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -743,31 +743,31 @@ end
 
 local LagLine = Drawing.new("Line") 
 LagLine.Color = color3RGB(150, 50, 255) 
-LagLine.Thickness = 0.4
+LagLine.Thickness = 0.1
 LagLine.ZIndex = 2  
 table.insert(_G.KillerHubLines, LagLine)
 
 local PingLine = Drawing.new("Line")
 PingLine.Color = color3RGB(0, 100, 255) 
-PingLine.Thickness = 0.4
+PingLine.Thickness = 0.1
 PingLine.ZIndex = 3  
 table.insert(_G.KillerHubLines, PingLine)
 
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = color3RGB(0, 255, 100) 
-LeadLine.Thickness = 0.4
+LeadLine.Thickness = 0.1
 LeadLine.ZIndex = 4  
 table.insert(_G.KillerHubLines, LeadLine)
 
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(255, 235, 35) 
-MinPredictionLine.Thickness = 0.4 
+MinPredictionLine.Thickness = 0.1 
 MinPredictionLine.ZIndex = 5  
 table.insert(_G.KillerHubLines, MinPredictionLine)
 
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = color3RGB(255, 35, 35) 
-PredictionLine.Thickness = 0.4 
+PredictionLine.Thickness = 0.1 
 PredictionLine.ZIndex = 6  
 table.insert(_G.KillerHubLines, PredictionLine)
 
