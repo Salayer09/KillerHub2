@@ -1,5 +1,5 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF V8.0.0 [🔥 SUPER-PREDICTION & GLOW FIXED]
+--  KILLER HUB | SHERIFF V8.0.1 [🔥 FULL MÓVIL BLINDADO & RENDIMIENTO FIJADO]
 -- ============================================================================
 
 getgenv().KillerHub = {
@@ -20,7 +20,7 @@ local UserInputService = game:GetService("UserInputService")
 local Stats = game:GetService("Stats")
 local Camera = workspace.CurrentCamera
 
--- ⚡ UPVALUES REALES (SOLO RENDIMIENTO AL MÁXIMO)
+-- ⚡ UPVALUES REALES (RENDIMIENTO AL MÁXIMO)
 local math_clamp = math.clamp
 local math_min = math.min
 local math_max = math.max
@@ -51,7 +51,7 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 2. CARGA DE LA LIBRERÍA DE INTERFAZ ORIGINAL
+-- 2. CARGA DE LA LIBRERÍA DE INTERFAZ ORIGINAL (v3.1 UI LAYOUT)
 local success, KillerHubLib = pcall(function()
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 end)
@@ -289,7 +289,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, fu
 end, SheriffConfig.ButtonSize)
 
 -- ============================================================================
--- 🧠 CORE LOGIC MM2
+-- 🧠 CORE LOGIC MM2 (CACHING CON RESPETO DE TIEMPO EFICIENTE)
 -- ============================================================================
 local MurdererDetectado = nil
 local lastMurdererCheckTime = 0 
@@ -367,7 +367,8 @@ local function getMurderer()
         else MurdererDetectado = nil end
     end
 
-    if currentTime - lastMurdererCheckTime < 0.10 then return currentTarget end
+    -- Control de tiempo estricto: no escanea a todos en cada frame de forma descontrolada
+    if currentTime - lastMurdererCheckTime < 0.25 then return currentTarget end
     lastMurdererCheckTime = currentTime
 
     for name, role in pairs(playerRoles) do
@@ -437,7 +438,7 @@ local function getSmartTargetPart(targetChar)
 end
 
 -- ============================================================================
--- 📈 MOTOR DE BALÍSTICA ACTUALIZADO (SÚPER PREDICCIÓN CON +200MS COMPENSACIÓN)
+-- 📈 MOTOR DE BALÍSTICA BLINDADO MÓVIL (SÚPER PREDICCIÓN EXCLUSIVA OMNI)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil end
@@ -451,7 +452,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- 3. Blíndado contra Glitches de Animación / Emotes en MM2
+    -- 🔥 [MEJORA 3]: Blindado contra Glitches de Animación / Emotes en MM2
     if humanoid.MoveDirection.Magnitude == 0 and rawVelocity.Magnitude > 2 then
         rawVelocity = VECTOR_ZERO 
     elseif rawVelocity.Magnitude < 0.6 then 
@@ -469,30 +470,38 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local maxExpectedSpeed = math_max(humanoid.WalkSpeed * 2.0, 36)
     if rawVelocity.Magnitude > maxExpectedSpeed then rawVelocity = rawVelocity.Unit * maxExpectedSpeed end
 
-    -- Suavizado adaptativo dinámico según el modo
+    -- Suavizado adaptativo dinámico según el modo elegido
     local responseSpeed = 16.5
     local mode = SheriffConfig.PredictionMode
     if mode == "Predictiva 2.0 (Aceleración)" then
-        responseSpeed = 28.0 -- Reacción ultra salvaje y rápida
+        responseSpeed = 28.0 
     elseif mode == "Predictivo Adaptativo" then
-        responseSpeed = 9.5  -- Súper suave
+        responseSpeed = 9.5  
     end
     
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, math_clamp(1 - math_exp(-responseSpeed * math_min(activeDT, 0.05)), 0.10, 0.85))
 
-    -- 2. Sistema de Compensación de Red Real para Pings Altos (+200ms)
-    local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
-    local pingCompensation = 1.0 + (rawPing * 1.85) -- Multiplicador dinámico de avance de red
+    -- 🔥 [MEJORA 2]: Retorno Seguro de Ping (Pcall blindado contra errores en Móvil/PC)
+    local rawPing = 0.06
+    pcall(function()
+        local performanceStats = Stats:FindFirstChild("Network")
+        if performanceStats and performanceStats:FindFirstChild("ServerToClientPing") then
+            rawPing = performanceStats.ServerToClientPing:GetValue() / 1000
+        else
+            rawPing = LocalPlayer:GetNetworkPitch() or 0.06
+        end
+    end)
 
-    -- 1. Curva Dinámica para evitar que se pase de largo (Dynamic Distance Scaling)
+    local pingCompensation = 1.0 + (rawPing * 1.85)
+
+    -- 🔥 [MEJORA 1]: Factor de Escala por Distancia Dinámica (Dynamic Distance Scaling)
     local distanceFactor = math_clamp(22 / distance, 0.38, 1.25)
 
-    -- Ejecución de variables modificadas según selección cosmética
     local multiplierMax = SheriffConfig.HorizontalPredMax
     local multiplierMin = SheriffConfig.HorizontalPredMin
     
     if mode == "Predictivo Adaptativo" then
-        smoothedVelocity = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) -- Aplanar vector
+        smoothedVelocity = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z)
     end
 
     local timeFrameTotal = multiplierMax * 0.5 * distanceFactor * pingCompensation * predictionWeight
@@ -501,12 +510,11 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local finalHorizontal = smoothedVelocity * timeFrameTotal
     local minHorizontal = smoothedVelocity * timeFrameMin
 
-    -- Cap máximo de seguridad por balance físico
     local maxHorizontalShift = 4.2 
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
 
-    -- Predicción Vertical Reactiva Real (Eje Y) si salta
+    -- Predicción Vertical Reactiva Real (Eje Y) si salta o cae
     local verticalOffsetMax = VECTOR_ZERO
     if math_abs(smoothedVelocity.Y) > 0.5 then
         local verticalFactor = SheriffConfig.VerticalPredMax * (1 + rawPing) * predictionWeight
@@ -517,7 +525,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- 🌌 SECCIÓN DE RENDERS TRACERS REALEZ
+-- 🌌 SECCIÓN DE RENDERS TRACERS BALÍSTICOS
 -- ============================================================================
 local LeadLine = Drawing.new("Line")
 LeadLine.Color = color3RGB(0, 255, 100) 
@@ -608,7 +616,7 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 -- ============================================================================
--- ⚡ DISPARADOR DE BOTÓN ACCIÓN DIRECTA
+-- ⚡ DISPARADOR DE BOTÓN - ACCIÓN DIRECTA PASIVA
 -- ============================================================================
 local function fireAtMurdererDirectly()
     if isFiringCooldown then return end 
@@ -638,7 +646,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- 🌌 ELEMENTOS VISUALES / INTERRUPTOR FLOTANTE CON GLOW CORREGIDO
+-- 🌌 ELEMENTOS VISUALES | INTERRUPTOR FLOTANTE CON CYBER-GLOW CORREGIDO
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -663,10 +671,10 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
 Corner.Parent = ShootButton
 
--- ⚡ RELLENO COMPLETO RE-AJUSTADO (Cero líneas vacías en las orillas)
+-- ✨ GLOW CORREGIDO Y CENTRALIZADO AL 100% (No desfasa en las esquinas al agrandarse)
 local GlowOverlay = Instance.new("Frame")
 GlowOverlay.Name = "GlowOverlay"
-GlowOverlay.Size = udim2New(1, 0, 1, 0) -- 100% Cubierto sin offsets desfasados
+GlowOverlay.Size = udim2New(1, 0, 1, 0) 
 GlowOverlay.Position = udim2New(0, 0, 0, 0)
 GlowOverlay.BackgroundTransparency = 1
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
@@ -698,11 +706,11 @@ DecalTexture.ZIndex = ShootButton.ZIndex + 2
 DecalTexture.Parent = ShootButton
 
 task.spawn(function()
-    local infoGiro = TweenInfo.new(0.8025, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local infoGiro = TweenInfo.new(0.80, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local tweenIda = TweenService:Create(DecalTexture, infoGiro, {Rotation = 360})
     local tweenVuelta = TweenService:Create(DecalTexture, infoGiro, {Rotation = 0})
-    tweenIda.Completed:Connect(function() task.wait(0.02) tweenVuelta:Play() end)
-    tweenVuelta.Completed:Connect(function() task.wait(0.02) tweenIda:Play() end)
+    tweenIda.Completed:Connect(function() task.wait(0.03) tweenVuelta:Play() end)
+    tweenVuelta.Completed:Connect(function() task.wait(0.03) tweenIda:Play() end)
     tweenIda:Play()
 end)
 
@@ -724,7 +732,7 @@ ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local localX = input.Position.X - ShootButton.AbsolutePosition.X
         UiGradient.Offset = vec2New(((localX / ShootButton.AbsoluteSize.X) - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.25}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.39}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         if not SheriffConfig.ButtonLocked then
