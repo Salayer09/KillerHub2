@@ -311,9 +311,17 @@ end)
 SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón Sheriff", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then 
+        local newRadius = UDim.new(0, math_floor(valor * 0.28))
         cachedShootButton.Size = udim2New(0, valor, 0, valor) 
+        
         if cachedShootButton:FindFirstChild("UICorner") then 
-            cachedShootButton.UICorner.CornerRadius = UDim.new(0, math_floor(valor * 0.28)) 
+            cachedShootButton.UICorner.CornerRadius = newRadius
+        end
+        
+        -- ⚡ FIX CRÍTICO: Sincronizar esquinas redondeadas del destello con el nuevo tamaño
+        local glow = cachedShootButton:FindFirstChild("GlowOverlay")
+        if glow and glow:FindFirstChild("GlowCorner") then
+            glow.GlowCorner.CornerRadius = newRadius
         end
     end
 end, SheriffConfig.ButtonSize)
@@ -322,9 +330,9 @@ end, SheriffConfig.ButtonSize)
 -- 🧠 HISTORIAL DE DATOS Y ENLACES DE RED
 -- ============================================================================
 local MurdererDetectado = nil
-local lastMurdererCheckTime = 0 -- Control de throttling para CPU
+local lastMurdererCheckTime = 0 
 
-local previousTargetVelocity = VECTOR_ZERO 
+(previousTargetVelocity = VECTOR_ZERO) 
 local smoothedVelocity = VECTOR_ZERO
 local lastRawVelocity = VECTOR_ZERO 
 local lastTargetChar = nil
@@ -428,11 +436,9 @@ local function getGunLocation()
     return nil, nil
 end
 
--- 👑 FUNCIÓN GETMURDERER TOTALMENTE OPTIMIZADA (THROTTLED)
 local function getMurderer()
     local currentTime = os_clock()
     
-    -- Si ya tenemos un Murderer válido detectado, validamos su estado sin volver a escanear a todo el servidor
     if MurdererDetectado and MurdererDetectado.Parent and MurdererDetectado.Character then
         local name = MurdererDetectado.Name
         local char = MurdererDetectado.Character
@@ -447,7 +453,6 @@ local function getMurderer()
         end
     end
 
-    -- Control de tiempo: Solo escanea la lista completa de jugadores cada 0.1 segundos (Saves 90% CPU)
     if currentTime - lastMurdererCheckTime < 0.10 then
         return currentTarget
     end
@@ -506,7 +511,6 @@ end
 local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 
--- RECOLECTOR DE BASURA SOLUCIONADO: Reutilización de ignoreList
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
@@ -571,7 +575,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local distance = (targetPosition - localHrp.Position).Magnitude
 
     local currentRawSpeed = rawVelocity.Magnitude
-    if currentRawSpeed < 0.6 then -- Si apenas se mueve, matamos la predicción por completo para que no tironee
+    if currentRawSpeed < 0.6 then 
         rawVelocity = VECTOR_ZERO
         currentRawSpeed = 0
     end
@@ -603,7 +607,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastRawVelocity = rawVelocity 
 
-    -- ⚡ FILTRO ANTI-AMAGUE TOTAL: Evita que la mira se desfase cuando el jugador frena o cambia de dirección
     local baitingFactor = 1
     local stableAcceleration = VECTOR_ZERO
     
@@ -611,10 +614,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local isLowFPS = activeDT > 0.033
     
     if dotProduct < 0.70 then
-        -- Si cambió radicalmente de dirección (giro brusco), destruimos la aceleración residual y bajamos la velocidad base
         stableAcceleration = VECTOR_ZERO
         if SheriffConfig.AntiBaiting then
-            baitingFactor = math_clamp((dotProduct + 1) / 3.0, 0.0, 0.20) -- Reducción masiva para evitar sobre-predicción
+            baitingFactor = math_clamp((dotProduct + 1) / 3.0, 0.0, 0.20) 
         end
     else
         local rawAcceleration = (rawVelocity - previousTargetVelocity) / math_max(clampedDT, 0.001)
@@ -674,7 +676,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         lagHorizontal = flatVel * (timeFrameLagOnly * dMod)
     end
 
-    local maxHorizontalShift = 3.5 -- Cap estricto en studs para que jamás se descuadre de más
+    local maxHorizontalShift = 3.5 
     if finalHorizontal.Magnitude > maxHorizontalShift then finalHorizontal = finalHorizontal.Unit * maxHorizontalShift end
     if minHorizontal.Magnitude > maxHorizontalShift then minHorizontal = minHorizontal.Unit * maxHorizontalShift end
     
@@ -913,15 +915,17 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0, math_floor(SheriffConfig.ButtonSize * 0.28))
 Corner.Parent = ShootButton
 
+-- ⚡ SE CORRIGIÓ EL TAMAÑO (INSET DE 1PX) PARA EVITAR QUE SOBRESALGA EN PANTALLA
 local GlowOverlay = Instance.new("Frame")
 GlowOverlay.Name = "GlowOverlay"
-GlowOverlay.Size = udim2New(1, 0, 1, 0)
-GlowOverlay.Position = udim2New(0, 0, 0, 0)
+GlowOverlay.Size = udim2New(1, -2, 1, -2) 
+GlowOverlay.Position = udim2New(0, 1, 0, 1)
 GlowOverlay.BackgroundTransparency = 1
 GlowOverlay.ZIndex = ShootButton.ZIndex + 1
 GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
+GlowCorner.Name = "GlowCorner"
 GlowCorner.CornerRadius = Corner.CornerRadius
 GlowCorner.Parent = GlowOverlay
 
