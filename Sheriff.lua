@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.2 - MULTI-RAY)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -23,6 +23,7 @@ local math_clamp = math.clamp
 local math_min = math.min
 local math_max = math.max
 local math_abs = math.abs
+local math_pow = math.pow
 local vec2New = Vector2.new
 local vec3New = Vector3.new
 local udim2New = UDim2.new
@@ -34,7 +35,6 @@ local workspace = workspace
 local workspace_Gravity = workspace.Gravity
 local VECTOR_ZERO = vec3New(0, 0, 0)
 
--- Limpieza preventiva de instancias previas
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do pcall(function() line:Remove() end) end
 end
@@ -48,20 +48,19 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 1. CARGA DE LIBRERÍA (URL Oficial provista de Paolo0109)
+-- 1. CARGA DE LIBRERÍA
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 local SheriffConfig = {
     SilentAim = false,
-    PredictionMode = "Omni-Direccional Absoluto (Universal)", 
+    PredictionMode = "PREDICTION PRO", 
     HorizontalScale = 100,  
     VerticalScale = 100,    
     PingCompensation = 100, 
     CloseRangeZone = 6, 
     WallCheck = true,    
     FiltroCaminadora = true, 
-    EstabilizadorInercial = true,
-    -- Configuración de tracers controlada por Multi-Dropdown
+    EstabilizadorInercial = false, -- Desactivado por defecto para evitar retrasos
     ShowRedTracer = true,      
     ShowYellowTracer = true, 
     ShowGreenTracer = true,
@@ -75,7 +74,7 @@ local SheriffConfig = {
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite_v10.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_v102.txt"
 
 local function saveConfig()
     pcall(function() if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(SheriffConfig)) end end)
@@ -118,13 +117,13 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- 2. CREACIÓN DE LA PESTAÑA SHERIFF
+-- 2. CREACIÓN DE LA INTERFAZ UI
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado) SheriffConfig.SilentAim = estado saveConfig() end)
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Verificar Paredes (Wall Check)", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"Omni-Direccional Absoluto (Universal)", "Lineal Simple"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Escaneo Avanzado Multi-Rayo", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
+SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 
 SheriffTab:CreateSection("Calibración del Entorno")
 SheriffTab:CreateSlider("HorizontalScaleSlider", "Predicción Horizontal (X/Z)", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
@@ -132,7 +131,6 @@ SheriffTab:CreateSlider("VerticalScaleSlider", "Predicción Vertical (Eje Y)", 0
 SheriffTab:CreateSlider("PingCompSlider", "Compensador de Latencia (%)", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
 SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
 
--- IMPLEMENTACIÓN DEL MULTI-DROPDOWN SEGÚN LA API SOLICITADA
 SheriffTab:CreateSection("Personalización Visual")
 SheriffTab:CreateMultiDropdown("ActiveTracers", "Visualización de Tracers (Múltiple):", {"Rojo (Impacto)", "Amarillo (Mínimo)", "Verde (Lead Time)"}, function(tablaFlags)
     SheriffConfig.ShowRedTracer = tablaFlags["Rojo (Impacto)"] or false
@@ -143,15 +141,13 @@ end)
 
 SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón de Disparo", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
-    if cachedShootButton then 
-        cachedShootButton.Size = udim2New(0, valor, 0, valor) 
-    end
-    saveConfig() -- Este slider guarda de manera segura
+    if cachedShootButton then cachedShootButton.Size = udim2New(0, valor, 0, valor) end
+    saveConfig()
 end, SheriffConfig.ButtonSize)
 
 SheriffTab:CreateSection("Filtros Anti-Errores Reales")
 SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Filtro Caminadora Invisible", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
-SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Estabilizador de Fintas", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
+SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Suavizado de Inercia (Fintas)", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
 SheriffTab:CreateSlider("TracerSmoothSlider", "Suavizado (1 = Instantáneo)", 1, 100, function(v)
     if v == 1 then SheriffConfig.TracerSmoothness = 1 else SheriffConfig.TracerSmoothness = 0.98 - ((v - 2) / 98) * 0.85 end
     saveConfig()
@@ -172,6 +168,7 @@ local playerDeadStatus = {}
 local currentTarget = nil
 local isFiringCooldown = false
 local positionHistory = {}
+local lastPositions = {} 
 local MAX_HISTORY_FRAMES = 5
 local handLineIsBlocked = false 
 
@@ -201,7 +198,7 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then table.insert(
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, RoundStart.OnClientEvent:Connect(function(a1, a2)
-        table.clear(playerRoles) table.clear(playerDeadStatus) table.clear(positionHistory)
+        table.clear(playerRoles) table.clear(playerDeadStatus) table.clear(positionHistory) table.clear(lastPositions)
         MurdererDetectado = nil parsePlayerData(a2) parsePlayerData(a1)
     end))
 end
@@ -275,11 +272,14 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 local ignoreListCache = {} 
 
--- PERFECCIONAMIENTO COMPLETO DEL WALL CHECK INTELIGENTE
+-- ============================================================================
+-- 🔥 IMPLEMENTACIÓN EXPERTA FASE 2: ESCANEO DE EXTREMIDADES MULTI-RAYO
+-- ============================================================================
 local function getSmartTargetPart(targetChar)
-    if not targetChar then return nil end
-    local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
-    if not SheriffConfig.WallCheck then return torso end
+    if not targetChar then return nil, true end
+    local hrp = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
+    if not hrp then return nil, true end
+    if not SheriffConfig.WallCheck then return hrp, false end
     
     local origin = Camera.CFrame.Position
     table.clear(ignoreListCache)
@@ -290,14 +290,29 @@ local function getSmartTargetPart(targetChar)
     for i = 1, #allPlayers do if allPlayers[i].Character then table.insert(ignoreListCache, allPlayers[i].Character) end end
     
     mapCastParams.FilterDescendantsInstances = ignoreListCache
-    if torso then
-        local ray = workspace:Raycast(origin, torso.Position - origin, mapCastParams)
-        -- Si no choca, o choca contra algo sin colisión física o casi invisible, se aprueba el tiro
-        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.8) then 
-            return torso 
+    
+    -- Árbol de escaneo anatómico por orden de exposición prioritario
+    local partsToScan = {
+        hrp,                                                                       -- 1. Centro de masa
+        targetChar:FindFirstChild("Head"),                                         -- 2. Cabeza por si asoma arriba
+        targetChar:FindFirstChild("LeftHand") or targetChar:FindFirstChild("Left Arm"),   -- 3. Extremidades laterales
+        targetChar:FindFirstChild("RightHand") or targetChar:FindFirstChild("Right Arm"),
+        targetChar:FindFirstChild("LeftFoot") or targetChar:FindFirstChild("Left Leg"),   -- 4. Extremidades de avance inferior
+        targetChar:FindFirstChild("RightFoot") or targetChar:FindFirstChild("Right Leg")
+    }
+    
+    for i = 1, #partsToScan do
+        local part = partsToScan[i]
+        if part then
+            local ray = workspace:Raycast(origin, part.Position - origin, mapCastParams)
+            -- Si la línea está limpia de colisiones físicas sólidas, disparamos a esa extremidad
+            if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.8) then 
+                return part, false -- Parte libre detectada
+            end
         end
     end
-    return torso
+    
+    return hrp, true -- Todo tapado, pero retornamos hrp para mantener el tracer visual pasivo
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -307,6 +322,9 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- ============================================================================
+-- 🔥 REENTRENADO CON FASE 1 FIJADA (VELOCIDAD PURA POR DELTA DE POSICIÓN)
+-- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -316,17 +334,26 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local activeDT = customDelta or emaDeltaTime
     local targetPosition = targetPart.Position
-    local rawVelocity = hrp.AssemblyLinearVelocity
     local distance = (targetPosition - localHrp.Position).Magnitude
+
+    -- Cálculo de velocidad real por delta matemático de studs (Elimina lag de Roblox)
+    local rawVelocity = hrp.AssemblyLinearVelocity
+    if lastPositions[targetChar] then
+        local datosPrevios = lastPositions[targetChar]
+        local tiempoTranscurrido = os_clock() - datosPrevios.Time
+        if tiempoTranscurrido > 0.001 then
+            local calculatedVel = (hrp.Position - datosPrevios.Pos) / tiempoTranscurrido
+            if calculatedVel.Magnitude > 1 and calculatedVel.Magnitude < 100 then
+                rawVelocity = calculatedVel
+            end
+        end
+    end
+    lastPositions[targetChar] = {Pos = hrp.Position, Time = os_clock()}
 
     if not positionHistory[targetChar] then positionHistory[targetChar] = {} end
     local history = positionHistory[targetChar]
     table.insert(history, 1, targetPosition)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
-
-    local heightScale = humanoid:FindFirstChild("BodyHeightScale") and humanoid.BodyHeightScale.Value or 1.0
-    local widthScale = humanoid:FindFirstChild("BodyWidthScale") and humanoid.BodyWidthScale.Value or 1.0
-    if heightScale < 0.75 or widthScale < 0.75 then targetPosition = hrp.Position end
 
     if SheriffConfig.FiltroCaminadora and #history >= 3 then
         local desplazamientoReal = (history[1] - history[#history]).Magnitude
@@ -336,41 +363,39 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local hMultiplier = (SheriffConfig.HorizontalScale / 100)
     local vMultiplier = (SheriffConfig.VerticalScale / 100)
     local pComp = (SheriffConfig.PingCompensation / 100)
-    local totalLatency = (cachedPingValue * pComp) + activeDT
+    
+    -- Buffer predictivo ultra agresivo
+    local totalLatency = (cachedPingValue * pComp) + activeDT + 0.015 
     
     local predictionWeight = 1
     if distance <= SheriffConfig.CloseRangeZone then predictionWeight = 0 end
 
     if lastTargetChar ~= targetChar then
-        smoothedVelocity = rawVelocity lastRawVelocity = rawVelocity lastTargetChar = targetChar
+        smoothedVelocity = rawVelocity lastTargetChar = targetChar
     end
 
-    if SheriffConfig.PredictionMode == "Omni-Direccional Absoluto (Universal)" then
-        local dotProduct = 1
-        if lastRawVelocity.Magnitude > 0.5 and rawVelocity.Magnitude > 0.5 then dotProduct = rawVelocity.Unit:Dot(lastRawVelocity.Unit) end
-        lastRawVelocity = rawVelocity
-
-        if SheriffConfig.EstabilizadorInercial and dotProduct < 0.4 then
-            smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, 0.14)
-        else
-            smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, 0.48)
-        end
+    if SheriffConfig.PredictionMode == "PREDICTION PRO" then
+        -- Lerp dinámico ajustado según el interruptor de UI
+        local lerpFactor = SheriffConfig.EstabilizadorInercial and 0.55 or 0.85
+        smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, lerpFactor)
 
         local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
         local verticalShift = VECTOR_ZERO
-        if humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.5 then
-            local pY = (smoothedVelocity.Y * totalLatency * vMultiplier) - (0.5 * workspace_Gravity * (totalLatency ^ 2))
+        
+        if humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.1 then
+            local pY = (smoothedVelocity.Y * totalLatency * vMultiplier) - (0.5 * workspace_Gravity * math_pow(totalLatency, 2))
             verticalShift = vec3New(0, pY, 0)
+        else
+            verticalShift = vec3New(0, smoothedVelocity.Y * totalLatency * vMultiplier, 0)
         end
 
         local finalPrediction = targetPosition + horizontalShift + verticalShift
-        local minPrediction = targetPosition + (horizontalShift * 0.35) + (verticalShift * 0.35)
+        local minPrediction = targetPosition + (horizontalShift * 0.40) + (verticalShift * 0.40)
 
         local floorY = getFloorHeight(hrp, targetChar)
         if floorY then
             local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.1
             if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-            if minPrediction.Y < minAllowedY then minPrediction = vec3New(minPrediction.X, minAllowedY, minPrediction.Z) end
         end
         return finalPrediction, minPrediction
     else
@@ -379,7 +404,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
 end
 
--- TRACERS SÚPER DELGADOS ULTRA-OPTI (THICKNESS = 0.5)
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(255, 235, 35)
 MinPredictionLine.Thickness = 0.5
@@ -404,9 +428,9 @@ local currentScreenHandPred = vec2New(0,0)
 local firstFrame = true
 local worldToViewport = Camera.WorldToViewportPoint
 
-local handCastParams = RaycastParams.new()
-handCastParams.FilterType = Enum.RaycastFilterType.Exclude
-
+-- ============================================================================
+-- 🔥 LOOP DE RENDERIZADO OPTIMIZADO PARA MULTI-RAYO
+-- ============================================================================
 local renderConn = RunService.RenderStepped:Connect(function(dt)
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) 
     checkWeaponVisibility()
@@ -418,12 +442,16 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local visualPart = targetChar:FindFirstChild("HumanoidRootPart")
+    local visualPart, isBlocked = getSmartTargetPart(targetChar) -- Ejecuta escaneo multi-rayo
+    handLineIsBlocked = isBlocked
+
     local myChar = LocalPlayer.Character
     local rightHand = myChar and (myChar:FindFirstChild("RightHand") or myChar:FindFirstChild("Right Arm"))
 
     if visualPart then
         local tSmooth = SheriffConfig.TracerSmoothness
+        local frameAlpha = (tSmooth == 1) and 1 or (1 - math_pow(1 - math_clamp(tSmooth, 0, 0.99), dt * 60))
+        
         local predictedPos, minPredictedPos = getPredictedPosition(targetChar, visualPart)
         local currentViewportSize = Camera.ViewportSize
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
@@ -433,7 +461,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local screenPos, onScreen = worldToViewport(Camera, minPredictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenMinPred = (firstFrame or tSmooth == 1) and target2D or currentScreenMinPred:Lerp(target2D, tSmooth)
+                currentScreenMinPred = firstFrame and target2D or currentScreenMinPred:Lerp(target2D, frameAlpha)
                 MinPredictionLine.From = screenOrigin MinPredictionLine.To = currentScreenMinPred MinPredictionLine.Visible = true
             else MinPredictionLine.Visible = false end
         else MinPredictionLine.Visible = false end
@@ -443,43 +471,32 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             local screenPos, onScreen = worldToViewport(Camera, predictedPos)
             if onScreen then
                 local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenPred = (firstFrame or tSmooth == 1) and target2D or currentScreenPred:Lerp(target2D, tSmooth)
+                currentScreenPred = firstFrame and target2D or currentScreenPred:Lerp(target2D, frameAlpha)
                 PredictionLine.From = screenOrigin PredictionLine.To = currentScreenPred PredictionLine.Visible = true
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
-        -- 3. TRACER VERDE (LEAD TIME PERFECCIONADO SEGÚN REGLAS DE WALL CHECK)
+        -- 3. TRACER VERDE (LEAD TIME DINÁMICO)
         if predictedPos and rightHand and SheriffConfig.ShowGreenTracer then
             local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
             local predScreenPos, predOnScreen = worldToViewport(Camera, predictedPos)
 
             if handOnScreen and predOnScreen then
-                if SheriffConfig.WallCheck then
-                    -- Si el Wall Check está activado, validamos obstrucciones reales
-                    handCastParams.FilterDescendantsInstances = {myChar, targetChar, Camera}
-                    local rayToTarget = workspace:Raycast(rightHand.Position, predictedPos - rightHand.Position, handCastParams)
-                    
-                    if rayToTarget and rayToTarget.Instance.CanCollide == true and rayToTarget.Instance.Transparency < 0.8 then
-                        LeadTimeLine.Color = color3RGB(100, 100, 100) -- Gris: Ruta bloqueada por estructura sólida
-                        handLineIsBlocked = true
-                    else
-                        LeadTimeLine.Color = color3RGB(35, 255, 35)  -- Verde: Ruta libre
-                        handLineIsBlocked = false
-                    end
+                -- Cambia el color del trazador de disparo según la visibilidad real calculada por el escáner
+                if handLineIsBlocked then
+                    LeadTimeLine.Color = color3RGB(100, 100, 100) -- Gris = Bloqueado tras pared sólida completa
                 else
-                    -- REGLA SOLICITADA: Si Wall Check está APAGADO, siempre se queda verde brillante e ignora muros
-                    LeadTimeLine.Color = color3RGB(35, 255, 35)
-                    handLineIsBlocked = false
+                    LeadTimeLine.Color = color3RGB(35, 255, 35)   -- Verde = ¡Fuego libre sobre parte expuesta!
                 end
 
                 local target2D = vec2New(predScreenPos.X, predScreenPos.Y)
-                currentScreenHandPred = (firstFrame or tSmooth == 1) and target2D or currentScreenHandPred:Lerp(target2D, tSmooth)
+                currentScreenHandPred = firstFrame and target2D or currentScreenHandPred:Lerp(target2D, frameAlpha)
 
                 LeadTimeLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
                 LeadTimeLine.To = currentScreenHandPred
                 LeadTimeLine.Visible = true
-            else LeadTimeLine.Visible = false handLineIsBlocked = false end
-        else LeadTimeLine.Visible = false handLineIsBlocked = false end
+            else LeadTimeLine.Visible = false end
+        else LeadTimeLine.Visible = false end
         
         firstFrame = false
     else
@@ -490,15 +507,15 @@ end)
 table.insert(_G.KillerHubConnections, renderConn)
 
 local function fireAtMurdererDirectly()
-    if isFiringCooldown or (SheriffConfig.WallCheck and handLineIsBlocked) then return end 
+    if isFiringCooldown or handLineIsBlocked then return end 
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end 
 
     local murderer = getMurderer()
     if murderer and murderer.Character then
         local targetChar = murderer.Character
-        local bestPart = getSmartTargetPart(targetChar) 
-        if bestPart then 
+        local bestPart, isBlocked = getSmartTargetPart(targetChar) 
+        if bestPart and not isBlocked then 
             local predictedPos = getPredictedPosition(targetChar, bestPart)
             if predictedPos then
                 isFiringCooldown = true autoEquipWeapon()
@@ -514,7 +531,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- CREACIÓN DEL BOTÓN DE DISPARO CON AUTO-SAVE OPTIMIZADO
+-- INTERFAZ DEL BOTÓN (AUTO-SAVE)
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
@@ -543,12 +560,12 @@ UiGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, color3RGB(24,
 UiGradient.Rotation = 45 UiGradient.Parent = GlowOverlay
 
 local DecalTexture = Instance.new("ImageLabel")
-DecalTexture.Size = udim2New(0.38, 0, 0.38, 0) DecalTexture.AnchorPoint = vec2New(0.5, 0.5) DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
+DecalTexture.Size = udim2New(0.37, 0, 0.37, 0) DecalTexture.AnchorPoint = vec2New(0.5, 0.5) DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
 DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
 DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 task.spawn(function()
-    local ti = TweenInfo.new(0.80, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local ti = TweenInfo.new(0.79, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local t1 = TweenService:Create(DecalTexture, ti, {Rotation = 360})
     local t2 = TweenService:Create(DecalTexture, ti, {Rotation = 0})
     table.insert(_G.KillerHubConnections, t1.Completed:Connect(function() task.wait(0.03) t2:Play() end))
@@ -566,7 +583,7 @@ table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(in
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local bPos = ShootButton.AbsolutePosition local bSize = ShootButton.AbsoluteSize
         UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.45}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.52}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -576,7 +593,6 @@ table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(in
                 dragging = false 
                 SheriffConfig.ButtonX = ShootButton.Position.X.Scale
                 SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
-                -- REGLA DE OPTIMIZACIÓN: Solo guarda al soltar el botón, previniendo lag en el Red Magic 
                 saveConfig() 
                 cChanged:Disconnect()
             end
@@ -586,7 +602,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
@@ -600,7 +616,7 @@ end))
 
 checkWeaponVisibility()
 
--- ENGINE HOOK NATIVO PARA INTERCEPTAR DISPAROS AUTOMÁTICAMENTE
+-- HOOKS DE RED INTERNOS
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
@@ -624,7 +640,7 @@ if WeaponService then
     local lastHookCallTime = os_clock()
 
     local function checkAndPredict(returnCFrame)
-        if SheriffConfig.WallCheck and handLineIsBlocked then return nil end 
+        if handLineIsBlocked then return nil end 
         local currentTime = os_clock()
         local structuralDelta = math_clamp(currentTime - lastHookCallTime, 0.008, 0.033)
         lastHookCallTime = currentTime
@@ -633,8 +649,8 @@ if WeaponService then
         if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
             local murderer = getMurderer()
             if murderer and murderer.Character then
-                local bestPart = getSmartTargetPart(murderer.Character)
-                if bestPart then
+                local bestPart, isBlocked = getSmartTargetPart(murderer.Character)
+                if bestPart and not isBlocked then
                     local predictedPos = getPredictedPosition(murderer.Character, bestPart, structuralDelta)
                     if predictedPos then return returnCFrame and cframeNew(predictedPos) or predictedPos end
                 end
