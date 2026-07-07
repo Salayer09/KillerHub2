@@ -1,6 +1,14 @@
 -- ============================================================================
---  KILLER HUB | SHERIFF SUITE V9.5.0 (ADVANCED VISUALS & HAND-RAY RESOLVER)
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO
 -- ============================================================================
+getgenv().KillerHub = {
+    Config = {
+        Volume = 0.5,                  
+        ToggleKey = "RightControl",    
+        ShowWatermark = true           
+    },
+    Flags = {} 
+}
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -26,6 +34,7 @@ local workspace = workspace
 local workspace_Gravity = workspace.Gravity
 local VECTOR_ZERO = vec3New(0, 0, 0)
 
+-- Limpieza preventiva de instancias previas
 if _G.KillerHubLines then
     for _, line in pairs(_G.KillerHubLines) do pcall(function() line:Remove() end) end
 end
@@ -39,12 +48,8 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
-local success, KillerHubLib = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
-end)
-
-if not success or not KillerHubLib then return end
-local KillerHub = KillerHubLib
+-- 1. CARGA DE LIBRERÍA (URL Oficial provista de Paolo0109)
+local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Paolo0109/KillerHUB/refs/heads/main/InterfazBase.lua"))()
 
 local SheriffConfig = {
     SilentAim = false,
@@ -56,7 +61,7 @@ local SheriffConfig = {
     WallCheck = true,    
     FiltroCaminadora = true, 
     EstabilizadorInercial = true,
-    -- CONTROLES DE VISIBILIDAD DE TRACERS
+    -- Configuración de tracers controlada por Multi-Dropdown
     ShowRedTracer = true,      
     ShowYellowTracer = true, 
     ShowGreenTracer = true,
@@ -70,7 +75,7 @@ local SheriffConfig = {
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite_v95.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_v10.txt"
 
 local function saveConfig()
     pcall(function() if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(SheriffConfig)) end end)
@@ -113,6 +118,7 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
+-- 2. CREACIÓN DE LA PESTAÑA SHERIFF
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -126,11 +132,22 @@ SheriffTab:CreateSlider("VerticalScaleSlider", "Predicción Vertical (Eje Y)", 0
 SheriffTab:CreateSlider("PingCompSlider", "Compensador de Latencia (%)", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
 SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
 
--- NUEVA SECCIÓN DE CONTROL DE TRACERS COMPATIBLE Y INDEPENDIENTE
-SheriffTab:CreateSection("Control de Tracers (Súper Delgados)")
-SheriffTab:CreateToggle("ShowRedToggle", "Mostrar Tracer Rojo (Impacto Final)", function(estado) SheriffConfig.ShowRedTracer = estado saveConfig() end)
-SheriffTab:CreateToggle("ShowYellowToggle", "Mostrar Tracer Amarillo (Pred. Mínima)", function(estado) SheriffConfig.ShowYellowTracer = estado saveConfig() end)
-SheriffTab:CreateToggle("ShowGreenToggle", "Mostrar Tracer Verde (Línea de Mano)", function(estado) SheriffConfig.ShowGreenTracer = estado saveConfig() end)
+-- IMPLEMENTACIÓN DEL MULTI-DROPDOWN SEGÚN LA API SOLICITADA
+SheriffTab:CreateSection("Personalización Visual")
+SheriffTab:CreateMultiDropdown("ActiveTracers", "Visualización de Tracers (Múltiple):", {"Rojo (Impacto)", "Amarillo (Mínimo)", "Verde (Lead Time)"}, function(tablaFlags)
+    SheriffConfig.ShowRedTracer = tablaFlags["Rojo (Impacto)"] or false
+    SheriffConfig.ShowYellowTracer = tablaFlags["Amarillo (Mínimo)"] or false
+    SheriffConfig.ShowGreenTracer = tablaFlags["Verde (Lead Time)"] or false
+    saveConfig()
+end)
+
+SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón de Disparo", 50, 200, function(valor)
+    SheriffConfig.ButtonSize = valor
+    if cachedShootButton then 
+        cachedShootButton.Size = udim2New(0, valor, 0, valor) 
+    end
+    saveConfig() -- Este slider guarda de manera segura
+end, SheriffConfig.ButtonSize)
 
 SheriffTab:CreateSection("Filtros Anti-Errores Reales")
 SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Filtro Caminadora Invisible", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
@@ -156,7 +173,7 @@ local currentTarget = nil
 local isFiringCooldown = false
 local positionHistory = {}
 local MAX_HISTORY_FRAMES = 5
-local handLineIsBlocked = false -- Control global de obstrucción física del brazo
+local handLineIsBlocked = false 
 
 task.spawn(function()
     while task.wait(0.5) do
@@ -258,20 +275,27 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 local ignoreListCache = {} 
 
+-- PERFECCIONAMIENTO COMPLETO DEL WALL CHECK INTELIGENTE
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil end
     local torso = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("UpperTorso") or targetChar:FindFirstChild("Torso")
     if not SheriffConfig.WallCheck then return torso end
+    
     local origin = Camera.CFrame.Position
     table.clear(ignoreListCache)
     table.insert(ignoreListCache, LocalPlayer.Character)
     table.insert(ignoreListCache, Camera)
+    
     local allPlayers = Players:GetPlayers()
     for i = 1, #allPlayers do if allPlayers[i].Character then table.insert(ignoreListCache, allPlayers[i].Character) end end
+    
     mapCastParams.FilterDescendantsInstances = ignoreListCache
     if torso then
         local ray = workspace:Raycast(origin, torso.Position - origin, mapCastParams)
-        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.85) then return torso end
+        -- Si no choca, o choca contra algo sin colisión física o casi invisible, se aprueba el tiro
+        if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.8) then 
+            return torso 
+        end
     end
     return torso
 end
@@ -355,23 +379,22 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
 end
 
--- TRACERS MODIFICADOS: EXTREMADAMENTE DELGADOS (THICKNESS = 0.7)
+-- TRACERS SÚPER DELGADOS ULTRA-OPTI (THICKNESS = 0.5)
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(255, 235, 35)
-MinPredictionLine.Thickness = 0.7
+MinPredictionLine.Thickness = 0.5
 MinPredictionLine.ZIndex = 5  
 table.insert(_G.KillerHubLines, MinPredictionLine)
 
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = color3RGB(255, 35, 35)
-PredictionLine.Thickness = 0.7
+PredictionLine.Thickness = 0.5
 PredictionLine.ZIndex = 6  
 table.insert(_G.KillerHubLines, PredictionLine)
 
--- NUEVO LEAD TIME FUNCIONAL DESDE LA MANO DERECHA
 local LeadTimeLine = Drawing.new("Line")
 LeadTimeLine.Color = color3RGB(35, 255, 35)
-LeadTimeLine.Thickness = 0.7
+LeadTimeLine.Thickness = 0.5
 LeadTimeLine.ZIndex = 7
 table.insert(_G.KillerHubLines, LeadTimeLine)
 
@@ -425,21 +448,27 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             else PredictionLine.Visible = false end
         else PredictionLine.Visible = false end
 
-        -- 3. TRACER VERDE FUNCIONAL (LEAD TIME DESDE MANO DERECHA)
+        -- 3. TRACER VERDE (LEAD TIME PERFECCIONADO SEGÚN REGLAS DE WALL CHECK)
         if predictedPos and rightHand and SheriffConfig.ShowGreenTracer then
             local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
             local predScreenPos, predOnScreen = worldToViewport(Camera, predictedPos)
 
             if handOnScreen and predOnScreen then
-                -- VALIDACIÓN DE COLISIÓN DE BALA (HACE ALGO REAL)
-                handCastParams.FilterDescendantsInstances = {myChar, targetChar, Camera}
-                local rayToTarget = workspace:Raycast(rightHand.Position, predictedPos - rightHand.Position, handCastParams)
-                
-                if rayToTarget and rayToTarget.Instance.CanCollide == true and rayToTarget.Instance.Transparency < 0.85 then
-                    LeadTimeLine.Color = color3RGB(100, 100, 100) -- Gris Oscuro: Bloqueado por Estructura
-                    handLineIsBlocked = true
+                if SheriffConfig.WallCheck then
+                    -- Si el Wall Check está activado, validamos obstrucciones reales
+                    handCastParams.FilterDescendantsInstances = {myChar, targetChar, Camera}
+                    local rayToTarget = workspace:Raycast(rightHand.Position, predictedPos - rightHand.Position, handCastParams)
+                    
+                    if rayToTarget and rayToTarget.Instance.CanCollide == true and rayToTarget.Instance.Transparency < 0.8 then
+                        LeadTimeLine.Color = color3RGB(100, 100, 100) -- Gris: Ruta bloqueada por estructura sólida
+                        handLineIsBlocked = true
+                    else
+                        LeadTimeLine.Color = color3RGB(35, 255, 35)  -- Verde: Ruta libre
+                        handLineIsBlocked = false
+                    end
                 else
-                    LeadTimeLine.Color = color3RGB(35, 255, 35) -- Verde: Libre de Obstáculos
+                    -- REGLA SOLICITADA: Si Wall Check está APAGADO, siempre se queda verde brillante e ignora muros
+                    LeadTimeLine.Color = color3RGB(35, 255, 35)
                     handLineIsBlocked = false
                 end
 
@@ -485,7 +514,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- INTERFAZ BOTÓN FLOTANTE
+-- CREACIÓN DEL BOTÓN DE DISPARO CON AUTO-SAVE OPTIMIZADO
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
@@ -539,11 +568,17 @@ table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(in
         UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
         TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.42}):Play()
         task.spawn(fireAtMurdererDirectly)
+        
         dragging = true dragStart = input.Position startPos = ShootButton.Position
         local cChanged
         cChanged = input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
-                dragging = false SheriffConfig.ButtonX = ShootButton.Position.X.Scale SheriffConfig.ButtonY = ShootButton.Position.Y.Scale saveConfig() cChanged:Disconnect()
+                dragging = false 
+                SheriffConfig.ButtonX = ShootButton.Position.X.Scale
+                SheriffConfig.ButtonY = ShootButton.Position.Y.Scale
+                -- REGLA DE OPTIMIZACIÓN: Solo guarda al soltar el botón, previniendo lag en el Red Magic 
+                saveConfig() 
+                cChanged:Disconnect()
             end
         end)
      end
@@ -565,7 +600,7 @@ end))
 
 checkWeaponVisibility()
 
--- HOOK NATIVO ADAPTATIVO
+-- ENGINE HOOK NATIVO PARA INTERCEPTAR DISPAROS AUTOMÁTICAMENTE
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
@@ -589,7 +624,7 @@ if WeaponService then
     local lastHookCallTime = os_clock()
 
     local function checkAndPredict(returnCFrame)
-        if SheriffConfig.WallCheck and handLineIsBlocked then return nil end -- BLOQUEO SEGURO POR COBERTURA
+        if SheriffConfig.WallCheck and handLineIsBlocked then return nil end 
         local currentTime = os_clock()
         local structuralDelta = math_clamp(currentTime - lastHookCallTime, 0.008, 0.033)
         lastHookCallTime = currentTime
