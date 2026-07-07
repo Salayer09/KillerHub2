@@ -48,7 +48,7 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 1. CARGA DE LIBRERÍA
+-- 1. CARGA DE LIBRERÍA (MANTENIENDO TU REPOSITORIO PERSONAl)
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 local SheriffConfig = {
@@ -60,7 +60,7 @@ local SheriffConfig = {
     CloseRangeZone = 6, 
     WallCheck = true,    
     FiltroCaminadora = true, 
-    EstabilizadorInercial = false, -- Desactivado por defecto para evitar retrasos
+    EstabilizadorInercial = false, 
     ShowRedTracer = true,      
     ShowYellowTracer = true, 
     ShowGreenTracer = true,
@@ -117,7 +117,7 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- 2. CREACIÓN DE LA INTERFAZ UI
+-- 2. CREACIÓN DE LA INTERFAZ UI (CON TUS CAMBIOS PRESERVAODS)
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -272,9 +272,6 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 local ignoreListCache = {} 
 
--- ============================================================================
--- 🔥 IMPLEMENTACIÓN EXPERTA FASE 2: ESCANEO DE EXTREMIDADES MULTI-RAYO
--- ============================================================================
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil, true end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
@@ -291,13 +288,12 @@ local function getSmartTargetPart(targetChar)
     
     mapCastParams.FilterDescendantsInstances = ignoreListCache
     
-    -- Árbol de escaneo anatómico por orden de exposición prioritario
     local partsToScan = {
-        hrp,                                                                       -- 1. Centro de masa
-        targetChar:FindFirstChild("Head"),                                         -- 2. Cabeza por si asoma arriba
-        targetChar:FindFirstChild("LeftHand") or targetChar:FindFirstChild("Left Arm"),   -- 3. Extremidades laterales
+        hrp,
+        targetChar:FindFirstChild("Head"),
+        targetChar:FindFirstChild("LeftHand") or targetChar:FindFirstChild("Left Arm"),
         targetChar:FindFirstChild("RightHand") or targetChar:FindFirstChild("Right Arm"),
-        targetChar:FindFirstChild("LeftFoot") or targetChar:FindFirstChild("Left Leg"),   -- 4. Extremidades de avance inferior
+        targetChar:FindFirstChild("LeftFoot") or targetChar:FindFirstChild("Left Leg"),
         targetChar:FindFirstChild("RightFoot") or targetChar:FindFirstChild("Right Leg")
     }
     
@@ -305,14 +301,13 @@ local function getSmartTargetPart(targetChar)
         local part = partsToScan[i]
         if part then
             local ray = workspace:Raycast(origin, part.Position - origin, mapCastParams)
-            -- Si la línea está limpia de colisiones físicas sólidas, disparamos a esa extremidad
             if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.8) then 
-                return part, false -- Parte libre detectada
+                return part, false
             end
         end
     end
     
-    return hrp, true -- Todo tapado, pero retornamos hrp para mantener el tracer visual pasivo
+    return hrp, true
 end
 
 local function getFloorHeight(targetHrp, targetChar)
@@ -322,9 +317,6 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- ============================================================================
--- 🔥 REENTRENADO CON FASE 1 FIJADA (VELOCIDAD PURA POR DELTA DE POSICIÓN)
--- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -336,7 +328,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- Cálculo de velocidad real por delta matemático de studs (Elimina lag de Roblox)
     local rawVelocity = hrp.AssemblyLinearVelocity
     if lastPositions[targetChar] then
         local datosPrevios = lastPositions[targetChar]
@@ -364,7 +355,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local vMultiplier = (SheriffConfig.VerticalScale / 100)
     local pComp = (SheriffConfig.PingCompensation / 100)
     
-    -- Buffer predictivo ultra agresivo
     local totalLatency = (cachedPingValue * pComp) + activeDT + 0.015 
     
     local predictionWeight = 1
@@ -375,7 +365,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
 
     if SheriffConfig.PredictionMode == "PREDICTION PRO" then
-        -- Lerp dinámico ajustado según el interruptor de UI
         local lerpFactor = SheriffConfig.EstabilizadorInercial and 0.55 or 0.85
         smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, lerpFactor)
 
@@ -404,32 +393,33 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
 end
 
+-- Configuración de líneas con grosor de 0.35 (Láser estilizado mas delgado)
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(255, 235, 35)
-MinPredictionLine.Thickness = 0.5
+MinPredictionLine.Thickness = 0.35
 MinPredictionLine.ZIndex = 5  
 table.insert(_G.KillerHubLines, MinPredictionLine)
 
 local PredictionLine = Drawing.new("Line")
 PredictionLine.Color = color3RGB(255, 35, 35)
-PredictionLine.Thickness = 0.5
+PredictionLine.Thickness = 0.35
 PredictionLine.ZIndex = 6  
 table.insert(_G.KillerHubLines, PredictionLine)
 
 local LeadTimeLine = Drawing.new("Line")
 LeadTimeLine.Color = color3RGB(35, 255, 35)
-LeadTimeLine.Thickness = 0.5
+LeadTimeLine.Thickness = 0.35
 LeadTimeLine.ZIndex = 7
 table.insert(_G.KillerHubLines, LeadTimeLine)
 
-local currentScreenPred = vec2New(0,0)
-local currentScreenMinPred = vec2New(0,0)
-local currentScreenHandPred = vec2New(0,0)
+-- CONTENEDORES DE COORDENADAS 3D INTERNAS (EVITAN JITTER DE CÁMERA NATIVO)
+local smoothed3DPred = VECTOR_ZERO
+local smoothed3DMinPred = VECTOR_ZERO
 local firstFrame = true
 local worldToViewport = Camera.WorldToViewportPoint
 
 -- ============================================================================
--- 🔥 LOOP DE RENDERIZADO OPTIMIZADO PARA MULTI-RAYO
+-- 🔥 LOOP DE RENDERIZADO OPTIMIZADO (3D WORLD-SPACE INTERPOLATION)
 -- ============================================================================
 local renderConn = RunService.RenderStepped:Connect(function(dt)
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) 
@@ -442,7 +432,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     end
 
     local targetChar = murderer.Character
-    local visualPart, isBlocked = getSmartTargetPart(targetChar) -- Ejecuta escaneo multi-rayo
+    local visualPart, isBlocked = getSmartTargetPart(targetChar) 
     handLineIsBlocked = isBlocked
 
     local myChar = LocalPlayer.Character
@@ -456,49 +446,54 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local currentViewportSize = Camera.ViewportSize
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
-        -- 1. TRACER AMARILLO (PREDICCIÓN MÍNIMA)
-        if minPredictedPos and SheriffConfig.ShowYellowTracer then
-            local screenPos, onScreen = worldToViewport(Camera, minPredictedPos)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenMinPred = firstFrame and target2D or currentScreenMinPred:Lerp(target2D, frameAlpha)
-                MinPredictionLine.From = screenOrigin MinPredictionLine.To = currentScreenMinPred MinPredictionLine.Visible = true
+        if predictedPos and minPredictedPos then
+            -- MAGIA DE OPTIMIZACIÓN: Interpola en el espacio 3D real del mundo, no en pixeles 2D cambiantes
+            if firstFrame then
+                smoothed3DPred = predictedPos
+                smoothed3DMinPred = minPredictedPos
+                firstFrame = false
+            else
+                smoothed3DPred = smoothed3DPred:Lerp(predictedPos, frameAlpha)
+                smoothed3DMinPred = smoothed3DMinPred:Lerp(minPredictedPos, frameAlpha)
+            end
+
+            -- 1. TRACER AMARILLO (PREDICCIÓN MÍNIMA)
+            if SheriffConfig.ShowYellowTracer then
+                local screenPos, onScreen = worldToViewport(Camera, smoothed3DMinPred)
+                if onScreen then
+                    MinPredictionLine.From = screenOrigin 
+                    MinPredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
+                    MinPredictionLine.Visible = true
+                else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
-        else MinPredictionLine.Visible = false end
 
-        -- 2. TRACER ROJO (IMPACTO FINAL)
-        if predictedPos and SheriffConfig.ShowRedTracer then
-            local screenPos, onScreen = worldToViewport(Camera, predictedPos)
-            if onScreen then
-                local target2D = vec2New(screenPos.X, screenPos.Y)
-                currentScreenPred = firstFrame and target2D or currentScreenPred:Lerp(target2D, frameAlpha)
-                PredictionLine.From = screenOrigin PredictionLine.To = currentScreenPred PredictionLine.Visible = true
+            -- 2. TRACER ROJO (IMPACTO FINAL SUPER FLUIDO)
+            if SheriffConfig.ShowRedTracer then
+                local screenPos, onScreen = worldToViewport(Camera, smoothed3DPred)
+                if onScreen then
+                    PredictionLine.From = screenOrigin 
+                    PredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
+                    PredictionLine.Visible = true
+                else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
-        else PredictionLine.Visible = false end
 
-        -- 3. TRACER VERDE (LEAD TIME DINÁMICO)
-        if predictedPos and rightHand and SheriffConfig.ShowGreenTracer then
-            local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
-            local predScreenPos, predOnScreen = worldToViewport(Camera, predictedPos)
+            -- 3. TRACER VERDE (LEAD TIME DINÁMICO DESDE LA MANO)
+            if rightHand and SheriffConfig.ShowGreenTracer then
+                local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
+                local predScreenPos, predOnScreen = worldToViewport(Camera, smoothed3DPred)
 
-            if handOnScreen and predOnScreen then
-                -- Cambia el color del trazador de disparo según la visibilidad real calculada por el escáner
-                if handLineIsBlocked then
-                    LeadTimeLine.Color = color3RGB(100, 100, 100) -- Gris = Bloqueado tras pared sólida completa
-                else
-                    LeadTimeLine.Color = color3RGB(35, 255, 35)   -- Verde = ¡Fuego libre sobre parte expuesta!
-                end
-
-                local target2D = vec2New(predScreenPos.X, predScreenPos.Y)
-                currentScreenHandPred = firstFrame and target2D or currentScreenHandPred:Lerp(target2D, frameAlpha)
-
-                LeadTimeLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
-                LeadTimeLine.To = currentScreenHandPred
-                LeadTimeLine.Visible = true
+                if handOnScreen and predOnScreen then
+                    if handLineIsBlocked then
+                        LeadTimeLine.Color = color3RGB(100, 100, 100) 
+                    else
+                        LeadTimeLine.Color = color3RGB(35, 255, 35)   
+                    end
+                    LeadTimeLine.From = vec2New(handScreenPos.X, handScreenPos.Y)
+                    LeadTimeLine.To = vec2New(predScreenPos.X, predScreenPos.Y)
+                    LeadTimeLine.Visible = true
+                else LeadTimeLine.Visible = false end
             else LeadTimeLine.Visible = false end
-        else LeadTimeLine.Visible = false end
-        
-        firstFrame = false
+        end
     else
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; LeadTimeLine.Visible = false;
         firstFrame = true
@@ -531,7 +526,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- INTERFAZ DEL BOTÓN (AUTO-SAVE)
+-- INTERFAZ DEL BOTÓN (PRESERVA DECAL ULTRA CORREGIDA)
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
