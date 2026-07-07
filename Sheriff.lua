@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.4 - ULTRA MEDIAN)
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.5 - ADAPTIVE JUMP)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -20,8 +20,8 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
 local math_clamp = math.clamp
-local math_min = math.min
-local math_max = math.max
+local math_min = math_min
+local math_max = math_max
 local math_abs = math.abs
 local math_pow = math.pow
 local vec2New = Vector2.new
@@ -52,6 +52,7 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 
 local SheriffConfig = {
     SilentAim = false,
+    JumpPrediction = true, -- [NUEVO] Toggle nativo para predicción de saltos
     PredictionMode = "PREDICTION PRO", 
     HorizontalScale = 100,  
     VerticalScale = 100,    
@@ -73,7 +74,7 @@ local SheriffConfig = {
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite_v104.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_v105.txt"
 
 local function saveConfig()
     pcall(function() if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(SheriffConfig)) end end)
@@ -121,6 +122,7 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado) SheriffConfig.SilentAim = estado saveConfig() end)
+SheriffTab:CreateToggle("JumpPredToggle", "Predicción de Salto Inteligente", function(estado) SheriffConfig.JumpPrediction = estado saveConfig() end, SheriffConfig.JumpPrediction)
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Escaneo Avanzado Multi-Rayo", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
 SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 
@@ -161,7 +163,7 @@ local smoothedVelocity = VECTOR_ZERO
 local lastTargetChar = nil
 local emaDeltaTime = 0.016 
 local cachedPingValue = 0.06
-local pingHistory = {} -- [FUNCIÓN 3: HISTORIAL PARA MEDIANA]
+local pingHistory = {} 
 local playerRoles = {}
 local playerDeadStatus = {}
 local currentTarget = nil
@@ -171,15 +173,13 @@ local lastPositions = {}
 local MAX_HISTORY_FRAMES = 5
 local handLineIsBlocked = false 
 
--- FUNCIÓN 3: FILTRO DE MEDIANA MÓVIL (ANTI-SPIKES DE PING)
 task.spawn(function()
-    while task.wait(0.25) do -- Escaneo más rápido para rellenar la mediana con precisión
+    while task.wait(0.25) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
             local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
             table.insert(pingHistory, rawPing)
             if #pingHistory > 5 then table.remove(pingHistory, 1) end
             
-            -- Clonar y ordenar la lista para extraer matemáticamente el valor central
             local sortPing = {unpack(pingHistory)}
             table.sort(sortPing)
             cachedPingValue = sortPing[math.ceil(#sortPing / 2)] or rawPing
@@ -324,7 +324,7 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- ENGINE DE PREDICCIÓN SEGURO (V10.4)
+-- ENGINE DE PREDICCIÓN CON ATENUACIÓN VERTICAL ADAPTATIVA
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -336,9 +336,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- [FUNCIÓN 1: FILTRADO DE EXTREMIDADES]
-    -- Forzamos a que los cálculos de velocidad matemática siempre usen el Torso (HRP)
-    -- Evitando que las animaciones de ataque (brazos/piernas moviéndose rápido) rompan la predicción.
     local rawVelocity = hrp.AssemblyLinearVelocity
     if lastPositions[targetChar] then
         local datosPrevios = lastPositions[targetChar]
@@ -354,7 +351,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     if not positionHistory[targetChar] then positionHistory[targetChar] = {} end
     local history = positionHistory[targetChar]
-    table.insert(history, 1, hrp.Position) -- Usamos HRP para el historial anti-caminadora
+    table.insert(history, 1, hrp.Position)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
     if SheriffConfig.FiltroCaminadora and #history >= 3 then
@@ -381,15 +378,28 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
         local verticalShift = VECTOR_ZERO
         
-        if humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.1 then
-            local pY = (smoothedVelocity.Y * totalLatency * vMultiplier) - (0.5 * workspace_Gravity * math_pow(totalLatency, 2))
-            verticalShift = vec3New(0, pY, 0)
-        else
-            verticalShift = vec3New(0, smoothedVelocity.Y * totalLatency * vMultiplier, 0)
+        -- [SISTEMA DE SALTO ADAPTATIVO POR DISTANCIA]
+        if SheriffConfig.JumpPrediction then
+            -- Si el Murderer está a menos de 12 studs, reducimos suavemente la predicción vertical a 0
+            local adaptiveYFactor = math_clamp((distance - SheriffConfig.CloseRangeZone) / 12, 0, 1)
+            local finalVScale = vMultiplier * adaptiveYFactor
+
+            if humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.1 then
+                local verticalVelocity = smoothedVelocity.Y
+                
+                -- Si está cayendo (Y negativa), reducimos la fuerza en 75% para que no apunte al piso
+                if verticalVelocity < 0 then 
+                    verticalVelocity = verticalVelocity * 0.25 
+                end
+                
+                -- Reducción drástica de la gravedad simulada para estabilizar la trayectoria del tiro
+                local pY = (verticalVelocity * totalLatency * finalVScale) - (0.15 * workspace_Gravity * math_pow(totalLatency, 2))
+                verticalShift = vec3New(0, pY, 0)
+            else
+                verticalShift = vec3New(0, smoothedVelocity.Y * totalLatency * finalVScale, 0)
+            end
         end
 
-        -- [FUNCIÓN 2: CAP DE PREDICCIÓN MÁXIMA (ANTI-LAG/ANTI-TELEPORT)]
-        -- Si por lag o exploits el cálculo intenta mover el tiro a más de 6.5 studs del cuerpo, lo congelamos en el límite seguro.
         if horizontalShift.Magnitude > 6.5 then horizontalShift = horizontalShift.Unit * 6.5 end
         if verticalShift.Magnitude > 5.0 then verticalShift = verticalShift.Unit * 5.0 end
 
@@ -402,20 +412,22 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         end
 
-        -- Tracers estables (eje Y plano, libre de oscilaciones)
         local tracerPrediction = targetPosition + horizontalShift
         local tracerMinPrediction = targetPosition + (horizontalShift * 0.40)
 
         return finalPrediction, minPrediction, tracerPrediction, tracerMinPrediction
     else
         local simpleShift = rawVelocity * totalLatency * hMultiplier * predictionWeight
-        
-        -- Cap seguro para el modo simple
         if simpleShift.Magnitude > 6.5 then simpleShift = simpleShift.Unit * 6.5 end
 
         local finalPrediction = targetPosition + simpleShift
-        local minPrediction = targetPosition + (simpleShift * 0.30)
         
+        -- Si desactivas la predicción de salto en modo simple, aplanamos el eje Y del tiro final
+        if not SheriffConfig.JumpPrediction then
+            finalPrediction = vec3New(finalPrediction.X, targetPosition.Y, finalPrediction.Z)
+        end
+        
+        local minPrediction = targetPosition + (simpleShift * 0.30)
         local tracerPrediction = vec3New(finalPrediction.X, targetPosition.Y, finalPrediction.Z)
         local tracerMinPrediction = vec3New(minPrediction.X, targetPosition.Y, minPrediction.Z)
 
@@ -581,11 +593,11 @@ DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://1257
 DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 task.spawn(function()
-    local ti = TweenInfo.new(0.7867, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local ti = TweenInfo.new(0.80, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local t1 = TweenService:Create(DecalTexture, ti, {Rotation = 360})
     local t2 = TweenService:Create(DecalTexture, ti, {Rotation = 0})
-    table.insert(_G.KillerHubConnections, t1.Completed:Connect(function() task.wait(0.03) t2:Play() end))
-    table.insert(_G.KillerHubConnections, t2.Completed:Connect(function() task.wait(0.03) t1:Play() end))
+    table.insert(_G.KillerHubConnections, t1.Completed:Connect(function() task.wait(0.032) t2:Play() end))
+    table.insert(_G.KillerHubConnections, t2.Completed:Connect(function() task.wait(0.032) t1:Play() end))
     t1:Play()
 end)
 
@@ -599,7 +611,7 @@ table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(in
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local bPos = ShootButton.AbsolutePosition local bSize = ShootButton.AbsoluteSize
         UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.59}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.52}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -618,7 +630,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.59, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
