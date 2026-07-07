@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.3 - ANTI-JITTER)
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.4 - ULTRA MEDIAN)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -48,7 +48,6 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
--- 1. CARGA DE LIBRERÍA (REPOSITORIO PERSONAL)
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 local SheriffConfig = {
@@ -60,11 +59,11 @@ local SheriffConfig = {
     CloseRangeZone = 6, 
     WallCheck = true,    
     FiltroCaminadora = true, 
-    EstabilizadorInercial = true, -- Activado por defecto para mejorar estabilidad
+    EstabilizadorInercial = true, 
     ShowRedTracer = true,      
     ShowYellowTracer = true, 
     ShowGreenTracer = true,
-    TracerSmoothness = 0.35, -- Suavizado inicial óptimo para Red Magic
+    TracerSmoothness = 0.35, 
     UseWeaponDetector = false, 
     ShowShootButton = false,
     ButtonSize = 95,
@@ -74,7 +73,7 @@ local SheriffConfig = {
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite_v103.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_v104.txt"
 
 local function saveConfig()
     pcall(function() if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(SheriffConfig)) end end)
@@ -117,7 +116,7 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- 2. CREACIÓN DE LA INTERFAZ UI
+-- INTERFAZ UI
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -162,6 +161,7 @@ local smoothedVelocity = VECTOR_ZERO
 local lastTargetChar = nil
 local emaDeltaTime = 0.016 
 local cachedPingValue = 0.06
+local pingHistory = {} -- [FUNCIÓN 3: HISTORIAL PARA MEDIANA]
 local playerRoles = {}
 local playerDeadStatus = {}
 local currentTarget = nil
@@ -171,10 +171,18 @@ local lastPositions = {}
 local MAX_HISTORY_FRAMES = 5
 local handLineIsBlocked = false 
 
+-- FUNCIÓN 3: FILTRO DE MEDIANA MÓVIL (ANTI-SPIKES DE PING)
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(0.25) do -- Escaneo más rápido para rellenar la mediana con precisión
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
-            cachedPingValue = Stats.Network.ServerToClientPing:GetValue() / 1000
+            local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
+            table.insert(pingHistory, rawPing)
+            if #pingHistory > 5 then table.remove(pingHistory, 1) end
+            
+            -- Clonar y ordenar la lista para extraer matemáticamente el valor central
+            local sortPing = {unpack(pingHistory)}
+            table.sort(sortPing)
+            cachedPingValue = sortPing[math.ceil(#sortPing / 2)] or rawPing
         end
     end
 end)
@@ -316,7 +324,7 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
--- RETORNA PREDICCIÓN COMPLETA (SILENT AIM) Y PREDICCIÓN PLANA (TRACERS ESTABLES)
+-- ENGINE DE PREDICCIÓN SEGURO (V10.4)
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -328,6 +336,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
+    -- [FUNCIÓN 1: FILTRADO DE EXTREMIDADES]
+    -- Forzamos a que los cálculos de velocidad matemática siempre usen el Torso (HRP)
+    -- Evitando que las animaciones de ataque (brazos/piernas moviéndose rápido) rompan la predicción.
     local rawVelocity = hrp.AssemblyLinearVelocity
     if lastPositions[targetChar] then
         local datosPrevios = lastPositions[targetChar]
@@ -343,7 +354,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     if not positionHistory[targetChar] then positionHistory[targetChar] = {} end
     local history = positionHistory[targetChar]
-    table.insert(history, 1, targetPosition)
+    table.insert(history, 1, hrp.Position) -- Usamos HRP para el historial anti-caminadora
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
     if SheriffConfig.FiltroCaminadora and #history >= 3 then
@@ -363,7 +374,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         smoothedVelocity = rawVelocity lastTargetChar = targetChar
     end
 
-    -- Filtro de amortiguación ultra-suave adaptado para pantallas de altos hercios (Red Magic)
     local vSmoothAlpha = math_clamp((SheriffConfig.EstabilizadorInercial and 8 or 22) * activeDT, 0, 1)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, vSmoothAlpha)
 
@@ -378,6 +388,11 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             verticalShift = vec3New(0, smoothedVelocity.Y * totalLatency * vMultiplier, 0)
         end
 
+        -- [FUNCIÓN 2: CAP DE PREDICCIÓN MÁXIMA (ANTI-LAG/ANTI-TELEPORT)]
+        -- Si por lag o exploits el cálculo intenta mover el tiro a más de 6.5 studs del cuerpo, lo congelamos en el límite seguro.
+        if horizontalShift.Magnitude > 6.5 then horizontalShift = horizontalShift.Unit * 6.5 end
+        if verticalShift.Magnitude > 5.0 then verticalShift = verticalShift.Unit * 5.0 end
+
         local finalPrediction = targetPosition + horizontalShift + verticalShift
         local minPrediction = targetPosition + (horizontalShift * 0.40) + (verticalShift * 0.40)
 
@@ -387,13 +402,17 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
         end
 
-        -- COORDENADAS PARA TRACERS (Totalmente planas en Y, fijadas a la altura real del hueso)
+        -- Tracers estables (eje Y plano, libre de oscilaciones)
         local tracerPrediction = targetPosition + horizontalShift
         local tracerMinPrediction = targetPosition + (horizontalShift * 0.40)
 
         return finalPrediction, minPrediction, tracerPrediction, tracerMinPrediction
     else
         local simpleShift = rawVelocity * totalLatency * hMultiplier * predictionWeight
+        
+        -- Cap seguro para el modo simple
+        if simpleShift.Magnitude > 6.5 then simpleShift = simpleShift.Unit * 6.5 end
+
         local finalPrediction = targetPosition + simpleShift
         local minPrediction = targetPosition + (simpleShift * 0.30)
         
@@ -427,9 +446,6 @@ local smoothed3DMinPred = VECTOR_ZERO
 local firstFrame = true
 local worldToViewport = Camera.WorldToViewportPoint
 
--- ============================================================================
--- 🔥 LOOP DE RENDERIZADO OPTIMIZADO (TRACERS CON FILTRADO EN EJE Y)
--- ============================================================================
 local renderConn = RunService.RenderStepped:Connect(function(dt)
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) 
     checkWeaponVisibility()
@@ -451,7 +467,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local tSmooth = SheriffConfig.TracerSmoothness
         local frameAlpha = (tSmooth == 1) and 1 or (1 - math_pow(1 - math_clamp(tSmooth, 0, 0.99), dt * 60))
         
-        -- Obtenemos predicciones normales (para matemáticas internas) y las planas (para dibujo de líneas)
         local _, _, tracerPredPos, tracerMinPredPos = getPredictedPosition(targetChar, visualPart, dt)
         local currentViewportSize = Camera.ViewportSize
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
@@ -462,12 +477,10 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 smoothed3DMinPred = tracerMinPredPos
                 firstFrame = false
             else
-                -- El suavizado se ejecuta en un plano X/Z estable sin rebotes de altura
                 smoothed3DPred = smoothed3DPred:Lerp(tracerPredPos, frameAlpha)
                 smoothed3DMinPred = smoothed3DMinPred:Lerp(tracerMinPredPos, frameAlpha)
             end
 
-            -- 1. TRACER AMARILLO (PREDICCIÓN MÍNIMA HORIZONTAL)
             if SheriffConfig.ShowYellowTracer then
                 local screenPos, onScreen = worldToViewport(Camera, smoothed3DMinPred)
                 if onScreen then
@@ -477,7 +490,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
 
-            -- 2. TRACER ROJO (IMPACTO HORIZONTAL FIJO)
             if SheriffConfig.ShowRedTracer then
                 local screenPos, onScreen = worldToViewport(Camera, smoothed3DPred)
                 if onScreen then
@@ -487,7 +499,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
 
-            -- 3. TRACER VERDE (LEAD TIME ENTRE MANO Y OBJETIVO PLANO)
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
                 local predScreenPos, predOnScreen = worldToViewport(Camera, smoothed3DPred)
@@ -521,7 +532,6 @@ local function fireAtMurdererDirectly()
         local targetChar = murderer.Character
         local bestPart, isBlocked = getSmartTargetPart(targetChar) 
         if bestPart and not isBlocked then 
-            -- Al disparar mantenemos la predicción completa (con eje Y) para no fallar el tiro real
             local finalPredictedPos = getPredictedPosition(targetChar, bestPart)
             if finalPredictedPos then
                 isFiringCooldown = true autoEquipWeapon()
@@ -571,7 +581,7 @@ DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://1257
 DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 task.spawn(function()
-    local ti = TweenInfo.new(0.79, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+    local ti = TweenInfo.new(0.7867, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
     local t1 = TweenService:Create(DecalTexture, ti, {Rotation = 360})
     local t2 = TweenService:Create(DecalTexture, ti, {Rotation = 0})
     table.insert(_G.KillerHubConnections, t1.Completed:Connect(function() task.wait(0.03) t2:Play() end))
@@ -589,7 +599,7 @@ table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(in
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         local bPos = ShootButton.AbsolutePosition local bSize = ShootButton.AbsoluteSize
         UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.52}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.59}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -608,7 +618,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.59, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
