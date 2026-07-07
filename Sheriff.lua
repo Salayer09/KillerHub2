@@ -384,12 +384,18 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         rawVelocity = rawVelocity.Unit * 28
     end
 
-    -- CORRECCIÓN DEL PARSEO DEL HISTORIAL DE POSICIONES (REPARACIÓN DE ATTEMPT TO CALL A NIL VALUE)
+    -- CORRECCIÓN APLICADA: Evitamos restas de vectores directos si son nulos y protegemos con pcall/tipo de dato
     if SheriffConfig.FiltroCaminadora and targetPlayer and positionHistory[targetPlayer] then
         local history = positionHistory[targetPlayer]
         if #history >= 3 and history[1] and history[#history] then
-            local desplazamientoReal = (history[1] - history[#history]).Magnitude
-            if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
+            local p1 = history[1]
+            local p2 = history[#history]
+            if typeof(p1) == "Vector3" and typeof(p2) == "Vector3" then
+                local desplazamientoReal = (p1 - p2).Magnitude
+                if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then 
+                    rawVelocity = vec3New(0, 0, 0) 
+                end
+            end
         end
     end
 
