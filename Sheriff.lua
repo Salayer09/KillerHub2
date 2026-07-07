@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.5 - FIXED)
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.3 - ANTI-JITTER)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -20,10 +20,10 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
 local math_clamp = math.clamp
-local math_min = math_min
-local math_max = math_max
-local math_abs = math_abs
-local math_pow = math_pow
+local math_min = math.min
+local math_max = math.max
+local math_abs = math.abs
+local math_pow = math.pow
 local vec2New = Vector2.new
 local vec3New = Vector3.new
 local udim2New = UDim2.new
@@ -48,6 +48,7 @@ _G.KillerHubConnections = {}
 local oldGui = game:GetService("CoreGui"):FindFirstChild("KillerHub_SheriffGui")
 if oldGui then oldGui:Destroy() end
 
+-- 1. CARGA DE LIBRERÍA
 local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Salayer09/KillerHub/refs/heads/main/Slayer.lua"))()
 
 local SheriffConfig = {
@@ -116,6 +117,7 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
+-- 2. CREACIÓN DE LA INTERFAZ UI
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Ajustes del Silent Aim")
 
@@ -166,23 +168,16 @@ local currentTarget = nil
 local isFiringCooldown = false
 local handLineIsBlocked = false 
 
+-- CONTENEDORES PARA MOTOR DE FÍSICAS ESTABILIZADO (ANTI-JITTER)
 local targetVelocities = {}
 local targetLastPositions = {}
 local positionHistory = {}
 local MAX_HISTORY_FRAMES = 5
 
--- FILTRO DE PING DE MEDIA MÓVIL SÓLIDO
-local pingHistory = {}
 task.spawn(function()
-    while task.wait(0.3) do
+    while task.wait(0.5) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
-            local rawPing = Stats.Network.ServerToClientPing:GetValue() / 1000
-            table.insert(pingHistory, rawPing)
-            if #pingHistory > 6 then table.remove(pingHistory, 1) end
-            
-            local sum = 0
-            for i = 1, #pingHistory do sum = sum + pingHistory[i] end
-            cachedPingValue = sum / #pingHistory
+            cachedPingValue = Stats.Network.ServerToClientPing:GetValue() / 1000
         end
     end
 end)
@@ -211,6 +206,9 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     end))
 end
 
+-- ============================================================================
+-- ⚙️ SISTEMA DE RASTREO EN HEARTBEAT (CORRECCIÓN DE RAÍZ DEL TEMBLOR)
+-- ============================================================================
 local physicsTrackingConn = RunService.Heartbeat:Connect(function(dt)
     local allPlayers = Players:GetPlayers()
     for i = 1, #allPlayers do
@@ -228,8 +226,9 @@ local physicsTrackingConn = RunService.Heartbeat:Connect(function(dt)
 
                 if lastData then
                     local dynamicVelocity = (currentPos - lastData.Pos) / dt
-                    if dynamicVelocity.Magnitude < 40 then
+                    if dynamicVelocity.Magnitude < 160 then
                         local currentVel = targetVelocities[pl] or hrp.AssemblyLinearVelocity
+                        -- El factor 0.22 estabiliza los microcambios de animaciones
                         targetVelocities[pl] = currentVel:Lerp(dynamicVelocity, 0.22)
                     end
                 else
@@ -369,33 +368,17 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     local activeDT = customDelta or emaDeltaTime
     local targetPosition = targetPart.Position
-
-    -- CONTROL DE ANIMACIÓN DE EXTREMIDADES EN ANCLAJE
-    local isExtremity = targetPart.Name:find("Hand") or targetPart.Name:find("Arm") or targetPart.Name:find("Foot") or targetPart.Name:find("Leg")
-    if isExtremity and hrp then
-        targetPosition = vec3New(targetPosition.X, hrp.Position.Y, targetPosition.Z)
-    end
-
     local distance = (targetPosition - localHrp.Position).Magnitude
+
+    -- Extrae la velocidad estabilizada del almacenamiento físico
     local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
     local rawVelocity = (targetPlayer and targetVelocities[targetPlayer]) or hrp.AssemblyLinearVelocity
 
-    if rawVelocity.Magnitude > 28 then
-        rawVelocity = rawVelocity.Unit * 28
-    end
-
-    -- CORRECCIÓN APLICADA: Evitamos restas de vectores directos si son nulos y protegemos con pcall/tipo de dato
     if SheriffConfig.FiltroCaminadora and targetPlayer and positionHistory[targetPlayer] then
         local history = positionHistory[targetPlayer]
-        if #history >= 3 and history[1] and history[#history] then
-            local p1 = history[1]
-            local p2 = history[#history]
-            if typeof(p1) == "Vector3" and typeof(p2) == "Vector3" then
-                local desplazamientoReal = (p1 - p2).Magnitude
-                if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then 
-                    rawVelocity = vec3New(0, 0, 0) 
-                end
-            end
+        if #history >= 3 then
+            local desplazamientoReal = (history[1] - history[#history]).Magnitude
+            if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
         end
     end
 
@@ -412,8 +395,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         smoothedVelocity = rawVelocity lastTargetChar = targetChar
     end
 
-    local finalPrediction, minPrediction
-
     if SheriffConfig.PredictionMode == "PREDICTION PRO" then
         local lerpFactor = SheriffConfig.EstabilizadorInercial and 0.55 or 0.85
         smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, lerpFactor)
@@ -428,27 +409,19 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             verticalShift = vec3New(0, smoothedVelocity.Y * totalLatency * vMultiplier, 0)
         end
 
-        finalPrediction = targetPosition + horizontalShift + verticalShift
-        minPrediction = targetPosition + (horizontalShift * 0.40) + (verticalShift * 0.40)
+        local finalPrediction = targetPosition + horizontalShift + verticalShift
+        local minPrediction = targetPosition + (horizontalShift * 0.40) + (verticalShift * 0.40)
+
+        local floorY = getFloorHeight(hrp, targetChar)
+        if floorY then
+            local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.1
+            if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
+        end
+        return finalPrediction, minPrediction
     else
         local simpleShift = rawVelocity * totalLatency * hMultiplier * predictionWeight
-        finalPrediction = targetPosition + simpleShift
-        minPrediction = targetPosition + (simpleShift * 0.30)
+        return targetPosition + simpleShift, targetPosition + (simpleShift * 0.30)
     end
-
-    local maxDistanceThreshold = 6.2 
-    local totalOffset = finalPrediction - targetPosition
-    if totalOffset.Magnitude > maxDistanceThreshold then
-        finalPrediction = targetPosition + (totalOffset.Unit * maxDistanceThreshold)
-    end
-
-    local floorY = getFloorHeight(hrp, targetChar)
-    if floorY then
-        local minAllowedY = floorY + (hrp.Size.Y / 2) + 0.1
-        if finalPrediction.Y < minAllowedY then finalPrediction = vec3New(finalPrediction.X, minAllowedY, finalPrediction.Z) end
-    end
-
-    return finalPrediction, minPrediction
 end
 
 local MinPredictionLine = Drawing.new("Line")
@@ -474,6 +447,9 @@ local smoothed3DMinPred = VECTOR_ZERO
 local firstFrame = true
 local worldToViewport = Camera.WorldToViewportPoint
 
+-- ============================================================================
+-- 🔥 LOOP DE RENDERIZADO OPTIMIZADO (3D WORLD-SPACE INTERPOLATION)
+-- ============================================================================
 local renderConn = RunService.RenderStepped:Connect(function(dt)
     emaDeltaTime = emaDeltaTime + 0.2 * (dt - emaDeltaTime) 
     checkWeaponVisibility()
@@ -509,6 +485,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 smoothed3DMinPred = smoothed3DMinPred:Lerp(minPredictedPos, frameAlpha)
             end
 
+            -- 1. TRACER AMARILLO (PREDICCIÓN MÍNIMA)
             if SheriffConfig.ShowYellowTracer then
                 local screenPos, onScreen = worldToViewport(Camera, smoothed3DMinPred)
                 if onScreen then
@@ -518,6 +495,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
 
+            -- 2. TRACER ROJO (IMPACTO FINAL SUPER FLUIDO)
             if SheriffConfig.ShowRedTracer then
                 local screenPos, onScreen = worldToViewport(Camera, smoothed3DPred)
                 if onScreen then
@@ -527,6 +505,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
 
+            -- 3. TRACER VERDE (LEAD TIME DINÁMICO DESDE LA MANO)
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
                 local predScreenPos, predOnScreen = worldToViewport(Camera, smoothed3DPred)
@@ -575,6 +554,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
+-- INTERFAZ DEL BOTÓN
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
@@ -659,6 +639,7 @@ end))
 
 checkWeaponVisibility()
 
+-- HOOKS DE RED INTERNOS
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
