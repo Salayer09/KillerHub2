@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.4 - ULTRA HIT-RATE)
+-- 👾 KILLER HUB | CONFIGURACIÓN GLOBAL DE INICIO (ENGINE V10.5 - FIXED)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -171,7 +171,7 @@ local targetLastPositions = {}
 local positionHistory = {}
 local MAX_HISTORY_FRAMES = 5
 
--- 1. MEJORA DE PING: FILTRO DE MEDIA MÓVIL (IGNORA PICOS DE LAG REVENTADOS)
+-- FILTRO DE PING DE MEDIA MÓVIL SÓLIDO
 local pingHistory = {}
 task.spawn(function()
     while task.wait(0.3) do
@@ -228,7 +228,6 @@ local physicsTrackingConn = RunService.Heartbeat:Connect(function(dt)
 
                 if lastData then
                     local dynamicVelocity = (currentPos - lastData.Pos) / dt
-                    -- 2. MEJORA ANTI-LAG: CAP DE VELOCIDAD EXTREMA EN EL MOTOR DE HISTORIAL
                     if dynamicVelocity.Magnitude < 40 then
                         local currentVel = targetVelocities[pl] or hrp.AssemblyLinearVelocity
                         targetVelocities[pl] = currentVel:Lerp(dynamicVelocity, 0.22)
@@ -371,7 +370,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local activeDT = customDelta or emaDeltaTime
     local targetPosition = targetPart.Position
 
-    -- 3. MEJORA ANTI-ANIMACIONES: ANCLAJE DE EXTREMIDADES (PROTEGER CONTRA GIROS DEL CUCHILLO O SALTOS CAÓTICOS)
+    -- CONTROL DE ANIMACIÓN DE EXTREMIDADES EN ANCLAJE
     local isExtremity = targetPart.Name:find("Hand") or targetPart.Name:find("Arm") or targetPart.Name:find("Foot") or targetPart.Name:find("Leg")
     if isExtremity and hrp then
         targetPosition = vec3New(targetPosition.X, hrp.Position.Y, targetPosition.Z)
@@ -381,14 +380,14 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local targetPlayer = Players:GetPlayerFromCharacter(targetChar)
     local rawVelocity = (targetPlayer and targetVelocities[targetPlayer]) or hrp.AssemblyLinearVelocity
 
-    -- Límite estricto a la velocidad física lineal máxima (Filtro anti-desfase / Teleports parciales)
     if rawVelocity.Magnitude > 28 then
         rawVelocity = rawVelocity.Unit * 28
     end
 
+    -- CORRECCIÓN DEL PARSEO DEL HISTORIAL DE POSICIONES (REPARACIÓN DE ATTEMPT TO CALL A NIL VALUE)
     if SheriffConfig.FiltroCaminadora and targetPlayer and positionHistory[targetPlayer] then
         local history = positionHistory[targetPlayer]
-        if #history >= 3 then
+        if #history >= 3 and history[1] and history[#history] then
             local desplazamientoReal = (history[1] - history[#history]).Magnitude
             if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
         end
@@ -431,7 +430,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         minPrediction = targetPosition + (simpleShift * 0.30)
     end
 
-    -- 4. MEJORA DE CAP ABSOLUTO (CLAMP DE EXTRAPOLACIÓN): EVITA QUE LA BALA VAYA A "NARNIA" POR PICOS DE RED
     local maxDistanceThreshold = 6.2 
     local totalOffset = finalPrediction - targetPosition
     if totalOffset.Magnitude > maxDistanceThreshold then
