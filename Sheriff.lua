@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V10.8 - SILENT AIM FIX & CLEAN UI
+-- 👾 KILLER HUB | ENGINE V10.9 - ENGLISH EDITION
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -20,8 +20,6 @@ local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
 
 local math_clamp = math.clamp
-local math_min = math.min
-local math_max = math.max
 local math_abs = math.abs
 local math_pow = math.pow
 local vec2New = Vector2.new
@@ -53,14 +51,13 @@ local KillerHub = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sal
 local SheriffConfig = {
     SilentAim = false,
     JumpPrediction = true, 
-    PredictionMode = "Prediction Pro", 
+    PredictionMode = "PREDICTION PRO", 
     HorizontalScale = 100,  
     VerticalScale = 100,    
+    PredictionDamping = 50, -- Damps prediction on zigzags, quick turns, and target lag
     PingCompensation = 100, 
     CloseRangeZone = 6, 
     WallCheck = true,    
-    FiltroCaminadora = true, 
-    EstabilizadorInercial = true, 
     ShowRedTracer = true,      
     ShowBlueTracer = true, 
     ShowGreenTracer = true,
@@ -73,7 +70,7 @@ local SheriffConfig = {
 }
 
 local HttpService = game:GetService("HttpService")
-local CONFIG_FILE = "KillerHub_SheriffSuite_v108.txt"
+local CONFIG_FILE = "KillerHub_SheriffSuite_v109.txt"
 
 local function saveConfig()
     pcall(function() if writefile then writefile(CONFIG_FILE, HttpService:JSONEncode(SheriffConfig)) end end)
@@ -116,44 +113,38 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- ============================================================================
--- UI MENU (CLEAN ENGLISH NAMES)
--- ============================================================================
+-- UI MENU
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
+SheriffTab:CreateSection("Silent Aim")
 
-SheriffTab:CreateSection("Silent Aim Settings")
-SheriffTab:CreateToggle("SheriffSilent", "Silent Aim", function(estado) SheriffConfig.SilentAim = estado saveConfig() end, SheriffConfig.SilentAim)
-SheriffTab:CreateToggle("JumpPredToggle", "Jump Prediction", function(estado) SheriffConfig.JumpPrediction = estado saveConfig() end, SheriffConfig.JumpPrediction)
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(estado) SheriffConfig.WallCheck = estado saveConfig() end, SheriffConfig.WallCheck)
-SheriffTab:CreateDropdown("PredMode", "Prediction Mode:", {"Prediction Pro", "Prediction Simple"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
+SheriffTab:CreateToggle("SheriffSilent", "Silent Aim", function(state) SheriffConfig.SilentAim = state saveConfig() end, SheriffConfig.SilentAim)
+SheriffTab:CreateToggle("JumpPredToggle", "Smart Jump Prediction", function(state) SheriffConfig.JumpPrediction = state saveConfig() end, SheriffConfig.JumpPrediction)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(state) SheriffConfig.WallCheck = state saveConfig() end, SheriffConfig.WallCheck)
+SheriffTab:CreateDropdown("PredMode", "Prediction Mode:", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 
-SheriffTab:CreateSection("Environment Calibration")
+SheriffTab:CreateSection("Prediction Settings")
 SheriffTab:CreateSlider("HorizontalScaleSlider", "Horizontal Prediction", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
 SheriffTab:CreateSlider("VerticalScaleSlider", "Vertical Prediction", 0, 300, function(v) SheriffConfig.VerticalScale = v saveConfig() end, SheriffConfig.VerticalScale)
-SheriffTab:CreateSlider("PingCompSlider", "Ping Compensation", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
-SheriffTab:CreateSlider("CloseRangeZoneSlider", "Close Range Zone", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
+SheriffTab:CreateSlider("PredictionDampingSlider", "Prediction Damping", 0, 100, function(v) SheriffConfig.PredictionDamping = v saveConfig() end, SheriffConfig.PredictionDamping)
+SheriffTab:CreateSlider("PingCompSlider", "Ping Compensation (%)", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
+SheriffTab:CreateSlider("CloseRangeZoneSlider", "Close Range Deadzone", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
 
-SheriffTab:CreateSection("Visual Customization")
-SheriffTab:CreateMultiDropdown("ActiveTracers", "Tracers:", {"Tracer Prediction (Maximum)", "Tracer Prediction (Minimum)", "Tracer Prediction (Lead Time)"}, function(tablaFlags)
-    SheriffConfig.ShowRedTracer = tablaFlags["Tracer Prediction (Maximum)"] or false
-    SheriffConfig.ShowBlueTracer = tablaFlags["Tracer Prediction (Minimum)"] or false 
-    SheriffConfig.ShowGreenTracer = tablaFlags["Tracer Prediction (Lead Time)"] or false
+SheriffTab:CreateSection("Visual Tracers")
+SheriffTab:CreateMultiDropdown("ActiveTracers", "Tracers Display:", {"Tracer Prediction Minimum", "Tracer Prediction Maximum", "Tracer Prediction Lead Time"}, function(flags)
+    SheriffConfig.ShowBlueTracer = flags["Tracer Prediction Minimum"] or false
+    SheriffConfig.ShowRedTracer = flags["Tracer Prediction Maximum"] or false 
+    SheriffConfig.ShowGreenTracer = flags["Tracer Prediction Lead Time"] or false
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("VoidBtnSize", "Shoot Button Size", 50, 200, function(valor)
-    SheriffConfig.ButtonSize = valor
-    if cachedShootButton then cachedShootButton.Size = udim2New(0, valor, 0, valor) end
+SheriffTab:CreateSection("On-Screen Controls")
+SheriffTab:CreateToggle("ShowVoidButton", "Show Shoot Button", function(state) SheriffConfig.ShowShootButton = state saveConfig() checkWeaponVisibility() end, SheriffConfig.ShowShootButton)
+SheriffTab:CreateToggle("WeaponDetectToggle", "Hide Button Without Weapon", function(state) SheriffConfig.UseWeaponDetector = state saveConfig() checkWeaponVisibility() end, SheriffConfig.UseWeaponDetector)
+SheriffTab:CreateSlider("VoidBtnSize", "Shoot Button Size", 50, 200, function(val)
+    SheriffConfig.ButtonSize = val
+    if cachedShootButton then cachedShootButton.Size = udim2New(0, val, 0, val) end
     saveConfig()
 end, SheriffConfig.ButtonSize)
-
-SheriffTab:CreateSection("Stabilizer Filters")
-SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Treadmill Filter", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end, SheriffConfig.FiltroCaminadora)
-SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Inertial Stabilizer", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end, SheriffConfig.EstabilizadorInercial)
-
-SheriffTab:CreateSection("Interface Settings")
-SheriffTab:CreateToggle("WeaponDetectToggle", "Weapon Detector", function(estado) SheriffConfig.UseWeaponDetector = estado saveConfig() checkWeaponVisibility() end, SheriffConfig.UseWeaponDetector)
-SheriffTab:CreateToggle("ShowVoidButton", "Show Shoot Button", function(estado) SheriffConfig.ShowShootButton = estado saveConfig() checkWeaponVisibility() end, SheriffConfig.ShowShootButton)
 
 local MurdererDetectado = nil
 local smoothedVelocity = VECTOR_ZERO
@@ -325,17 +316,19 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 local function getPredictedPosition(targetChar, targetPart, customDelta)
-    if not targetChar or not targetPart then return nil, nil, nil, nil, nil end
+    if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil, nil, nil end
+    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil end
 
     local activeDT = customDelta or emaDeltaTime
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
     local rawVelocity = hrp.AssemblyLinearVelocity
+    local prevVel = VECTOR_ZERO
+
     if humanoid.FloorMaterial ~= Enum.Material.Air and humanoid.MoveDirection.Magnitude > 0 then
         local walkSpeed = humanoid.WalkSpeed > 0 and humanoid.WalkSpeed or 16
         rawVelocity = vec3New(humanoid.MoveDirection.X * walkSpeed, rawVelocity.Y, humanoid.MoveDirection.Z * walkSpeed)
@@ -343,6 +336,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         if lastPositions[targetChar] then
             local datosPrevios = lastPositions[targetChar]
             local tiempoTranscurrido = os_clock() - datosPrevios.Time
+            prevVel = datosPrevios.Vel or VECTOR_ZERO
             if tiempoTranscurrido > 0.01 then
                 local calculatedVel = (hrp.Position - datosPrevios.Pos) / tiempoTranscurrido
                 if calculatedVel.Magnitude > 0.5 and calculatedVel.Magnitude < 100 then
@@ -351,16 +345,24 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             end
         end
     end
-    lastPositions[targetChar] = {Pos = hrp.Position, Time = os_clock()}
+    lastPositions[targetChar] = {Pos = hrp.Position, Vel = rawVelocity, Time = os_clock()}
 
     if not positionHistory[targetChar] then positionHistory[targetChar] = {} end
     local history = positionHistory[targetChar]
     table.insert(history, 1, hrp.Position)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
-    if SheriffConfig.FiltroCaminadora and #history >= 3 then
-        local desplazamientoReal = (history[1] - history[#history]).Magnitude
-        if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
+    -- PREDICTION DAMPING LOGIC (LAG & ZIGZAG COMPENSATION)
+    local dampeningFactor = 1.0
+    if rawVelocity.Magnitude > 1 and prevVel.Magnitude > 1 then
+        local dirDot = rawVelocity.Unit:Dot(prevVel.Unit)
+        if dirDot < 0.6 then -- Rapid direction switch (Zigzag / Fake)
+            local severity = math_clamp((0.6 - dirDot) / 1.6, 0, 1)
+            dampeningFactor = dampeningFactor * (1 - (severity * (SheriffConfig.PredictionDamping / 100)))
+        end
+    elseif rawVelocity.Magnitude < 2 and prevVel.Magnitude > 5 then
+        -- Target suddenly stopped moving or lagged out
+        dampeningFactor = dampeningFactor * (1 - (0.8 * (SheriffConfig.PredictionDamping / 100)))
     end
 
     local hMultiplier = (SheriffConfig.HorizontalScale / 100)
@@ -375,10 +377,10 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         smoothedVelocity = rawVelocity lastTargetChar = targetChar
     end
 
-    local vSmoothAlpha = math_clamp((SheriffConfig.EstabilizadorInercial and 5 or 20) * activeDT, 0, 1)
+    local vSmoothAlpha = math_clamp(12 * activeDT, 0, 1)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, vSmoothAlpha)
 
-    local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
+    local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight * dampeningFactor
     if horizontalShift.Magnitude > 6.5 then horizontalShift = horizontalShift.Unit * 6.5 end
 
     local finalPredNoY = vec3New(targetPosition.X + horizontalShift.X, targetPosition.Y, targetPosition.Z + horizontalShift.Z)
@@ -406,23 +408,21 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     return finalPredWithY, finalPredNoY, minPredNoY
 end
 
--- ============================================================================
--- TRACERS (RENDER)
--- ============================================================================
+-- TRACERS SETUP
 local MinPredictionLine = Drawing.new("Line")
-MinPredictionLine.Color = color3RGB(4, 0, 220)
+MinPredictionLine.Color = color3RGB(4, 0, 220) -- Blue
 MinPredictionLine.Thickness = 2.0
 MinPredictionLine.Transparency = 1.0  
 MinPredictionLine.ZIndex = 5          
 
 local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = color3RGB(255, 35, 35)
+PredictionLine.Color = color3RGB(255, 35, 35) -- Red
 PredictionLine.Thickness = 2.0
 PredictionLine.Transparency = 1.0  
 PredictionLine.ZIndex = 10         
 
 local LeadTimeLine = Drawing.new("Line")
-LeadTimeLine.Color = color3RGB(35, 255, 35)
+LeadTimeLine.Color = color3RGB(35, 255, 35) -- Green
 LeadTimeLine.Thickness = 1.8
 LeadTimeLine.Transparency = 1.0  
 LeadTimeLine.ZIndex = 7
@@ -464,7 +464,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 lastWorldMinPredNoY = lastWorldMinPredNoY:Lerp(minPredNoY, 0.9)
             end
 
-            -- Minimum Tracer
+            -- Blue Tracer (Tracer Prediction Minimum)
             if SheriffConfig.ShowBlueTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldMinPredNoY)
                 if onScreen then
@@ -474,7 +474,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
 
-            -- Maximum Tracer
+            -- Red Tracer (Tracer Prediction Maximum)
             if SheriffConfig.ShowRedTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldPredNoY)
                 if onScreen then
@@ -484,7 +484,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
 
-            -- Lead Time Tracer
+            -- Green Tracer (Tracer Prediction Lead Time)
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
                 local predScreenPos, predOnScreen = worldToViewport(Camera, lastWorldPredNoY)
@@ -529,9 +529,7 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- ============================================================================
 -- ON-SCREEN SHOOT BUTTON UI
--- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
@@ -614,9 +612,7 @@ table.insert(_G.KillerHubConnections, UserInputService.InputChanged:Connect(func
     end
 end))
 
--- ============================================================================
--- WEAPON SERVICE HOOK (FIXED SILENT AIM DISPARO PASSIVO)
--- ============================================================================
+-- FIXED SILENT AIM WEAPON SERVICE HOOKS
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
@@ -639,38 +635,39 @@ if WeaponService then
     local oldGetMouseTargetCFrame = WeaponService.GetMouseTargetCFrame
     local lastHookCallTime = os_clock()
 
-    local function checkAndPredict()
-        if handLineIsBlocked then return nil end 
-        local currentTime = os_clock()
-        local structuralDelta = math_clamp(currentTime - lastHookCallTime, 0.008, 0.033)
-        lastHookCallTime = currentTime
+    local function getSilentAimTarget(returnCFrame)
+        if not SheriffConfig.SilentAim then return nil end
 
         local gun, _ = getGunLocation()
-        if SheriffConfig.SilentAim and (not SheriffConfig.UseWeaponDetector or (gun ~= nil)) then
-            local murderer = getMurderer()
-            if murderer and murderer.Character then
-                local bestPart, isBlocked = getSmartTargetPart(murderer.Character)
-                if bestPart and not isBlocked then
-                    local finalPredictedPos = getPredictedPosition(murderer.Character, bestPart, structuralDelta)
-                    if finalPredictedPos then 
-                        -- MM2 requiere CFrame obligatoriamente para FireServer
-                        return cframeNew(finalPredictedPos) 
-                    end
+        if SheriffConfig.UseWeaponDetector and not gun then return nil end
+
+        local murderer = getMurderer()
+        if murderer and murderer.Character then
+            local bestPart, isBlocked = getSmartTargetPart(murderer.Character)
+            if bestPart and not (SheriffConfig.WallCheck and isBlocked) then
+                local currentTime = os_clock()
+                local dt = math_clamp(currentTime - lastHookCallTime, 0.008, 0.033)
+                lastHookCallTime = currentTime
+
+                local finalPredictedPos = getPredictedPosition(murderer.Character, bestPart, dt)
+                if finalPredictedPos then
+                    return returnCFrame and cframeNew(finalPredictedPos) or finalPredictedPos
                 end
             end
         end
         return nil
     end
 
-    if oldGetTargetPosition then 
-        WeaponService.GetTargetPosition = function(self, ...) 
-            return checkAndPredict() or oldGetTargetPosition(self, ...) 
-        end 
+    if oldGetTargetPosition then
+        WeaponService.GetTargetPosition = function(self, ...)
+            return getSilentAimTarget(false) or oldGetTargetPosition(self, ...)
+        end
     end
-    if oldGetMouseTargetCFrame then 
-        WeaponService.GetMouseTargetCFrame = function(self, ...) 
-            return checkAndPredict() or oldGetMouseTargetCFrame(self, ...) 
-        end 
+
+    if oldGetMouseTargetCFrame then
+        WeaponService.GetMouseTargetCFrame = function(self, ...)
+            return getSilentAimTarget(true) or oldGetMouseTargetCFrame(self, ...)
+        end
     end
 end
 
