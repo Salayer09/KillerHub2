@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V10.9 - ENGLISH EDITION
+-- 👾 KILLER HUB | ENGINE V11.0 - GLOW ANIMATED & OPTIMIZED
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -54,7 +54,7 @@ local SheriffConfig = {
     PredictionMode = "PREDICTION PRO", 
     HorizontalScale = 100,  
     VerticalScale = 100,    
-    PredictionDamping = 50, -- Damps prediction on zigzags, quick turns, and target lag
+    PredictionDamping = 50,
     PingCompensation = 100, 
     CloseRangeZone = 6, 
     WallCheck = true,    
@@ -352,16 +352,14 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     table.insert(history, 1, hrp.Position)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
-    -- PREDICTION DAMPING LOGIC (LAG & ZIGZAG COMPENSATION)
     local dampeningFactor = 1.0
     if rawVelocity.Magnitude > 1 and prevVel.Magnitude > 1 then
         local dirDot = rawVelocity.Unit:Dot(prevVel.Unit)
-        if dirDot < 0.6 then -- Rapid direction switch (Zigzag / Fake)
+        if dirDot < 0.6 then
             local severity = math_clamp((0.6 - dirDot) / 1.6, 0, 1)
             dampeningFactor = dampeningFactor * (1 - (severity * (SheriffConfig.PredictionDamping / 100)))
         end
     elseif rawVelocity.Magnitude < 2 and prevVel.Magnitude > 5 then
-        -- Target suddenly stopped moving or lagged out
         dampeningFactor = dampeningFactor * (1 - (0.8 * (SheriffConfig.PredictionDamping / 100)))
     end
 
@@ -410,19 +408,19 @@ end
 
 -- TRACERS SETUP
 local MinPredictionLine = Drawing.new("Line")
-MinPredictionLine.Color = color3RGB(4, 0, 220) -- Blue
+MinPredictionLine.Color = color3RGB(4, 0, 220) 
 MinPredictionLine.Thickness = 2.0
 MinPredictionLine.Transparency = 1.0  
 MinPredictionLine.ZIndex = 5          
 
 local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = color3RGB(255, 35, 35) -- Red
+PredictionLine.Color = color3RGB(255, 35, 35) 
 PredictionLine.Thickness = 2.0
 PredictionLine.Transparency = 1.0  
 PredictionLine.ZIndex = 10         
 
 local LeadTimeLine = Drawing.new("Line")
-LeadTimeLine.Color = color3RGB(35, 255, 35) -- Green
+LeadTimeLine.Color = color3RGB(35, 255, 35) 
 LeadTimeLine.Thickness = 1.8
 LeadTimeLine.Transparency = 1.0  
 LeadTimeLine.ZIndex = 7
@@ -464,7 +462,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 lastWorldMinPredNoY = lastWorldMinPredNoY:Lerp(minPredNoY, 0.9)
             end
 
-            -- Blue Tracer (Tracer Prediction Minimum)
             if SheriffConfig.ShowBlueTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldMinPredNoY)
                 if onScreen then
@@ -474,7 +471,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
 
-            -- Red Tracer (Tracer Prediction Maximum)
             if SheriffConfig.ShowRedTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldPredNoY)
                 if onScreen then
@@ -484,7 +480,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
 
-            -- Green Tracer (Tracer Prediction Lead Time)
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
                 local predScreenPos, predOnScreen = worldToViewport(Camera, lastWorldPredNoY)
@@ -555,12 +550,20 @@ GlowCorner.CornerRadius = UDim.new(0.28, 0) GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
 UiGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)), ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)), ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))})
-UiGradient.Rotation = 45 UiGradient.Parent = GlowOverlay
+UiGradient.Rotation = 45 
+UiGradient.Offset = vec2New(0, 0) -- Glow perfectamente centrado
+UiGradient.Parent = GlowOverlay
+
+-- ROTACIÓN CONTINUA A LA DERECHA EN EL GLOW
+local glowRotateConn = RunService.RenderStepped:Connect(function(dt)
+    UiGradient.Rotation = (UiGradient.Rotation + dt * 120) % 360
+end)
+table.insert(_G.KillerHubConnections, glowRotateConn)
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Size = udim2New(0.37, 0, 0.37, 0) DecalTexture.AnchorPoint = vec2New(0.5, 0.5) DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
 DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
-DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
+DecalTexture.ImageTransparency = 1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 task.spawn(function()
     local ti = TweenInfo.new(0.80, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
@@ -573,15 +576,14 @@ end)
 
 local Label = Instance.new("TextLabel")
 Label.Size = udim2New(1, 0, 0.2, 0) Label.Position = udim2New(0, 0, 0.75, 0) Label.BackgroundTransparency = 1
-Label.Text = "SHOOT" Label.TextColor3 = color3RGB(255, 255, 255) Label.TextSize = 15 Label.Font = Enum.Font.GothamBold
+Label.Text = "SHOOT" Label.TextColor3 = color3RGB(255, 255, 255) Label.TextSize = 15 Label.Font = Enum.Font.GothamBold -- Texto ajustado sutilmente
 Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity; Label.ZIndex = ShootButton.ZIndex + 2; Label.Parent = ShootButton
 
 local dragging, dragInput, dragStart, startPos
 table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        local bPos = ShootButton.AbsolutePosition local bSize = ShootButton.AbsoluteSize
-        UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.55}):Play()
+        UiGradient.Offset = vec2New(0, 0) -- Se fija en el centro exacto al presionar
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.23}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -600,7 +602,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.23, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
