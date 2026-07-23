@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V11.0 - GLOW ANIMATED & OPTIMIZED
+-- 👾 KILLER HUB | ENGINE V11.0 - ANTI-ZIGZAG & SILENT AIM FIXED
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -54,7 +54,7 @@ local SheriffConfig = {
     PredictionMode = "PREDICTION PRO", 
     HorizontalScale = 100,  
     VerticalScale = 100,    
-    PredictionDamping = 50,
+    AntiZigZag = true,
     PingCompensation = 100, 
     CloseRangeZone = 6, 
     WallCheck = true,    
@@ -118,6 +118,7 @@ local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
 SheriffTab:CreateSection("Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Silent Aim", function(state) SheriffConfig.SilentAim = state saveConfig() end, SheriffConfig.SilentAim)
+SheriffTab:CreateToggle("AntiZigZagToggle", "Anti-ZigZag", function(state) SheriffConfig.AntiZigZag = state saveConfig() end, SheriffConfig.AntiZigZag)
 SheriffTab:CreateToggle("JumpPredToggle", "Smart Jump Prediction", function(state) SheriffConfig.JumpPrediction = state saveConfig() end, SheriffConfig.JumpPrediction)
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(state) SheriffConfig.WallCheck = state saveConfig() end, SheriffConfig.WallCheck)
 SheriffTab:CreateDropdown("PredMode", "Prediction Mode:", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
@@ -125,7 +126,6 @@ SheriffTab:CreateDropdown("PredMode", "Prediction Mode:", {"PREDICTION PRO", "PR
 SheriffTab:CreateSection("Prediction Settings")
 SheriffTab:CreateSlider("HorizontalScaleSlider", "Horizontal Prediction", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
 SheriffTab:CreateSlider("VerticalScaleSlider", "Vertical Prediction", 0, 300, function(v) SheriffConfig.VerticalScale = v saveConfig() end, SheriffConfig.VerticalScale)
-SheriffTab:CreateSlider("PredictionDampingSlider", "Prediction Damping", 0, 100, function(v) SheriffConfig.PredictionDamping = v saveConfig() end, SheriffConfig.PredictionDamping)
 SheriffTab:CreateSlider("PingCompSlider", "Ping Compensation (%)", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
 SheriffTab:CreateSlider("CloseRangeZoneSlider", "Close Range Deadzone", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
 
@@ -352,15 +352,13 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     table.insert(history, 1, hrp.Position)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
-    local dampeningFactor = 1.0
-    if rawVelocity.Magnitude > 1 and prevVel.Magnitude > 1 then
+    -- SISTEMA NATIVO Y OPTIMIZADO DE ANTI-ZIGZAG
+    if SheriffConfig.AntiZigZag and rawVelocity.Magnitude > 1.5 and prevVel.Magnitude > 1.5 then
         local dirDot = rawVelocity.Unit:Dot(prevVel.Unit)
         if dirDot < 0.6 then
-            local severity = math_clamp((0.6 - dirDot) / 1.6, 0, 1)
-            dampeningFactor = dampeningFactor * (1 - (severity * (SheriffConfig.PredictionDamping / 100)))
+            local antiZigZagMult = math_clamp((dirDot + 1) / 1.6, 0.4, 1.0)
+            rawVelocity = vec3New(rawVelocity.X * antiZigZagMult, rawVelocity.Y, rawVelocity.Z * antiZigZagMult)
         end
-    elseif rawVelocity.Magnitude < 2 and prevVel.Magnitude > 5 then
-        dampeningFactor = dampeningFactor * (1 - (0.8 * (SheriffConfig.PredictionDamping / 100)))
     end
 
     local hMultiplier = (SheriffConfig.HorizontalScale / 100)
@@ -378,7 +376,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local vSmoothAlpha = math_clamp(12 * activeDT, 0, 1)
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, vSmoothAlpha)
 
-    local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight * dampeningFactor
+    local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
     if horizontalShift.Magnitude > 6.5 then horizontalShift = horizontalShift.Unit * 6.5 end
 
     local finalPredNoY = vec3New(targetPosition.X + horizontalShift.X, targetPosition.Y, targetPosition.Z + horizontalShift.Z)
@@ -551,10 +549,9 @@ GlowCorner.CornerRadius = UDim.new(0.28, 0) GlowCorner.Parent = GlowOverlay
 local UiGradient = Instance.new("UIGradient")
 UiGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)), ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)), ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))})
 UiGradient.Rotation = 45 
-UiGradient.Offset = vec2New(0, 0) -- Glow perfectamente centrado
+UiGradient.Offset = vec2New(0, 0)
 UiGradient.Parent = GlowOverlay
 
--- ROTACIÓN CONTINUA A LA DERECHA EN EL GLOW
 local glowRotateConn = RunService.RenderStepped:Connect(function(dt)
     UiGradient.Rotation = (UiGradient.Rotation + dt * 120) % 360
 end)
@@ -576,14 +573,14 @@ end)
 
 local Label = Instance.new("TextLabel")
 Label.Size = udim2New(1, 0, 0.2, 0) Label.Position = udim2New(0, 0, 0.75, 0) Label.BackgroundTransparency = 1
-Label.Text = "SHOOT" Label.TextColor3 = color3RGB(255, 255, 255) Label.TextSize = 15 Label.Font = Enum.Font.GothamBold -- Texto ajustado sutilmente
+Label.Text = "SHOOT" Label.TextColor3 = color3RGB(255, 255, 255) Label.TextSize = 15 Label.Font = Enum.Font.GothamBold
 Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity; Label.ZIndex = ShootButton.ZIndex + 2; Label.Parent = ShootButton
 
 local dragging, dragInput, dragStart, startPos
 table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        UiGradient.Offset = vec2New(0, 0) -- Se fija en el centro exacto al presionar
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.23}):Play()
+        UiGradient.Offset = vec2New(0, 0)
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.005}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -602,7 +599,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.23, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.30, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
@@ -614,7 +611,34 @@ table.insert(_G.KillerHubConnections, UserInputService.InputChanged:Connect(func
     end
 end))
 
--- FIXED SILENT AIM WEAPON SERVICE HOOKS
+-- SILENT AIM HOOK CORREGIDO (DETECCIÓN DE PANTALLA/CLIC)
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    
+    if not checkcaller() and (method == "FireServer" or method == "fireServer") and tostring(self) == "Shoot" then
+        if SheriffConfig.SilentAim then
+            local gun, _ = getGunLocation()
+            if not (SheriffConfig.UseWeaponDetector and not gun) then
+                local murderer = getMurderer()
+                if murderer and murderer.Character then
+                    local bestPart, isBlocked = getSmartTargetPart(murderer.Character)
+                    if bestPart and not (SheriffConfig.WallCheck and isBlocked) then
+                        local finalPredictedPos = getPredictedPosition(murderer.Character, bestPart)
+                        if finalPredictedPos then
+                            args[2] = cframeNew(finalPredictedPos)
+                            return oldNamecall(self, unpack(args))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return oldNamecall(self, ...)
+end)
+
+-- WEAPON SERVICE MODULE HOOK
 local WeaponService = nil
 local ClientServices = ReplicatedStorage:FindFirstChild("ClientServices") or ReplicatedStorage:FindFirstChild("Services")
 if ClientServices then
