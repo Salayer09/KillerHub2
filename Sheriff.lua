@@ -116,42 +116,42 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- UI MENÚ
+-- UI MENÚ (LIMPIO Y EN INGLÉS)
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
-SheriffTab:CreateSection("Ajustes del Silent Aim")
+SheriffTab:CreateSection("Silent Aim")
 
-SheriffTab:CreateToggle("SheriffSilent", "Activar Silent Aim Pasivo", function(estado) SheriffConfig.SilentAim = estado saveConfig() end)
-SheriffTab:CreateToggle("JumpPredToggle", "Predicción de Salto Inteligente", function(estado) SheriffConfig.JumpPrediction = estado saveConfig() end, SheriffConfig.JumpPrediction)
-SheriffTab:CreateToggle("SheriffWallCheckToggle", "Escaneo Avanzado Multi-Rayo", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
-SheriffTab:CreateDropdown("PredMode", "Modo de Predicción:", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
+SheriffTab:CreateToggle("SheriffSilent", "Silent Aim", function(estado) SheriffConfig.SilentAim = estado saveConfig() end)
+SheriffTab:CreateToggle("JumpPredToggle", "Jump Prediction", function(estado) SheriffConfig.JumpPrediction = estado saveConfig() end, SheriffConfig.JumpPrediction)
+SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
+SheriffTab:CreateDropdown("PredMode", "Prediction Mode", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 
-SheriffTab:CreateSection("Calibración del Entorno")
-SheriffTab:CreateSlider("HorizontalScaleSlider", "Predicción Horizontal (X/Z)", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
-SheriffTab:CreateSlider("VerticalScaleSlider", "Predicción Vertical (Eje Y)", 0, 300, function(v) SheriffConfig.VerticalScale = v saveConfig() end, SheriffConfig.VerticalScale)
-SheriffTab:CreateSlider("PingCompSlider", "Compensador de Latencia (%)", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
-SheriffTab:CreateSlider("CloseRangeZoneSlider", "Zona Muerta Quemarropa", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
+SheriffTab:CreateSection("Calibration")
+SheriffTab:CreateSlider("HorizontalScaleSlider", "Horizontal Scale", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
+SheriffTab:CreateSlider("VerticalScaleSlider", "Vertical Scale", 0, 300, function(v) SheriffConfig.VerticalScale = v saveConfig() end, SheriffConfig.VerticalScale)
+SheriffTab:CreateSlider("PingCompSlider", "Ping Compensation", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
+SheriffTab:CreateSlider("CloseRangeZoneSlider", "Close Range Zone", 0, 20, function(v) SheriffConfig.CloseRangeZone = v saveConfig() end, SheriffConfig.CloseRangeZone)
 
-SheriffTab:CreateSection("Personalización Visual")
-SheriffTab:CreateMultiDropdown("ActiveTracers", "Visualización de Tracers (Múltiple):", {"Rojo (Horizontal)", "Azul (Horizontal)", "Verde (Lead)"}, function(tablaFlags)
-    SheriffConfig.ShowRedTracer = tablaFlags["Rojo (Horizontal)"] or false
-    SheriffConfig.ShowBlueTracer = tablaFlags["Azul (Horizontal)"] or false 
-    SheriffConfig.ShowGreenTracer = tablaFlags["Verde (Lead)"] or false
+SheriffTab:CreateSection("Visuals")
+SheriffTab:CreateMultiDropdown("ActiveTracers", "Tracers", {"Tracer Prediction", "Min Tracer Prediction", "Lead Time"}, function(tablaFlags)
+    SheriffConfig.ShowRedTracer = tablaFlags["Tracer Prediction"] or false
+    SheriffConfig.ShowBlueTracer = tablaFlags["Min Tracer Prediction"] or false 
+    SheriffConfig.ShowGreenTracer = tablaFlags["Lead Time"] or false
     saveConfig()
 end)
 
-SheriffTab:CreateSlider("VoidBtnSize", "Tamaño del Botón de Disparo", 50, 200, function(valor)
+SheriffTab:CreateSlider("VoidBtnSize", "Button Size", 50, 200, function(valor)
     SheriffConfig.ButtonSize = valor
     if cachedShootButton then cachedShootButton.Size = udim2New(0, valor, 0, valor) end
     saveConfig()
 end, SheriffConfig.ButtonSize)
 
-SheriffTab:CreateSection("Filtros Estabilizadores (Celular)")
-SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Filtro Caminadora Invisible", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
-SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Estabilizador Vectorial de Red", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
+SheriffTab:CreateSection("Stabilizers")
+SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Walk Filter", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
+SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Inertial Stabilizer", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
 
-SheriffTab:CreateSection("Ajustes de Interfaz")
-SheriffTab:CreateToggle("WeaponDetectToggle", "Ocultar Botón sin Arma", function(estado) SheriffConfig.UseWeaponDetector = estado saveConfig() checkWeaponVisibility() end)
-SheriffTab:CreateToggle("ShowVoidButton", "Mostrar Botón en Pantalla", function(estado) SheriffConfig.ShowShootButton = estado saveConfig() checkWeaponVisibility() end)
+SheriffTab:CreateSection("Interface")
+SheriffTab:CreateToggle("WeaponDetectToggle", "Weapon Detector", function(estado) SheriffConfig.UseWeaponDetector = estado saveConfig() checkWeaponVisibility() end)
+SheriffTab:CreateToggle("ShowVoidButton", "Show Button", function(estado) SheriffConfig.ShowShootButton = estado saveConfig() checkWeaponVisibility() end)
 
 local MurdererDetectado = nil
 local smoothedVelocity = VECTOR_ZERO
@@ -406,22 +406,22 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- CONFIGURACIÓN DE CAPAS DE TRACERS (ZINDEX CORREGIDO)
+-- CONFIGURACIÓN DE CAPAS DE TRACERS
 -- ============================================================================
 local MinPredictionLine = Drawing.new("Line")
-MinPredictionLine.Color = color3RGB(4, 0, 220) -- Azul Solicitado Corregido
+MinPredictionLine.Color = color3RGB(4, 0, 220)
 MinPredictionLine.Thickness = 2.0
 MinPredictionLine.Transparency = 1.0  
-MinPredictionLine.ZIndex = 5          -- Capa Inferior
+MinPredictionLine.ZIndex = 5          
 
 local PredictionLine = Drawing.new("Line")
-PredictionLine.Color = color3RGB(255, 35, 35) -- Rojo
+PredictionLine.Color = color3RGB(255, 35, 35)
 PredictionLine.Thickness = 2.0
 PredictionLine.Transparency = 1.0  
-PredictionLine.ZIndex = 10         -- Capa Superior (Prioridad Máxima)
+PredictionLine.ZIndex = 10         
 
 local LeadTimeLine = Drawing.new("Line")
-LeadTimeLine.Color = color3RGB(35, 255, 35) -- Verde
+LeadTimeLine.Color = color3RGB(35, 255, 35)
 LeadTimeLine.Thickness = 1.8
 LeadTimeLine.Transparency = 1.0  
 LeadTimeLine.ZIndex = 7
@@ -455,17 +455,14 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
         if predNoY and minPredNoY then
-            -- INYECCIÓN DEL FILTRO 90/10 ANTI-TEMBLOR VISUAL
             if not lastWorldPredNoY or lastTargetChar ~= targetChar then
                 lastWorldPredNoY = predNoY
                 lastWorldMinPredNoY = minPredNoY
             else
-                -- 90% instantáneo, 10% suavizado inercial para absorber saltos de frames/ping
                 lastWorldPredNoY = lastWorldPredNoY:Lerp(predNoY, 0.9)
                 lastWorldMinPredNoY = lastWorldMinPredNoY:Lerp(minPredNoY, 0.9)
             end
 
-            -- Tracer Azul (Horizontal Mínimo)
             if SheriffConfig.ShowBlueTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldMinPredNoY)
                 if onScreen then
@@ -475,7 +472,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else MinPredictionLine.Visible = false end
             else MinPredictionLine.Visible = false end
 
-            -- Tracer Rojo (Horizontal Máximo)
             if SheriffConfig.ShowRedTracer then
                 local screenPos, onScreen = worldToViewport(Camera, lastWorldPredNoY)
                 if onScreen then
@@ -485,7 +481,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
                 else PredictionLine.Visible = false end
             else PredictionLine.Visible = false end
 
-            -- Tracer Verde (Desde la mano directo a la predicción estabilizada)
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
                 local predScreenPos, predOnScreen = worldToViewport(Camera, lastWorldPredNoY)
@@ -530,7 +525,9 @@ local function fireAtMurdererDirectly()
      end
 end
 
--- INTERFAZ DEL BOTÓN TÁCTIL
+-- ============================================================================
+-- INTERFAZ DEL BOTÓN TÁCTIL (EFECTO CENTRADO Y ROTACIÓN CONTINUA A LA DERECHA)
+-- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
 VoidGui.ResetOnSpawn = false VoidGui.Parent = game:GetService("CoreGui")
@@ -549,14 +546,32 @@ local Corner = Instance.new("UICorner")
 Corner.CornerRadius = UDim.new(0.28, 0) Corner.Parent = ShootButton
 
 local GlowOverlay = Instance.new("Frame")
-GlowOverlay.Size = udim2New(1, 0, 1, 0) GlowOverlay.BackgroundTransparency = 1; GlowOverlay.ZIndex = ShootButton.ZIndex + 1; GlowOverlay.Parent = ShootButton
+GlowOverlay.Size = udim2New(1, 0, 1, 0) 
+GlowOverlay.BackgroundTransparency = 1; 
+GlowOverlay.ZIndex = ShootButton.ZIndex + 1; 
+GlowOverlay.Parent = ShootButton
 
 local GlowCorner = Instance.new("UICorner")
 GlowCorner.CornerRadius = UDim.new(0.28, 0) GlowCorner.Parent = GlowOverlay
 
 local UiGradient = Instance.new("UIGradient")
-UiGradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)), ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)), ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))})
-UiGradient.Rotation = 45 UiGradient.Parent = GlowOverlay
+UiGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, color3RGB(24, 8, 43)), 
+    ColorSequenceKeypoint.new(0.5, color3RGB(131, 46, 222)), 
+    ColorSequenceKeypoint.new(1, color3RGB(24, 8, 43))
+})
+UiGradient.Offset = vec2New(0, 0) 
+UiGradient.Rotation = 0 
+UiGradient.Parent = GlowOverlay
+
+-- Bucle de rotación constante a la derecha
+task.spawn(function()
+    while VoidGui.Parent do
+        local tweenRot = TweenService:Create(UiGradient, TweenInfo.new(3, Enum.EasingStyle.Linear), {Rotation = UiGradient.Rotation + 360})
+        tweenRot:Play()
+        tweenRot.Completed:Wait()
+    end
+end)
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Size = udim2New(0.37, 0, 0.37, 0) DecalTexture.AnchorPoint = vec2New(0.5, 0.5) DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
@@ -580,9 +595,7 @@ Label.TextTransparency = 1 - SheriffConfig.ButtonOpacity; Label.ZIndex = ShootBu
 local dragging, dragInput, dragStart, startPos
 table.insert(_G.KillerHubConnections, ShootButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        local bPos = ShootButton.AbsolutePosition local bSize = ShootButton.AbsoluteSize
-        UiGradient.Offset = vec2New(((input.Position.X - bPos.X) / bSize.X - 0.5) * 1.5, 0)
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.55}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.01, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.45}):Play()
         task.spawn(fireAtMurdererDirectly)
         
         dragging = true dragStart = input.Position startPos = ShootButton.Position
@@ -601,7 +614,7 @@ end))
 
 table.insert(_G.KillerHubConnections, ShootButton.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        TweenService:Create(GlowOverlay, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
+        TweenService:Create(GlowOverlay, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1}):Play()
     end
 end))
 
