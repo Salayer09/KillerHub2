@@ -117,7 +117,7 @@ local function checkWeaponVisibility()
 end
 
 -- UI MENÚ (LIMPIO Y EN INGLÉS)
-local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://10747373142")
+local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://15286655815")
 SheriffTab:CreateSection("Silent Aim")
 
 SheriffTab:CreateToggle("SheriffSilent", "Silent Aim", function(estado) SheriffConfig.SilentAim = estado saveConfig() end)
