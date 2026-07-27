@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V10.8 - ANTI-SHAKE 90/10 FILTER (MOBILE)
+-- 👾 KILLER HUB | ENGINE V10.8 - ANTI-SHAKE 90/10 FILTER (FIXED HITBOX & WALLS)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -116,7 +116,7 @@ local function checkWeaponVisibility()
     else cachedScreenGui.Enabled = true end
 end
 
--- UI MENÚ (LIMPIO Y EN INGLÉS)
+-- UI MENÚ
 local SheriffTab = KillerHub:CreateTab("Sheriff", "rbxassetid://15286655815")
 SheriffTab:CreateSection("Silent Aim")
 
@@ -168,7 +168,6 @@ local lastPositions = {}
 local MAX_HISTORY_FRAMES = 4 
 local handLineIsBlocked = false 
 
--- Variables de persistencia para el amortiguador 90/10
 local lastWorldPredNoY = nil
 local lastWorldMinPredNoY = nil
 
@@ -282,24 +281,34 @@ local mapCastParams = RaycastParams.new()
 mapCastParams.FilterType = Enum.RaycastFilterType.Exclude
 local ignoreListCache = {} 
 
+-- FIX: FILTRADO MEJORADO DE HITBOX Y OBSTÁCULOS
 local function getSmartTargetPart(targetChar)
     if not targetChar then return nil, true end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
+    local head = targetChar:FindFirstChild("Head")
     if not hrp then return nil, true end
-    if not SheriffConfig.WallCheck then return hrp, false end
+    
+    if not SheriffConfig.WallCheck then return head or hrp, false end
     
     local origin = Camera.CFrame.Position
     table.clear(ignoreListCache)
-    table.insert(ignoreListCache, LocalPlayer.Character)
+    
+    if LocalPlayer.Character then table.insert(ignoreListCache, LocalPlayer.Character) end
     table.insert(ignoreListCache, Camera)
     
+    -- Ignorar a todos los personajes para que las hitboxes agrandadas de otros jugadores no interfieran
     local allPlayers = Players:GetPlayers()
-    for i = 1, #allPlayers do if allPlayers[i].Character then table.insert(ignoreListCache, allPlayers[i].Character) end end
+    for i = 1, #allPlayers do 
+        if allPlayers[i].Character then 
+            table.insert(ignoreListCache, allPlayers[i].Character) 
+        end 
+    end
+    
     mapCastParams.FilterDescendantsInstances = ignoreListCache
     
     local partsToScan = {
+        head or hrp,
         hrp,
-        targetChar:FindFirstChild("Head"),
         targetChar:FindFirstChild("LeftHand") or targetChar:FindFirstChild("Left Arm"),
         targetChar:FindFirstChild("RightHand") or targetChar:FindFirstChild("Right Arm")
     }
@@ -308,7 +317,8 @@ local function getSmartTargetPart(targetChar)
         local part = partsToScan[i]
         if part then
             local ray = workspace:Raycast(origin, part.Position - origin, mapCastParams)
-            if not ray or (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.8) then 
+            -- Si no colisiona con una pared sólida (ignora partes transparentes/hitboxes), hay vista directa
+            if not ray or (ray.Instance and (ray.Instance.CanCollide == false or ray.Instance.Transparency >= 0.5)) then 
                 return part, false
             end
         end
@@ -323,6 +333,7 @@ local function getFloorHeight(targetHrp, targetChar)
     return ray and ray.Position.Y or nil
 end
 
+-- FIX: PREDICCIÓN SIN DESVÍOS EN VELOCIDAD ZERO / ESTÁTICA
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
@@ -346,6 +357,8 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
                 local calculatedVel = (hrp.Position - datosPrevios.Pos) / tiempoTranscurrido
                 if calculatedVel.Magnitude > 0.5 and calculatedVel.Magnitude < 100 then
                     rawVelocity = calculatedVel
+                else
+                    rawVelocity = VECTOR_ZERO
                 end
             end
         end
@@ -357,7 +370,10 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     table.insert(history, 1, hrp.Position)
     if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
 
-    if SheriffConfig.FiltroCaminadora and #history >= 3 then
+    -- Si el objetivo está casi completamente quieto, forzar velocidad cero para evitar desviación vertical
+    if rawVelocity.Magnitude < 0.5 then
+        rawVelocity = VECTOR_ZERO
+    elseif SheriffConfig.FiltroCaminadora and #history >= 3 then
         local desplazamientoReal = (history[1] - history[#history]).Magnitude
         if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
     end
@@ -368,7 +384,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     
     local totalLatency = (cachedPingValue * pComp) + activeDT + 0.015 
     local predictionWeight = 1
-    if distance <= SheriffConfig.CloseRangeZone then predictionWeight = 0 end
+    if distance <= SheriffConfig.CloseRangeZone or rawVelocity == VECTOR_ZERO then predictionWeight = 0 end
 
     if lastTargetChar ~= targetChar then
         smoothedVelocity = rawVelocity lastTargetChar = targetChar
@@ -384,7 +400,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local minPredNoY = vec3New(targetPosition.X + (horizontalShift.X * 0.4), targetPosition.Y, targetPosition.Z + (horizontalShift.Z * 0.4))
 
     local verticalShift = VECTOR_ZERO
-    if SheriffConfig.JumpPrediction and (humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.1) then
+    if SheriffConfig.JumpPrediction and predictionWeight > 0 and (humanoid.FloorMaterial == Enum.Material.Air or math_abs(smoothedVelocity.Y) > 0.1) then
         local adaptiveYFactor = math_clamp((distance - SheriffConfig.CloseRangeZone) / 12, 0, 1)
         local finalVScale = vMultiplier * adaptiveYFactor
         local verticalVelocity = smoothedVelocity.Y
@@ -406,7 +422,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- CONFIGURACIÓN DE CAPAS DE TRACERS
+-- TRACERS
 -- ============================================================================
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(4, 0, 220)
@@ -526,7 +542,7 @@ local function fireAtMurdererDirectly()
 end
 
 -- ============================================================================
--- INTERFAZ DEL BOTÓN TÁCTIL (EFECTO CENTRADO Y ROTACIÓN CONTINUA A LA DERECHA)
+-- INTERFAZ DEL BOTÓN TÁCTIL
 -- ============================================================================
 local VoidGui = Instance.new("ScreenGui")
 VoidGui.Name = "KillerHub_SheriffGui"
@@ -564,7 +580,6 @@ UiGradient.Offset = vec2New(0, 0)
 UiGradient.Rotation = 0 
 UiGradient.Parent = GlowOverlay
 
--- Bucle de rotación constante a la derecha
 task.spawn(function()
     while VoidGui.Parent do
         local tweenRot = TweenService:Create(UiGradient, TweenInfo.new(3, Enum.EasingStyle.Linear), {Rotation = UiGradient.Rotation + 360})
