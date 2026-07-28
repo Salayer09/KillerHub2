@@ -125,7 +125,7 @@ SheriffTab:CreateToggle("JumpPredToggle", "Jump Prediction", function(estado) Sh
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
 SheriffTab:CreateDropdown("PredMode", "Prediction Mode", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 
-SheriffTab:CreateSection("Calibration")
+SheriffTab:CreateSection("Prediction")
 SheriffTab:CreateSlider("HorizontalScaleSlider", "Horizontal Prediction", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
 SheriffTab:CreateSlider("VerticalScaleSlider", "Vertical Prediction", 0, 300, function(v) SheriffConfig.VerticalScale = v saveConfig() end, SheriffConfig.VerticalScale)
 SheriffTab:CreateSlider("PingCompSlider", "Ping Compensation", 0, 200, function(v) SheriffConfig.PingCompensation = v saveConfig() end, SheriffConfig.PingCompensation)
@@ -145,7 +145,7 @@ SheriffTab:CreateSlider("VoidBtnSize", "Button Size", 50, 200, function(valor)
     saveConfig()
 end, SheriffConfig.ButtonSize)
 
-SheriffTab:CreateSection("Prediction")
+SheriffTab:CreateSection("Stabilizers")
 SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Walk Filter", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
 SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Inertial Stabilizer", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
 
