@@ -605,7 +605,7 @@ end)
 
 local DecalTexture = Instance.new("ImageLabel")
 DecalTexture.Size = udim2New(0.37, 0, 0.37, 0) DecalTexture.AnchorPoint = vec2New(0.5, 0.5) DecalTexture.Position = udim2New(0.5, 0, 0.44, 0)
-DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://125754446555599"
+DecalTexture.BackgroundTransparency = 1; DecalTexture.Image = "rbxassetid://120488215819106"
 DecalTexture.ImageTransparency =  1 - SheriffConfig.ButtonOpacity; DecalTexture.ZIndex = ShootButton.ZIndex + 2; DecalTexture.Parent = ShootButton
 
 task.spawn(function()
