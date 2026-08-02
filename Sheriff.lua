@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V10.8 - ANTI-SHAKE 90/10 FILTER (MM2 SUITE)
+-- 👾 KILLER HUB | ENGINE V10.8 - ULTRA-SYNC PREDICTION (MM2 SUITE)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -171,9 +171,6 @@ local MAX_HISTORY_FRAMES = 4
 local handLineIsBlocked = false 
 local lastScanTime = 0
 
-local lastWorldPredNoY = nil
-local lastWorldMinPredNoY = nil
-
 task.spawn(function()
     while task.wait(0.25) do
         if Stats and Stats:FindFirstChild("Network") and Stats.Network:FindFirstChild("ServerToClientPing") then
@@ -209,7 +206,6 @@ if RoundStart and RoundStart:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, RoundStart.OnClientEvent:Connect(function(a1, a2)
         table.clear(playerRoles) table.clear(playerDeadStatus) table.clear(positionHistory) table.clear(lastPositions)
         MurdererDetectado = nil parsePlayerData(a2) parsePlayerData(a1)
-        lastWorldPredNoY = nil lastWorldMinPredNoY = nil
     end))
 end
 
@@ -297,7 +293,6 @@ local function getSmartTargetPart(targetChar)
     local hrp = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso") or targetChar:FindFirstChild("UpperTorso")
     if not hrp then return nil, true end
     
-    -- Si está en modo Piercing o WallCheck desactivado, ignora validación de paredes
     if not SheriffConfig.WallCheck or SheriffConfig.ShotType == "Piercing" then 
         return hrp, false 
     end
@@ -338,11 +333,11 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 local function getPredictedPosition(targetChar, targetPart, customDelta)
-    if not targetChar or not targetPart then return nil, nil, nil, nil, nil end
+    if not targetChar or not targetPart then return nil, nil, nil end
     local hrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = targetChar:FindFirstChildOfClass("Humanoid")
     local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil, nil, nil end
+    if not hrp or not humanoid or humanoid.Health <= 0 or not localHrp then return nil, nil, nil end
 
     local activeDT = customDelta or emaDeltaTime
     local targetPosition = targetPart.Position
@@ -388,8 +383,16 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
         smoothedVelocity = rawVelocity lastTargetChar = targetChar
     end
 
-    local vSmoothAlpha = math_clamp((SheriffConfig.EstabilizadorInercial and 5 or 20) * activeDT, 0, 1)
+    -- ========================================================================
+    -- AJUSTE DE RESPONSIVIDAD INSTANTÁNEA AL FRENAR
+    -- ========================================================================
+    local isStopping = (humanoid.MoveDirection.Magnitude < 0.1 and rawVelocity.Magnitude < 2)
+    local vSmoothAlpha = isStopping and 0.85 or math_clamp((SheriffConfig.EstabilizadorInercial and 12 or 30) * activeDT, 0, 1)
+    
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, vSmoothAlpha)
+    if isStopping and smoothedVelocity.Magnitude < 0.5 then
+        smoothedVelocity = VECTOR_ZERO
+    end
 
     local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
     if horizontalShift.Magnitude > 6.5 then horizontalShift = horizontalShift.Unit * 6.5 end
@@ -420,7 +423,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- TRACERS
+-- TRACERS (SIN LERP SECUNDARIO: MUESTRAN LA PREDICCIÓN REAL 1:1)
 -- ============================================================================
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(4, 0, 220)
@@ -452,7 +455,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     local murderer = getMurderer()
     if not murderer or not murderer.Character then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; LeadTimeLine.Visible = false;
-        lastWorldPredNoY = nil lastWorldMinPredNoY = nil
         return
     end
 
@@ -469,16 +471,8 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
         if predNoY and minPredNoY then
-            if not lastWorldPredNoY or lastTargetChar ~= targetChar then
-                lastWorldPredNoY = predNoY
-                lastWorldMinPredNoY = minPredNoY
-            else
-                lastWorldPredNoY = lastWorldPredNoY:Lerp(predNoY, 0.9)
-                lastWorldMinPredNoY = lastWorldMinPredNoY:Lerp(minPredNoY, 0.9)
-            end
-
             if SheriffConfig.ShowBlueTracer then
-                local screenPos, onScreen = worldToViewport(Camera, lastWorldMinPredNoY)
+                local screenPos, onScreen = worldToViewport(Camera, minPredNoY)
                 if onScreen then
                     MinPredictionLine.From = screenOrigin 
                     MinPredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
@@ -487,7 +481,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             else MinPredictionLine.Visible = false end
 
             if SheriffConfig.ShowRedTracer then
-                local screenPos, onScreen = worldToViewport(Camera, lastWorldPredNoY)
+                local screenPos, onScreen = worldToViewport(Camera, predNoY)
                 if onScreen then
                     PredictionLine.From = screenOrigin 
                     PredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
@@ -497,7 +491,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
-                local predScreenPos, predOnScreen = worldToViewport(Camera, lastWorldPredNoY)
+                local predScreenPos, predOnScreen = worldToViewport(Camera, predNoY)
 
                 if handOnScreen and predOnScreen then
                     LeadTimeLine.Color = (handLineIsBlocked and SheriffConfig.ShotType ~= "Piercing") and color3RGB(255, 255, 255) or color3RGB(35, 255, 35)
@@ -509,7 +503,6 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         end
     else
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; LeadTimeLine.Visible = false;
-        lastWorldPredNoY = nil lastWorldMinPredNoY = nil
     end 
 end)
 table.insert(_G.KillerHubConnections, renderConn)
@@ -537,7 +530,7 @@ local function fireAtMurdererDirectly()
                         originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame 
                     end
 
-                    -- Modo Piercing: Teletransporta el origen justo al lado del objetivo
+                    -- Modo Piercing con ajuste fino a 1.3 studs
                     if SheriffConfig.ShotType == "Piercing" then
                         local dir = (finalPredictedPos - char.HumanoidRootPart.Position).Unit
                         originCFrame = cframeNew(finalPredictedPos - (dir * 1.3), finalPredictedPos)
