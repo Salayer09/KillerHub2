@@ -1,5 +1,5 @@
 -- ============================================================================
--- 👾 KILLER HUB | ENGINE V10.8 - ANTI-SHAKE 90/10 FILTER (MOBILE)
+-- 👾 KILLER HUB | ENGINE V10.8 - ANTI-SHAKE 90/10 FILTER (MOBILE & PC)
 -- ============================================================================
 getgenv().KillerHub = {
     Config = {
@@ -55,6 +55,7 @@ local SheriffConfig = {
     JumpPrediction = true, 
     PredictionMode = "PREDICTION PRO", 
     ShotType = "Normal", -- Tipo de disparo por defecto
+    ShotKey = "E", -- Tecla de disparo por defecto en PC
     HorizontalScale = 100,  
     VerticalScale = 100,    
     PingCompensation = 100, 
@@ -126,6 +127,16 @@ SheriffTab:CreateToggle("JumpPredToggle", "Jump Prediction", function(estado) Sh
 SheriffTab:CreateToggle("SheriffWallCheckToggle", "Wall Check", function(estado) SheriffConfig.WallCheck = estado saveConfig() end)
 SheriffTab:CreateDropdown("PredMode", "Prediction Mode", {"PREDICTION PRO", "PREDICTION SIMPLE"}, function(sel) SheriffConfig.PredictionMode = sel saveConfig() end)
 SheriffTab:CreateDropdown("ShotTypeDropdown", "Type of shot", {"Normal", "Piercer"}, function(sel) SheriffConfig.ShotType = sel saveConfig() end)
+
+-- Keybind para PC (Movido aquí a la sección Silent Aim, debajo de Type of shot)
+SheriffTab:CreateKeybind("ShotKeyBind", "Shot Key (PC)", Enum.KeyCode[SheriffConfig.ShotKey] or Enum.KeyCode.E, function(tecla)
+    if typeof(tecla) == "EnumItem" then
+        SheriffConfig.ShotKey = tecla.Name
+    elseif type(tecla) == "string" then
+        SheriffConfig.ShotKey = tecla
+    end
+    saveConfig()
+end)
 
 SheriffTab:CreateSection("Prediction")
 SheriffTab:CreateSlider("HorizontalScaleSlider", "Horizontal Prediction", 0, 300, function(v) SheriffConfig.HorizontalScale = v saveConfig() end, SheriffConfig.HorizontalScale)
@@ -527,6 +538,20 @@ local function fireAtMurdererDirectly()
         end
      end
 end
+
+-- ============================================================================
+-- ACTIVACIÓN DE DISPARO POR TECLADO EN PC
+-- ============================================================================
+local pcInputConn = UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        local keyToUse = SheriffConfig.ShotKey or "E"
+        if input.KeyCode == Enum.KeyCode[keyToUse] then
+            task.spawn(fireAtMurdererDirectly)
+        end
+    end
+end)
+table.insert(_G.KillerHubConnections, pcInputConn)
 
 -- ============================================================================
 -- INTERFAZ DEL BOTÓN TÁCTIL (EFECTO CENTRADO Y ROTACIÓN CONTINUA A LA DERECHA)
