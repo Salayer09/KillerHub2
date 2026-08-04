@@ -59,7 +59,6 @@ local SheriffConfig = {
     PingCompensation = 100, 
     CloseRangeZone = 6, 
     WallCheck = true,    
-    FiltroCaminadora = true, 
     EstabilizadorInercial = true, 
     ShowRedTracer = true,      
     ShowBlueTracer = true, 
@@ -150,7 +149,6 @@ SheriffTab:CreateSlider("VoidBtnSize", "Button Size", 50, 200, function(valor)
 end, SheriffConfig.ButtonSize)
 
 SheriffTab:CreateSection("Stabilizers")
-SheriffTab:CreateToggle("FiltroCaminadoraToggle", "Walk Filter", function(estado) SheriffConfig.FiltroCaminadora = estado saveConfig() end)
 SheriffTab:CreateToggle("EstabilizadorInercialToggle", "Inertial Stabilizer", function(estado) SheriffConfig.EstabilizadorInercial = estado saveConfig() end)
 
 SheriffTab:CreateSection("Interface")
@@ -168,11 +166,13 @@ local playerRoles = {}
 local playerDeadStatus = {}
 local currentTarget = nil
 local isFiringCooldown = false
-local positionHistory = {}
 local lastPositions = {} 
-local MAX_HISTORY_FRAMES = 4 
 local handLineIsBlocked = false 
 local lastScanTime = 0
+
+-- Variables para suavizado visual de Tracers
+local smoothedPredNoY = nil
+local smoothedMinPredNoY = nil
 
 -- Hilo secundario para cálculo continuo de latencia (Ping)
 task.spawn(function()
@@ -208,7 +208,7 @@ if PlayerDataChanged and PlayerDataChanged:IsA("RemoteEvent") then table.insert(
 local RoundStart = ReplicatedStorage:FindFirstChild("RoundStart", true)
 if RoundStart and RoundStart:IsA("RemoteEvent") then
     table.insert(_G.KillerHubConnections, RoundStart.OnClientEvent:Connect(function(a1, a2)
-        table.clear(playerRoles) table.clear(playerDeadStatus) table.clear(positionHistory) table.clear(lastPositions)
+        table.clear(playerRoles) table.clear(playerDeadStatus) table.clear(lastPositions)
         MurdererDetectado = nil parsePlayerData(a2) parsePlayerData(a1)
     end))
 end
@@ -337,7 +337,7 @@ local function getFloorHeight(targetHrp, targetChar)
 end
 
 -- ============================================================================
--- NÚCLEO DE PREDICCIÓN AVANZADA (ADAPTATIVA)
+-- NÚCLEO DE PREDICCIÓN AVANZADA (ADAPTATIVA Y SUAVE)
 -- ============================================================================
 local function getPredictedPosition(targetChar, targetPart, customDelta)
     if not targetChar or not targetPart then return nil, nil, nil end
@@ -350,22 +350,31 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local targetPosition = targetPart.Position
     local distance = (targetPosition - localHrp.Position).Magnitude
 
-    -- 1. VELOCIDAD HORIZONTAL INTELIGENTE (Pasos cortos vs carrera)
+    -- 1. VELOCIDAD HORIZONTAL Y DETECCIÓN DE INTERNET / LAG FREEZE
     local moveMag = humanoid.MoveDirection.Magnitude
     local rawPhysicsVel = hrp.AssemblyLinearVelocity
     local walkSpeed = humanoid.WalkSpeed > 0 and humanoid.WalkSpeed or 16
     
     local intendedVel = vec3New(humanoid.MoveDirection.X * walkSpeed, 0, humanoid.MoveDirection.Z * walkSpeed)
     local actualPhysicsH = vec3New(rawPhysicsVel.X, 0, rawPhysicsVel.Z)
-    
-    -- Ajuste dinámico de velocidad según fuerza del Input
     local rawVelocity = actualPhysicsH:Lerp(intendedVel, math_clamp(moveMag, 0, 1))
 
-    -- 2. DETECCIÓN DE ESCALERAS Y RAMPAS (Cálculo directo Y)
+    -- DETECCIÓN DE DESCONEXIÓN / LAG DE RED ("Correr en la nada")
+    -- Si la física dice que se mueve rápido pero su posición real en el mundo no cambia nada, se le fue el internet.
+    local isNetworkLagged = false
     local calculatedVelY = rawPhysicsVel.Y
+
     if lastPositions[targetChar] then
         local dtPrev = os_clock() - lastPositions[targetChar].Time
-        if dtPrev > 0.005 then
+        if dtPrev > 0.008 then
+            local realPosDisplacement = (hrp.Position - lastPositions[targetChar].Pos).Magnitude
+            
+            -- Si la velocidad física es alta pero la posición real casi no se movió -> Lag / Desconexión
+            if rawVelocity.Magnitude > 3 and realPosDisplacement < 0.12 then
+                isNetworkLagged = true
+            end
+
+            -- Cálculo directo vertical (escaleras/rampas)
             local realYVel = (hrp.Position.Y - lastPositions[targetChar].Pos.Y) / dtPrev
             if math_abs(realYVel) > 0.5 then
                 calculatedVelY = realYVel
@@ -374,15 +383,9 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     end
     lastPositions[targetChar] = {Pos = hrp.Position, Time = os_clock()}
 
-    -- Historial anti-caminadora
-    if not positionHistory[targetChar] then positionHistory[targetChar] = {} end
-    local history = positionHistory[targetChar]
-    table.insert(history, 1, hrp.Position)
-    if #history > MAX_HISTORY_FRAMES then table.remove(history, #history) end
-
-    if SheriffConfig.FiltroCaminadora and #history >= 3 then
-        local desplazamientoReal = (history[1] - history[#history]).Magnitude
-        if rawVelocity.Magnitude > 4 and desplazamientoReal < 1.2 then rawVelocity = VECTOR_ZERO end
+    -- Si se le fue el internet, anulamos la velocidad de predicción para que vaya directo al torso.
+    if isNetworkLagged then
+        rawVelocity = VECTOR_ZERO
     end
 
     local hMultiplier = (SheriffConfig.HorizontalScale / 100)
@@ -393,15 +396,26 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
     local predictionWeight = distance <= SheriffConfig.CloseRangeZone and 0 or 1
 
     if lastTargetChar ~= targetChar then
-        smoothedVelocity = rawVelocity lastTargetChar = targetChar
+        smoothedVelocity = rawVelocity 
+        lastTargetChar = targetChar
     end
 
-    -- Estabilizador inercial y freno instantáneo
+    -- 2. ESTABILIZADOR INERCIAL Y PREDICCIÓN SUAVE (SMOOTH PREDICTION)
     local isStopping = (moveMag < 0.1 and rawVelocity.Magnitude < 2)
-    local vSmoothAlpha = isStopping and 0.85 or math_clamp((SheriffConfig.EstabilizadorInercial and 14 or 30) * activeDT, 0, 1)
+    local isStarting = (moveMag > 0.1 and smoothedVelocity.Magnitude < 2)
+
+    -- Factor Alpha suave y dinámico según el estado del movimiento
+    local vSmoothAlpha = 0.35 -- Transición suave por defecto
+    if isStopping then
+        vSmoothAlpha = 0.75 -- Decaimiento rápido al frenar para evitar sobre-predicción
+    elseif isStarting then
+        vSmoothAlpha = 0.20 -- Transición progresiva al arrancar para que no dé un tirón brusco
+    elseif SheriffConfig.EstabilizadorInercial then
+        vSmoothAlpha = math_clamp(12 * activeDT, 0.15, 0.45)
+    end
     
     smoothedVelocity = smoothedVelocity:Lerp(rawVelocity, vSmoothAlpha)
-    if isStopping and smoothedVelocity.Magnitude < 0.5 then smoothedVelocity = VECTOR_ZERO end
+    if isStopping and smoothedVelocity.Magnitude < 0.4 then smoothedVelocity = VECTOR_ZERO end
 
     -- Vector de offset horizontal
     local horizontalShift = vec3New(smoothedVelocity.X, 0, smoothedVelocity.Z) * totalLatency * hMultiplier * predictionWeight
@@ -412,7 +426,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 
     -- 3. PREDICCIÓN VERTICAL Y GRAVEDAD REAL
     local verticalShift = VECTOR_ZERO
-    if SheriffConfig.JumpPrediction then
+    if SheriffConfig.JumpPrediction and not isNetworkLagged then
         local isAir = (humanoid.FloorMaterial == Enum.Material.Air)
         local isStairMovement = (not isAir and math_abs(calculatedVelY) > 0.8)
 
@@ -421,7 +435,6 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
             local finalVScale = vMultiplier * adaptiveYFactor
             
             if isAir then
-                -- Ecuación física de caída / salto: Y = Vy*t - 0.5*g*t^2
                 local gravityEffect = 0.5 * workspace_Gravity * math_pow(totalLatency, 2)
                 local pY = (calculatedVelY * totalLatency * finalVScale) - gravityEffect
                 verticalShift = vec3New(0, pY, 0)
@@ -444,7 +457,7 @@ local function getPredictedPosition(targetChar, targetPart, customDelta)
 end
 
 -- ============================================================================
--- SISTEMA VISUAL (TRACERS 1:1 SIN RETARDO)
+-- SISTEMA VISUAL (TRACERS SUAVES 1:1)
 -- ============================================================================
 local MinPredictionLine = Drawing.new("Line")
 MinPredictionLine.Color = color3RGB(4, 0, 220)
@@ -476,6 +489,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     local murderer = getMurderer()
     if not murderer or not murderer.Character then
         PredictionLine.Visible = false; MinPredictionLine.Visible = false; LeadTimeLine.Visible = false;
+        smoothedPredNoY = nil; smoothedMinPredNoY = nil;
         return
     end
 
@@ -492,8 +506,12 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
         local screenOrigin = vec2New(currentViewportSize.X / 2, currentViewportSize.Y)
 
         if predNoY and minPredNoY then
+            -- Suavizado de posiciones visuales de tracers
+            smoothedPredNoY = smoothedPredNoY and smoothedPredNoY:Lerp(predNoY, 0.4) or predNoY
+            smoothedMinPredNoY = smoothedMinPredNoY and smoothedMinPredNoY:Lerp(minPredNoY, 0.4) or minPredNoY
+
             if SheriffConfig.ShowBlueTracer then
-                local screenPos, onScreen = worldToViewport(Camera, minPredNoY)
+                local screenPos, onScreen = worldToViewport(Camera, smoothedMinPredNoY)
                 if onScreen then
                     MinPredictionLine.From = screenOrigin 
                     MinPredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
@@ -502,7 +520,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
             else MinPredictionLine.Visible = false end
 
             if SheriffConfig.ShowRedTracer then
-                local screenPos, onScreen = worldToViewport(Camera, predNoY)
+                local screenPos, onScreen = worldToViewport(Camera, smoothedPredNoY)
                 if onScreen then
                     PredictionLine.From = screenOrigin 
                     PredictionLine.To = vec2New(screenPos.X, screenPos.Y) 
@@ -512,7 +530,7 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
 
             if rightHand and SheriffConfig.ShowGreenTracer then
                 local handScreenPos, handOnScreen = worldToViewport(Camera, rightHand.Position)
-                local predScreenPos, predOnScreen = worldToViewport(Camera, predNoY)
+                local predScreenPos, predOnScreen = worldToViewport(Camera, smoothedPredNoY)
 
                 if handOnScreen and predOnScreen then
                     LeadTimeLine.Color = (handLineIsBlocked and SheriffConfig.ShotType ~= "Piercing") and color3RGB(255, 255, 255) or color3RGB(35, 255, 35)
@@ -554,7 +572,6 @@ local function fireAtMurdererDirectly()
                         originCFrame = char.HumanoidRootPart.GunRaycastAttachment.WorldCFrame 
                     end
 
-                    -- Modo Piercing con separación justa de 1.3 studs
                     if SheriffConfig.ShotType == "Piercing" then
                         local dir = (finalPredictedPos - char.HumanoidRootPart.Position).Unit
                         originCFrame = cframeNew(finalPredictedPos - (dir * 1.3), finalPredictedPos)
